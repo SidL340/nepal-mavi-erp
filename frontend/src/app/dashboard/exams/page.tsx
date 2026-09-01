@@ -557,6 +557,184 @@ export default function ExamsPage() {
     }
   };
 
+  // Standalone Print Engine for Class Exam Ledger (Mark-wise & Grade-wise)
+  const triggerLedgerPrint = () => {
+    if (!ledgerData || !ledgerData.rows || ledgerData.rows.length === 0) {
+      toast.error('No exam ledger data available to print.');
+      return;
+    }
+
+    const currentExamObj = examsData?.find((e: any) => e.id.toString() === ledgerExamId);
+    const currentLedgerClass = classesData?.find((c: any) => c.id.toString() === ledgerClassId);
+    const examTitleStr = currentExamObj ? (currentExamObj.nameNepali || currentExamObj.name) : 'Examination';
+    const classNameStr = currentLedgerClass ? `${currentLedgerClass.name} ${currentLedgerClass.section ? `(${currentLedgerClass.section})` : ''}` : 'Class';
+    const isGradeMode = ledgerViewMode === 'grades';
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const subjects = ledgerData.subjects || [];
+
+    // Header HTML for subjects
+    const subjectHeaders = subjects
+      .map(
+        (sub: any) => `
+        <th colSpan="3" style="text-align: center; border: 1px solid #1e3a5f; background: #162c46; color: #fff; font-size: 8.5px; padding: 3px 2px;">
+          ${sub.subject?.name || sub.subjectName}
+        </th>
+      `
+      )
+      .join('');
+
+    const subDetailHeaders = subjects
+      .map(() =>
+        isGradeMode
+          ? `<th style="text-align: center; font-size: 8px; border: 1px solid #cbd5e1; padding: 2px;">TH</th><th style="text-align: center; font-size: 8px; border: 1px solid #cbd5e1; padding: 2px;">PR</th><th style="text-align: center; font-size: 8px; border: 1px solid #cbd5e1; padding: 2px; background: #fef3c7;">FINAL</th>`
+          : `<th style="text-align: center; font-size: 8px; border: 1px solid #cbd5e1; padding: 2px;">TH</th><th style="text-align: center; font-size: 8px; border: 1px solid #cbd5e1; padding: 2px;">PR</th><th style="text-align: center; font-size: 8px; border: 1px solid #cbd5e1; padding: 2px; background: #fef3c7;">TOT</th>`
+      )
+      .join('');
+
+    // Table rows HTML
+    const rowsHtml = ledgerData.rows
+      .map((row: any) => {
+        const symbol = row.symbolNo || generateSymbolNo(activeYear?.year, currentLedgerClass?.name, row.rollNo || row.sn);
+
+        const subCells = row.subjects
+          ?.map((sub: any) => {
+            if (isGradeMode) {
+              const thGrade = sub.theory?.letterGrade || '—';
+              const prGrade = sub.practical?.letterGrade || '—';
+              const subGrade = sub.finalGrade || (sub.compiled?.finalGrade || 'NG');
+              const subIsNG = subGrade === 'NG';
+              return `
+                <td style="text-align: center; font-size: 8.5px; border: 1px solid #e2e8f0; padding: 3px 1px;">${thGrade}</td>
+                <td style="text-align: center; font-size: 8.5px; border: 1px solid #e2e8f0; padding: 3px 1px; color: #6b21a8;">${prGrade}</td>
+                <td style="text-align: center; font-size: 8.5px; font-weight: bold; border: 1px solid #cbd5e1; padding: 3px 1px; background: #fffbeb; color: ${subIsNG ? '#b91c1c' : '#1e3a5f'};">${subGrade}</td>
+              `;
+            } else {
+              const thObt = sub.theory?.obtained !== null && sub.theory?.obtained !== undefined ? sub.theory.obtained : '—';
+              const prObt = sub.practical?.obtained !== null && sub.practical?.obtained !== undefined ? sub.practical.obtained : '—';
+              const totObt = sub.totalObtained ?? (sub.compiled?.obtained ?? 0);
+              return `
+                <td style="text-align: center; font-size: 8.5px; border: 1px solid #e2e8f0; padding: 3px 1px;">${thObt}</td>
+                <td style="text-align: center; font-size: 8.5px; border: 1px solid #e2e8f0; padding: 3px 1px; color: #6b21a8;">${prObt}</td>
+                <td style="text-align: center; font-size: 8.5px; font-weight: bold; border: 1px solid #cbd5e1; padding: 3px 1px; background: #f8fafc;">${totObt}</td>
+              `;
+            }
+          })
+          .join('');
+
+        if (isGradeMode) {
+          const isNG = row.status === 'NON_GRADED' || row.overallGrade === 'NG';
+          return `
+            <tr>
+              <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1;">${row.rank}</td>
+              <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1;">${row.rollNo || row.sn}</td>
+              <td style="text-align: center; font-family: monospace; border: 1px solid #cbd5e1;">${symbol}</td>
+              <td style="border: 1px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;"><strong>${row.fullName}</strong></td>
+              ${subCells}
+              <td style="text-align: center; font-weight: 900; color: #1e3a5f; border: 1px solid #cbd5e1; background: #fef3c7;">${row.gpa !== undefined ? row.gpa.toFixed(2) : '0.00'}</td>
+              <td style="text-align: center; font-weight: 900; border: 1px solid #cbd5e1;">${row.overallGrade || 'NG'}</td>
+              <td style="text-align: center; font-weight: 900; color: ${!isNG ? '#15803d' : '#b91c1c'}; border: 1px solid #cbd5e1;">${!isNG ? 'PASSED' : 'NON-GRADED'}</td>
+            </tr>
+          `;
+        } else {
+          const isPassed = row.percentage >= 35 && row.status !== 'NON_GRADED';
+          return `
+            <tr>
+              <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1;">${row.rank}</td>
+              <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1;">${row.rollNo || row.sn}</td>
+              <td style="text-align: center; font-family: monospace; border: 1px solid #cbd5e1;">${symbol}</td>
+              <td style="border: 1px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;"><strong>${row.fullName}</strong></td>
+              <td style="text-align: center; font-family: monospace; border: 1px solid #cbd5e1;">${row.studentId}</td>
+              ${subCells}
+              <td style="text-align: right; font-weight: 900; color: #1e3a5f; border: 1px solid #cbd5e1;">${row.grandTotal} / ${row.grandFull}</td>
+              <td style="text-align: right; font-weight: 900; color: #15803d; border: 1px solid #cbd5e1;">${row.percentage}%</td>
+              <td style="text-align: center; font-weight: 900; color: ${isPassed ? '#15803d' : '#b91c1c'}; border: 1px solid #cbd5e1;">${isPassed ? 'PASS' : 'FAIL'}</td>
+            </tr>
+          `;
+        }
+      })
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${examTitleStr} Ledger - Shree Nepal Secondary School</title>
+          <style>
+            @page { size: A4 landscape; margin: 6mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
+            .school-name { font-size: 14px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .report-title { font-size: 11px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 2px 10px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; }
+            .meta-grid { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; margin-bottom: 8px; background: #f8fafc; padding: 6px 10px; border-radius: 4px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+            th { background: #1e3a5f; color: #fff; padding: 5px 3px; text-align: left; font-size: 9px; border: 1px solid #1e3a5f; }
+            td { padding: 4px 3px; }
+            .footer-sig { margin-top: 25px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 160px; text-align: center; padding-top: 3px; margin-top: 30px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट (Shree Nepal Sec. School)</div>
+            <div class="report-title">${examTitleStr} — Official Class Ledger Sheet (${isGradeMode ? 'Grade-wise GPA Ledger' : 'Mark-wise Ledger'})</div>
+          </div>
+
+          <div class="meta-grid">
+            <div><strong>कक्षा (Class):</strong> ${classNameStr}</div>
+            <div><strong>शैक्षिक सत्र (Academic Year):</strong> ${activeYear?.year || '2083'}</div>
+            <div><strong>कुल विद्यार्थी (Total Students):</strong> ${ledgerData.rows.length}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px; text-align: center;" rowSpan="2">Rank</th>
+                <th style="width: 30px; text-align: center;" rowSpan="2">Roll</th>
+                <th style="width: 70px; text-align: center;" rowSpan="2">Symbol No.</th>
+                <th style="max-width: 140px;" rowSpan="2">Student Name</th>
+                ${!isGradeMode ? `<th style="width: 90px;" rowSpan="2">EMIS ID</th>` : ''}
+                ${subjectHeaders}
+                ${isGradeMode ? `
+                  <th style="width: 45px; text-align: center; background: #162c46; color: #fef3c7;" rowSpan="2">GPA</th>
+                  <th style="width: 45px; text-align: center;" rowSpan="2">Grade</th>
+                  <th style="width: 55px; text-align: center;" rowSpan="2">Status</th>
+                ` : `
+                  <th style="width: 70px; text-align: right;" rowSpan="2">Total</th>
+                  <th style="width: 40px; text-align: right;" rowSpan="2">%</th>
+                  <th style="width: 45px; text-align: center;" rowSpan="2">Result</th>
+                `}
+              </tr>
+              <tr>
+                ${subDetailHeaders}
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="footer-sig">
+            <div class="sig-line">कक्षा शिक्षकको दस्तखत (Class Teacher)</div>
+            <div class="sig-line">परीक्षा नियन्त्रकको दस्तखत (Exam Controller)</div>
+            <div class="sig-line">प्रधानाध्यापकको दस्तखत तथा छाप (Headmaster Stamp)</div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   const currentClassObj = classesData?.find((c: any) => c.id.toString() === selectedClassId);
   const currentClassSubject = currentClassObj?.subjects?.find((cs: any) => cs.subjectId.toString() === selectedSubjectId);
   const currentSubjectObj = subjectsData?.find((s: any) => s.id.toString() === selectedSubjectId);
@@ -1105,7 +1283,7 @@ export default function ExamsPage() {
 
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={triggerLedgerPrint}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-xs transition"
               >
                 <Printer size={14} />
