@@ -17,26 +17,41 @@ router.post('/login', async (req, res) => {
     const rawPass = String(password).trim();
     const lowerInput = rawInput.toLowerCase();
 
-    // 1. Fetch active users
-    const allUsers = await prisma.user.findMany({
-      where: { isActive: true },
+    // 1. Fast targeted indexed query (instead of scanning all users in memory)
+    let user = await prisma.user.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { username: { equals: rawInput } },
+          { teacher: { email: { equals: rawInput } } },
+          { teacher: { phone: { equals: rawInput } } },
+          { student: { studentId: { equals: rawInput } } },
+          { student: { emisId: { equals: rawInput } } },
+          { student: { phone: { equals: rawInput } } },
+        ],
+      },
       include: {
         teacher: { select: { id: true, fullName: true, photoUrl: true, email: true, phone: true } },
         student: { select: { id: true, fullName: true, studentId: true, emisId: true, photoUrl: true, phone: true } },
       },
     });
 
-    // Match by username, email, phone, studentId, emisId, or fullName
-    let user = allUsers.find(u =>
-      u.username.toLowerCase() === lowerInput ||
-      (u.teacher?.email && u.teacher.email.toLowerCase() === lowerInput) ||
-      (u.teacher?.phone && u.teacher.phone === rawInput) ||
-      (u.teacher?.fullName && u.teacher.fullName.toLowerCase() === lowerInput) ||
-      (u.student?.studentId && u.student.studentId.toLowerCase() === lowerInput) ||
-      (u.student?.emisId && u.student.emisId.toLowerCase() === lowerInput) ||
-      (u.student?.phone && u.student.phone === rawInput) ||
-      (u.student?.fullName && u.student.fullName.toLowerCase() === lowerInput)
-    );
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          isActive: true,
+          OR: [
+            { username: { contains: rawInput } },
+            { teacher: { fullName: { contains: rawInput } } },
+            { student: { fullName: { contains: rawInput } } },
+          ],
+        },
+        include: {
+          teacher: { select: { id: true, fullName: true, photoUrl: true, email: true, phone: true } },
+          student: { select: { id: true, fullName: true, studentId: true, emisId: true, photoUrl: true, phone: true } },
+        },
+      });
+    }
 
     // 2. Fallback: Search unlinked Student table
     if (!user) {
@@ -64,7 +79,7 @@ router.post('/login', async (req, res) => {
           });
         } else if (!studentRec.userId) {
           // Auto-repair missing User record for student
-          const hash = await bcrypt.hash(rawPass, 12);
+          const hash = await bcrypt.hash(rawPass, 10);
           const newUser = await prisma.user.create({
             data: {
               username: studentRec.studentId || `STU-${studentRec.id}`,

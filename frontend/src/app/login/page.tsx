@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,6 +22,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+
+  useEffect(() => {
+    router.prefetch('/dashboard');
+    router.prefetch('/teacher');
+    router.prefetch('/student');
+    router.prefetch('/dashboard/finance/fees');
+  }, [router]);
 
   // Forgot password modal state
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
