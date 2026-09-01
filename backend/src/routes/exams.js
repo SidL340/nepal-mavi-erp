@@ -399,7 +399,10 @@ router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN
     const examId = parseInt(req.params.id);
     const { classIds, isPublished = true } = req.body;
 
-    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      include: { examClasses: { include: { class: true } } },
+    });
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
     const whereClass = { examId };
@@ -413,12 +416,32 @@ router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN
     });
 
     if (isPublished) {
+      const targetClassIds = classIds && Array.isArray(classIds) && classIds.length > 0
+        ? classIds.map(id => parseInt(id))
+        : exam.examClasses.map(ec => ec.classId);
+
+      for (const cid of targetClassIds) {
+        const cls = await prisma.class.findUnique({ where: { id: cid } });
+        await prisma.notice.create({
+          data: {
+            title: `📢 Exam Results Published: ${exam.name} (${cls?.name || 'Class'})`,
+            body: `Official examination results for ${exam.name} (${cls?.name || 'Class'}) have been published by school administration. You can now view and print your Grade Sheet from your Student Portal!`,
+            type: 'GENERAL',
+            targetClassId: cid,
+            postedDateBs: '2081-05-15',
+            createdBy: req.user.id,
+          },
+        });
+      }
+
       await prisma.notice.create({
         data: {
           title: `📢 Exam Results Published: ${exam.name}`,
-          body: `Official results for ${exam.name} have been published by administration. Students can view and print their Grade Sheets from the Student Portal.`,
-          type: 'EXAM',
+          body: `Official examination results for ${exam.name} have been published by administration. Students can view and print their Grade Sheets from the Student Portal.`,
+          type: 'GENERAL',
+          targetRole: 'STUDENT',
           postedDateBs: '2081-05-15',
+          createdBy: req.user.id,
         },
       });
     }
@@ -455,9 +478,10 @@ router.get('/:examId/marksheet/:studentId', authenticate, async (req, res) => {
       if (!examClass || !examClass.isPublished) {
         return res.json({
           success: true,
-          isPublished: false,
-          data: null,
-          message: `Results for "${exam?.name || 'this exam'}" have not been published by administration yet.`,
+          data: {
+            isPublished: false,
+            message: `Results for "${exam?.name || 'this exam'}" have not been published by administration yet.`,
+          },
         });
       }
     }
@@ -561,6 +585,7 @@ router.get('/:examId/marksheet/:studentId', authenticate, async (req, res) => {
     return res.json({
       success: true,
       data: {
+        isPublished: true,
         school,
         exam,
         student: {

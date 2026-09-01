@@ -15,10 +15,12 @@ router.get('/', authenticate, async (req, res) => {
     // Role-based filter
     if (role === 'STUDENT') {
       const sId = student?.id;
+      const activeEnrollment = student ? await prisma.classEnrollment.findFirst({ where: { studentId: sId, isActive: true } }) : null;
       where.OR = [
-        { targetRole: null, type: 'GENERAL' },
+        { targetRole: null },
+        { targetRole: 'STUDENT' },
         { targetStudentId: sId },
-        { targetClassId: student ? (await prisma.classEnrollment.findFirst({ where: { studentId: sId, isActive: true } }))?.classId : undefined },
+        { targetClassId: activeEnrollment ? activeEnrollment.classId : undefined },
       ];
     } else if (role === 'TEACHER') {
       where.OR = [
