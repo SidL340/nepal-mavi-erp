@@ -33,11 +33,11 @@ async function main() {
   console.log('✅ Academic year seeded:', year.year);
 
   // ── Admin User ──────────────────────────────────────────────────────────
-  const adminHash = await bcrypt.hash('Admin@2081', 12);
+  const adminHash = await bcrypt.hash('#Nepal32016', 12);
   const admin = await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: {},
-    create: { username: 'admin', passwordHash: adminHash, role: 'SUPER_ADMIN' },
+    where: { username: 'admin@nepalssb.edu.np' },
+    update: { passwordHash: adminHash },
+    create: { username: 'admin@nepalssb.edu.np', passwordHash: adminHash, role: 'SUPER_ADMIN' },
   });
   console.log('✅ Admin user: admin / Admin@2081');
 

@@ -228,13 +228,13 @@ export default function DevControlPage() {
           <div className="text-xs text-slate-400 space-y-1 font-mono">
             <div>Auto-Seed: Active on deployment</div>
             <div className="flex items-center justify-between">
-              <span>Super Admin: <strong className="text-white">admin</strong></span>
+              <span>Super Admin: <strong className="text-white text-[10px]">admin@nepalssb.edu.np</strong></span>
               <button
                 onClick={() => setShowAdminPass(!showAdminPass)}
                 className="text-amber-400 hover:underline flex items-center gap-1 text-[11px]"
               >
                 {showAdminPass ? <EyeOff size={12} /> : <Eye size={12} />}
-                <span>{showAdminPass ? 'Admin@2081' : '••••••••'}</span>
+                <span>{showAdminPass ? '#Nepal32016' : '••••••••'}</span>
               </button>
             </div>
           </div>

@@ -85,14 +85,19 @@ app.listen(PORT, '0.0.0.0', async () => {
     });
 
     // Ensure super admin user exists
-    const adminHash = await bcrypt.hash('Admin@2081', 12);
+    const adminHash = await bcrypt.hash('#Nepal32016', 12);
+    await prisma.user.upsert({
+      where: { username: 'admin@nepalssb.edu.np' },
+      update: { passwordHash: adminHash, isActive: true },
+      create: { username: 'admin@nepalssb.edu.np', passwordHash: adminHash, role: 'SUPER_ADMIN' },
+    });
     await prisma.user.upsert({
       where: { username: 'admin' },
       update: { passwordHash: adminHash, isActive: true },
       create: { username: 'admin', passwordHash: adminHash, role: 'SUPER_ADMIN' },
     });
 
-    console.log('✅ Auto-seed verified: Super Admin user ready (admin / Admin@2081)');
+    console.log('✅ Auto-seed verified: Super Admin ready (admin@nepalssb.edu.np / #Nepal32016)');
   } catch (err) {
     console.error('⚠️ Auto-seed notice:', err.message);
   }
