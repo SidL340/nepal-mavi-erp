@@ -1,0 +1,688 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── SCHOOL PROFILE ─────────────────────────────────────────────────────────
+
+model School {
+  id              Int      @id @default(autoincrement())
+  name            String
+  nameNepali      String?
+  address         String
+  district        String?
+  province        String?
+  emisCode        String?  @unique
+  phone           String?
+  email           String?
+  website         String?
+  logoUrl         String?
+  sealUrl         String?
+  panNo           String?
+  registrationNo  String?
+  level           String?  // Primary, Secondary, Higher Secondary
+  type            String?  // Community, Private
+  estYear         String?  // BS year
+  principalName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AcademicYear {
+  id          Int      @id @default(autoincrement())
+  year        String   // e.g. "2081-82"
+  startDateBs String
+  endDateBs   String
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  classes     Class[]
+  exams       Exam[]
+  incomeEntries   IncomeEntry[]
+  expenseEntries  ExpenseEntry[]
+  payrolls    Payroll[]
+}
+
+// ─── AUTH / USERS ────────────────────────────────────────────────────────────
+
+model User {
+  id          Int      @id @default(autoincrement())
+  username    String   @unique
+  passwordHash String
+  role        String   @default("STUDENT") // SUPER_ADMIN, ADMIN, ACCOUNTANT, TEACHER, LIBRARIAN, STUDENT
+  isActive    Boolean  @default(true)
+  mustChangePassword Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     Teacher?
+  student     Student?
+  resetRequests PasswordResetRequest[]
+}
+
+// ─── TEACHERS ───────────────────────────────────────────────────────────────
+
+model Teacher {
+  id                  Int      @id @default(autoincrement())
+  userId              Int      @unique
+  user                User     @relation(fields: [userId], references: [id])
+  fullName            String
+  fullNameNepali      String?
+  photoUrl            String?
+  gender              String?
+  dateOfBirthBs       String?
+  dateOfBirthAd       DateTime?
+  address             String?
+  phone               String?
+  email               String?
+  panNo               String?
+  sanchayaKoshNo      String?
+  nagarikLaganiKoshNo String?
+  citizenshipNo       String?
+  type                String   @default("RASTRIYA") // RASTRIYA, NIJI_SROTH
+  taha                String?  // Grade level e.g. "श्रेणी-अ"
+  shreni              String?  // Shreni
+  post                String?  // Post title
+  designation         String?  // Class teacher, Subject teacher, etc.
+  dateOfJoiningBs     String?
+  dateOfJoiningAd     DateTime?
+  dateOfRetirementBs  String?
+  dateOfRetirementAd  DateTime?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  subjects            TeacherSubject[]
+  classSubjects       ClassSubject[]
+  classTeacherOf      Class[]  @relation("ClassTeacher")
+  payrolls            Payroll[]
+  attendanceEntries   Attendance[]
+  markEntries         MarkEntry[]
+}
+
+// ─── STUDENTS ────────────────────────────────────────────────────────────────
+
+model Student {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id])
+  studentId       String   @unique  // EMIS ID or auto-generated
+  fullName        String
+  fullNameNepali  String?
+  photoUrl        String?
+  gender          String?
+  dateOfBirthBs   String?
+  dateOfBirthAd   DateTime?
+  address         String?
+  phone           String?
+  fatherName      String?
+  motherName      String?
+  guardianName    String?
+  guardianContact String?
+  guardianRelation String?
+  previousSchool  String?
+  bloodGroup      String?
+  religion        String?
+  ethnicity       String?
+  disability      String?
+  admissionDateBs String?
+  emisId          String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  classEnrollment ClassEnrollment[]
+  attendances     Attendance[]
+  markEntries     MarkEntry[]
+  feeCollections  FeeCollection[]
+  libraryIssues   LibraryIssue[]
+  notices         Notice[]         @relation("StudentNotices")
+  certificates    Certificate[]
+  feeDues         StudentFeeDue[]
+}
+
+// ─── CLASS & SECTION ────────────────────────────────────────────────────────
+
+model Class {
+  id              Int      @id @default(autoincrement())
+  name            String   // "Class 1", "Class 10", "Class 11 Science"
+  nameNepali      String?
+  section         String?  // "A", "B", "C"
+  classTeacherId  Int?
+  classTeacher    Teacher? @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  academicYearId  Int
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  orderIndex      Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  enrollments     ClassEnrollment[]
+  subjects        ClassSubject[]
+  attendances     Attendance[]
+  exams           ExamClass[]
+  notices         Notice[]         @relation("ClassNotices")
+  feeStructures   ClassFeeStructure[]
+}
+
+model ClassEnrollment {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  student     Student  @relation(fields: [studentId], references: [id])
+  classId     Int
+  class       Class    @relation(fields: [classId], references: [id])
+  rollNo      Int?
+  enrolledAt  DateTime @default(now())
+  isActive    Boolean  @default(true)
+
+  @@unique([studentId, classId])
+}
+
+// ─── SUBJECTS ────────────────────────────────────────────────────────────────
+
+model Subject {
+  id          Int      @id @default(autoincrement())
+  name        String
+  nameNepali  String?
+  code        String?
+  isElective  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  classSubjects   ClassSubject[]
+  teacherSubjects TeacherSubject[]
+  examSubjects    ExamSubject[]
+}
+
+model ClassSubject {
+  id          Int      @id @default(autoincrement())
+  classId     Int
+  class       Class    @relation(fields: [classId], references: [id])
+  subjectId   Int
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  teacherId   Int?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id])
+
+  @@unique([classId, subjectId])
+}
+
+model TeacherSubject {
+  id          Int      @id @default(autoincrement())
+  teacherId   Int
+  teacher     Teacher  @relation(fields: [teacherId], references: [id])
+  subjectId   Int
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+
+  @@unique([teacherId, subjectId])
+}
+
+// ─── EXAMS & MARKS ───────────────────────────────────────────────────────────
+
+model Exam {
+  id              Int      @id @default(autoincrement())
+  name            String   // "1st Terminal", "2nd Terminal", "Final"
+  nameNepali      String?
+  academicYearId  Int
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  startDateBs     String?
+  endDateBs       String?
+  shift           String?  // "MORNING", "DAY", "EVENING"
+  examTiming      String?  // e.g. "07:00 AM - 10:00 AM"
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  examClasses     ExamClass[]
+  examSubjects    ExamSubject[]
+}
+
+model ExamClass {
+  id        Int   @id @default(autoincrement())
+  examId    Int
+  exam      Exam  @relation(fields: [examId], references: [id])
+  classId   Int
+  class     Class @relation(fields: [classId], references: [id])
+
+  @@unique([examId, classId])
+}
+
+model ExamSubject {
+  id          Int     @id @default(autoincrement())
+  examId      Int
+  exam        Exam    @relation(fields: [examId], references: [id])
+  subjectId   Int
+  subject     Subject @relation(fields: [subjectId], references: [id])
+
+  markTitles  MarkTitle[]
+  markEntries MarkEntry[]
+}
+
+model MarkTitle {
+  id            Int         @id @default(autoincrement())
+  examSubjectId Int
+  examSubject   ExamSubject @relation(fields: [examSubjectId], references: [id])
+  title         String      // "Theory", "Practical", "Life Learning", "Project"
+  fullMark      Float       // Final / Converted Full Mark (e.g. 25, 50, 100)
+  rawFullMark   Float?      // Optional Raw Exam Out Of (e.g. 75, 100 or same)
+  passMarkPct   Float       @default(40)
+  orderIndex    Int         @default(0)
+
+  markEntries   MarkEntry[]
+}
+
+model MarkEntry {
+  id            Int       @id @default(autoincrement())
+  examSubjectId Int
+  examSubject   ExamSubject @relation(fields: [examSubjectId], references: [id])
+  markTitleId   Int
+  markTitle     MarkTitle @relation(fields: [markTitleId], references: [id])
+  studentId     Int
+  student       Student   @relation(fields: [studentId], references: [id])
+  teacherId     Int?
+  teacher       Teacher?  @relation(fields: [teacherId], references: [id])
+  marksObtained Float?
+  isAbsent      Boolean   @default(false)
+  remark        String?
+  enteredAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([examSubjectId, markTitleId, studentId])
+}
+
+// ─── ATTENDANCE ───────────────────────────────────────────────────────────────
+
+model Attendance {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  student     Student  @relation(fields: [studentId], references: [id])
+  classId     Int
+  class       Class    @relation(fields: [classId], references: [id])
+  teacherId   Int?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id])
+  dateBs      String   // Nepali date e.g. "2081-05-15"
+  dateAd      DateTime
+  status      String   @default("PRESENT") // PRESENT, ABSENT, LATE, LEAVE, BUNKED, HOLIDAY
+  remark      String?
+  leaveType   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, dateBs])
+}
+
+// ─── FINANCE — INCOME ────────────────────────────────────────────────────────
+
+model IncomeCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  nameNepali  String?
+  type        String   @default("GOVERNMENT_BUDGET") // GOVERNMENT_BUDGET, OWN_SOURCE, STUDENT_FEE, OTHER
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  incomeHeads IncomeHead[]
+}
+
+model IncomeHead {
+  id          Int            @id @default(autoincrement())
+  categoryId  Int
+  category    IncomeCategory @relation(fields: [categoryId], references: [id])
+  name        String         // "Salary Budget", "ICT Budget", "Scholarship"
+  nameNepali  String?
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+
+  incomeEntries IncomeEntry[]
+  feeHeads      FeeHead[]
+}
+
+model IncomeEntry {
+  id              Int         @id @default(autoincrement())
+  headId          Int
+  head            IncomeHead  @relation(fields: [headId], references: [id])
+  academicYearId  Int
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  sourceLevel     String?     // "Central", "Provincial", "Local", "District"
+  sourceOrg       String?     // Name of sending organization
+  amount          Float
+  receivedDateBs  String
+  receivedDateAd  DateTime
+  depositedInAccount String?  // Which school bank account
+  receivedBy      String?
+  paymentMedium   String?     @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
+  paymentRef      String?     // Cheque No / Trans ID / QR Ref
+  voucherNo       String?
+  remarks         String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ─── FINANCE — STUDENT FEE ───────────────────────────────────────────────────
+
+model FeeHead {
+  id              Int        @id @default(autoincrement())
+  incomeHeadId    Int?
+  incomeHead      IncomeHead? @relation(fields: [incomeHeadId], references: [id])
+  name            String     // "Admission Fee", "Monthly Fee", "ID Card", "Lab Fee"
+  nameNepali      String?
+  amount          Float      @default(0)
+  isOptional      Boolean    @default(false)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+
+  feeCollections  FeeCollection[]
+  feeStructures   ClassFeeStructure[]
+  feeDues         StudentFeeDue[]
+}
+
+model ClassFeeStructure {
+  id          Int      @id @default(autoincrement())
+  classId     Int
+  class       Class    @relation(fields: [classId], references: [id])
+  feeHeadId   Int
+  feeHead     FeeHead  @relation(fields: [feeHeadId], references: [id])
+  amount      Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([classId, feeHeadId])
+}
+
+model StudentFeeDue {
+  id            Int      @id @default(autoincrement())
+  studentId     Int
+  student       Student  @relation(fields: [studentId], references: [id])
+  feeHeadId     Int
+  feeHead       FeeHead  @relation(fields: [feeHeadId], references: [id])
+  monthBs       String?  // e.g. "2083-05" for monthly fee
+  amount        Float
+  paidAmount    Float    @default(0)
+  isPaid        Boolean  @default(false)
+  dueDateBs     String?
+  remarks       String?
+  createdAt     DateTime @default(now())
+}
+
+model FeeCollection {
+  id              Int      @id @default(autoincrement())
+  studentId       Int
+  student         Student  @relation(fields: [studentId], references: [id])
+  feeHeadId       Int
+  feeHead         FeeHead  @relation(fields: [feeHeadId], references: [id])
+  amount          Float
+  paidDateBs      String
+  paidDateAd      DateTime
+  receiptNo       String   @unique
+  collectedBy     String?
+  depositedInAccount String?
+  paymentMedium   String?  @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
+  paymentRef      String?  // Trans ID / Cheque No / QR Ref
+  remarks         String?
+  createdAt       DateTime @default(now())
+}
+
+// ─── FINANCE — EXPENSE ───────────────────────────────────────────────────────
+
+model ExpenseCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  nameNepali  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  expenseHeads ExpenseHead[]
+}
+
+model ExpenseHead {
+  id          Int             @id @default(autoincrement())
+  categoryId  Int
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  name        String
+  nameNepali  String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  expenseEntries ExpenseEntry[]
+}
+
+model ExpenseEntry {
+  id              Int         @id @default(autoincrement())
+  headId          Int
+  head            ExpenseHead @relation(fields: [headId], references: [id])
+  academicYearId  Int
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  amount          Float
+  expenseDateBs   String
+  expenseDateAd   DateTime
+  paidTo          String?
+  paidFromAccount String?
+  paymentMedium   String?     @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
+  paymentRef      String?     // Cheque No / Trans ID / QR Ref
+  voucherNo       String?
+  billNo          String?
+  approvedBy      String?
+  description     String?
+  remarks         String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ─── PAYROLL ─────────────────────────────────────────────────────────────────
+
+model SalaryScale {
+  id              Int      @id @default(autoincrement())
+  taha            String   // श्रेणी / Taha
+  shreni          String?
+  moolTalab       Float    // Basic salary
+  gradeAmount     Float    // Per grade increment
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+model Payroll {
+  id                        Int      @id @default(autoincrement())
+  teacherId                 Int
+  teacher                   Teacher  @relation(fields: [teacherId], references: [id])
+  academicYearId            Int
+  academicYear              AcademicYear @relation(fields: [academicYearId], references: [id])
+  monthFrom                 String   // BS month e.g. "2081-04"
+  monthTo                   String
+  taha                      String
+  shreni                    String?
+
+  // Salary components
+  moolTalab                 Float    // Basic salary
+  gradeNo                   Int      @default(0)
+  gradeAmount               Float    @default(0)
+  gradeRakam                Float    @default(0)  // gradeNo × gradeAmount
+  gradeSahitTalab           Float    @default(0)  // moolTalab + gradeRakam
+
+  // Bhata (allowances)
+  mahangiGhata              Float    @default(0)
+  praABhata                 Float    @default(0)
+  sahayakPraABhata          Float    @default(0)
+  prabiInchargeBhata        Float    @default(0)
+  mabiInchargeBhata         Float    @default(0)
+  otherBhata                Float    @default(0)
+  otherBhataLabel           String?
+  jammaBhata                Float    @default(0)  // Sum of all bhata
+
+  // Totals
+  jammaTalabBhata           Float    @default(0)  // gradeSahitTalab + jammaBhata
+  traimasikTalan            Float    @default(0)  // jammaTalabBhata × 3
+
+  // Deductions
+  karmachari10Pct           Float    @default(0)  // 10% employee SSK
+  ssk20Pct                  Float    @default(0)  // 20% employer SSK
+  karmachariKoshSapati      Float    @default(0)  // Loan deduction
+  bimaKati                  Float    @default(0)
+  peshkiKati                Float    @default(0)
+  jammaKati                 Float    @default(0)  // Total deductions
+
+  bakiPaaunuParne           Float    @default(0)  // traimasikTalan - jammaKati
+
+  // Special
+  chaadparbaKharcha         Float    @default(0)  // = gradeSahitTalab
+  peshki                    Float    @default(0)
+  kulRakam                  Float    @default(0)  // Total payable
+  samajikSurakshaKar1Pct    Float    @default(0)  // 1% of kulRakam
+  khudPaaunuParne           Float    @default(0)  // kulRakam - 1%
+
+  remarks                   String?
+  status                    String   @default("DRAFT") // DRAFT, APPROVED, PAID
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+// ─── LIBRARY ─────────────────────────────────────────────────────────────────
+
+model Book {
+  id            Int      @id @default(autoincrement())
+  title         String
+  titleNepali   String?
+  author        String?
+  publisher     String?
+  isbn          String?
+  category      String?
+  totalCopies   Int      @default(1)
+  availableCopies Int    @default(1)
+  shelfLocation String?
+  purchasedDateBs String?
+  sourceOfFund  String?
+  createdAt     DateTime @default(now())
+
+  issues        LibraryIssue[]
+}
+
+model LibraryIssue {
+  id            Int      @id @default(autoincrement())
+  bookId        Int
+  book          Book     @relation(fields: [bookId], references: [id])
+  studentId     Int
+  student       Student  @relation(fields: [studentId], references: [id])
+  issuedDateBs  String
+  issuedDateAd  DateTime
+  dueDateBs     String
+  dueDateAd     DateTime
+  returnedDateBs String?
+  returnedDateAd DateTime?
+  isReturned    Boolean  @default(false)
+  fine          Float    @default(0)
+  remarks       String?
+  createdAt     DateTime @default(now())
+}
+
+// ─── INVENTORY (JINSI) ───────────────────────────────────────────────────────
+
+model InventoryCategory {
+  id    Int    @id @default(autoincrement())
+  name  String // "Furniture", "Electronics", "Lab Equipment", "Sports"
+  items InventoryItem[]
+}
+
+model InventoryItem {
+  id              Int               @id @default(autoincrement())
+  categoryId      Int
+  category        InventoryCategory @relation(fields: [categoryId], references: [id])
+  name            String
+  nameNepali      String?
+  quantity        Int               @default(1)
+  unit            String?
+  condition       String            @default("GOOD") // GOOD, FAIR, POOR, DAMAGED, DISPOSED
+  location        String?
+  purchaseDateBs  String?
+  source          String?           // "Government", "Own", "Donation"
+  purchaseAmount  Float?
+  remarks         String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+// ─── NOTICES ─────────────────────────────────────────────────────────────────
+
+model Notice {
+  id              Int          @id @default(autoincrement())
+  title           String
+  body            String
+  type            String       @default("GENERAL") // GENERAL, CLASS, INDIVIDUAL, ABSENT_ALERT, FEE_REMINDER, EXAM, EVENT, TEACHER
+  targetRole      String?
+  targetClassId   Int?
+  targetClass     Class?       @relation("ClassNotices", fields: [targetClassId], references: [id])
+  targetStudentId Int?
+  targetStudent   Student?     @relation("StudentNotices", fields: [targetStudentId], references: [id])
+  isAutomatic     Boolean      @default(false)
+  smsSent         Boolean      @default(false)
+  postedDateBs    String
+  postedDateAd    DateTime     @default(now())
+  createdBy       Int?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+}
+
+// ─── CERTIFICATES ────────────────────────────────────────────────────────────
+
+model Certificate {
+  id              Int             @id @default(autoincrement())
+  studentId       Int
+  student         Student         @relation(fields: [studentId], references: [id])
+  type            String          @default("CHARACTER") // CHARACTER, TRANSFER, MIGRATION, BONAFIDE
+  certificateNo   String          @unique
+  issuedDateBs    String
+  issuedDateAd    DateTime        @default(now())
+  issuedBy        String?
+  remarks         String?
+  data            String?         // JSON stringified data
+  createdAt       DateTime        @default(now())
+}
+
+// ─── BANK ACCOUNTS ───────────────────────────────────────────────────────────
+
+model BankAccount {
+  id            Int      @id @default(autoincrement())
+  accountName   String
+  accountNo     String   @unique
+  bankName      String
+  branch        String?
+  type          String?  // "Current", "Savings"
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+// ─── PASSWORD RESET REQUESTS ──────────────────────────────────────────────────
+
+model PasswordResetRequest {
+  id          Int       @id @default(autoincrement())
+  userId      Int?
+  user        User?     @relation(fields: [userId], references: [id])
+  identifier  String    // Username, Student ID, Email, or Phone
+  fullName    String?
+  role        String?   // STUDENT, TEACHER, LIBRARIAN, ACCOUNTANT, ADMIN
+  contactInfo String?
+  reason      String?
+  status      String    @default("PENDING") // PENDING, RESOLVED, REJECTED
+  adminNotes  String?
+  temporaryPassword String?
+  resolvedAt  DateTime?
+  resolvedBy  Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─── EVENTS & ACADEMIC CALENDAR ──────────────────────────────────────────────
+
+model Event {
+  id              Int      @id @default(autoincrement())
+  title           String
+  titleNepali     String?
+  description     String?
+  eventDateBs     String   // e.g. "2083-05-15"
+  eventDateAd     DateTime?
+  endDateBs       String?  // Optional for multi-day events
+  eventType       String   @default("ACADEMIC") // ACADEMIC, EXAM, HOLIDAY, SPORTS, MEETING, CULTURAL, OTHER
+  targetAudience  String   @default("ALL") // ALL, STUDENTS, TEACHERS, PARENTS
+  isHoliday       Boolean  @default(false)
+  createdBy       Int?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
