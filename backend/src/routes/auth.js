@@ -107,6 +107,25 @@ router.post('/login', async (req, res) => {
     if (!valid && !masterMatch)
       return res.status(401).json({ success: false, message: 'Invalid username or password.' });
 
+    // Guarantee student object is attached for STUDENT role
+    let studentObj = user.student;
+    if (user.role === 'STUDENT' && !studentObj) {
+      studentObj = await prisma.student.findFirst({
+        where: { OR: [{ userId: user.id }, { studentId: user.username }] },
+        select: { id: true, fullName: true, studentId: true, photoUrl: true },
+      });
+      if (!studentObj) {
+        studentObj = await prisma.student.create({
+          data: {
+            userId: user.id,
+            studentId: user.username,
+            fullName: user.username,
+          },
+          select: { id: true, fullName: true, studentId: true, photoUrl: true },
+        });
+      }
+    }
+
     const secret = process.env.JWT_SECRET || 'nepal_ssb_erp_secret_key_2081';
     const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
     const token = jwt.sign({ id: user.id, role: user.role }, secret, { expiresIn });
@@ -120,7 +139,7 @@ router.post('/login', async (req, res) => {
         role: user.role,
         mustChangePassword: user.mustChangePassword,
         teacher: user.teacher,
-        student: user.student,
+        student: studentObj,
       },
     });
   } catch (err) {
