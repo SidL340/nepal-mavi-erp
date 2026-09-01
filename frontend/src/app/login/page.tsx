@@ -102,8 +102,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full shadow-2xl mb-4 p-2">
             <School className="w-10 h-10 text-[#1e3a5f]" />
           </div>
-          <h1 className="text-3xl font-black text-white font-serif tracking-wide">Nepal School ERP</h1>
-          <p className="text-amber-300 mt-1 text-xs font-bold font-nepali">नेपाल विद्यालय व्यवस्थापन तथा परीक्षा प्रणाली</p>
+          <h1 className="text-3xl font-black text-white font-serif tracking-wide">Nepal SSB Secondary School ERP</h1>
+          <p className="text-amber-300 mt-1 text-xs font-bold font-nepali">नेपाल एसएसबी माध्यमिक विद्यालय व्यवस्थापन प्रणाली</p>
         </div>
 
         {/* Login Card */}

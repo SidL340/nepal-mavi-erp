@@ -294,8 +294,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-white tracking-wide">NEPAL MAVI ERP</p>
-              <p className="truncate text-[10px] font-medium text-amber-400 font-nepali">विद्यालय व्यवस्थापन</p>
+              <p className="truncate text-sm font-bold text-white tracking-wide">NEPAL SSB ERP</p>
+              <p className="truncate text-[10px] font-medium text-amber-400 font-nepali">नेपाल एसएसबी मा.वि.</p>
             </div>
           )}
         </div>
