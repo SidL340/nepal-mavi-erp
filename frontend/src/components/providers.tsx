@@ -12,14 +12,23 @@ const queryClient = new QueryClient({
       gcTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
-      retry: 1,
+      retry: 4,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },
   },
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const initFromStorage = useAuthStore((s) => s.initFromStorage);
-  useEffect(() => { initFromStorage(); }, [initFromStorage]);
+  useEffect(() => {
+    initFromStorage();
+    // Backend cold-start warmup ping
+    try {
+      const api = require('@/lib/api').default;
+      api.get('/health').catch(() => {});
+    } catch (e) {}
+  }, [initFromStorage]);
+
   return (
     <QueryClientProvider client={queryClient}>
       {children}
