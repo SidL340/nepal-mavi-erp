@@ -29,6 +29,8 @@ import toast from 'react-hot-toast';
 import ExpensesPage from './expenses/page';
 import IncomePage from './income/page';
 import JournalPage from './journal/page';
+import FeeCollectionPage from './fees/page';
+import PayrollPage from './payroll/page';
 
 export default function UnifiedFinanceHubPage() {
   const searchParams = useSearchParams();
@@ -261,6 +263,30 @@ export default function UnifiedFinanceHubPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab('fees')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold whitespace-nowrap transition ${
+            activeTab === 'fees'
+              ? 'bg-indigo-700 text-white shadow-2xs'
+              : 'text-gray-600 hover:bg-slate-100'
+          }`}
+        >
+          <Receipt size={14} />
+          <span>Fee Collections (विद्यार्थी शुल्क)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('payroll')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold whitespace-nowrap transition ${
+            activeTab === 'payroll'
+              ? 'bg-teal-700 text-white shadow-2xs'
+              : 'text-gray-600 hover:bg-slate-100'
+          }`}
+        >
+          <Wallet size={14} />
+          <span>Staff Payroll (तलबी भरपाई)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('journal')}
           className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold whitespace-nowrap transition ${
             activeTab === 'journal'
@@ -300,6 +326,8 @@ export default function UnifiedFinanceHubPage() {
       {/* ─── TAB CONTENT ───────────────────────────────────────────────────── */}
       {activeTab === 'expenses' && <ExpensesPage />}
       {activeTab === 'income' && <IncomePage />}
+      {activeTab === 'fees' && <FeeCollectionPage />}
+      {activeTab === 'payroll' && <PayrollPage />}
       {activeTab === 'journal' && <JournalPage />}
 
       {/* OVERVIEW TAB */}
