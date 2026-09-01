@@ -216,6 +216,232 @@ export default function AttendancePage() {
     }
   };
 
+  // Standalone Print Engine for Monthly Attendance Report
+  const triggerMonthlyAttendancePrint = () => {
+    if (!monthlyReportData || monthlyReportData.length === 0) {
+      toast.error('No monthly attendance data to print.');
+      return;
+    }
+
+    const currentMonthlyClass = classesData?.find((c: any) => c.id.toString() === monthlyClassId);
+    const classNameStr = currentMonthlyClass ? `${currentMonthlyClass.name} ${currentMonthlyClass.section ? `(${currentMonthlyClass.section})` : ''}` : 'Class';
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const rowsHtml = monthlyReportData
+      .map(
+        (s: any, idx: number) => `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">${idx + 1}</td>
+          <td><strong>${s.fullName}</strong></td>
+          <td style="font-family: monospace;">${s.studentId}</td>
+          <td style="text-align: center; font-weight: bold;">${s.total}</td>
+          <td style="text-align: center; color: #15803d; font-weight: bold;">${s.present}</td>
+          <td style="text-align: center; color: #b91c1c; font-weight: bold;">${s.absent}</td>
+          <td style="text-align: center; color: #b45309;">${s.late}</td>
+          <td style="text-align: center; color: #1d4ed8;">${s.leave}</td>
+          <td style="text-align: right; font-weight: 900; color: #1e3a5f;">${s.percentage}%</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Monthly Attendance Ledger - Shree Nepal Secondary School</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 15px; }
+            .logo { width: 50px; height: 50px; border-radius: 50%; border: 1px solid #f59e0b; }
+            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; margin: 4px 0 2px; }
+            .school-sub { font-size: 11px; font-weight: 700; color: #4b5563; }
+            .report-title { font-size: 13px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 4px 12px; border-radius: 4px; margin-top: 6px; text-transform: uppercase; border: 1px solid #bfdbfe; }
+            .meta-grid { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+            th { background: #1e3a5f; color: #fff; padding: 8px 6px; text-align: left; font-size: 10.5px; }
+            td { padding: 7px 6px; border-bottom: 1px solid #e2e8f0; }
+            tr:nth-child(even) { background: #f8fafc; }
+            .footer-sig { margin-top: 40px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 180px; text-align: center; padding-top: 4px; margin-top: 40px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <img src="/school_logo.png" class="logo" alt="School Seal" />
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+            <div class="school-sub">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+            <div class="report-title">मासिक विद्यार्थी हाजिरी विवरण (Monthly Attendance Ledger)</div>
+          </div>
+
+          <div class="meta-grid">
+            <div><strong>कक्षा (Class):</strong> ${classNameStr}</div>
+            <div><strong>मासिक महिना (Month BS):</strong> ${monthlyBs}</div>
+            <div><strong>कुल विद्यार्थी (Total Students):</strong> ${monthlyReportData.length}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">क्र.स.</th>
+                <th>विद्यार्थीको नाम (Student Name)</th>
+                <th>EMIS/ID Code</th>
+                <th style="text-align: center;">सञ्चालन दिन</th>
+                <th style="text-align: center;">उपस्थित</th>
+                <th style="text-align: center;">अनुपस्थित</th>
+                <th style="text-align: center;">ढिलो</th>
+                <th style="text-align: center;">विदा</th>
+                <th style="text-align: right;">उपस्थिति %</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="footer-sig">
+            <div class="sig-line">कक्षा शिक्षकको दस्तखत<br>(Class Teacher Signature)</div>
+            <div class="sig-line">प्रधानाध्यापकको दस्तखत तथा छाप<br>(Headmaster / School Stamp)</div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  // Standalone Print Engine for Yearly Attendance Report
+  const triggerYearlyAttendancePrint = () => {
+    if (!yearlyReport || yearlyReport.length === 0) {
+      toast.error('No yearly attendance data to print.');
+      return;
+    }
+
+    const currentYearlyClass = classesData?.find((c: any) => c.id.toString() === yearlyClassId);
+    const classNameStr = currentYearlyClass ? `${currentYearlyClass.name} ${currentYearlyClass.section ? `(${currentYearlyClass.section})` : ''}` : 'Class';
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const rowsHtml = yearlyReport
+      .map(
+        (s: any) => `
+        <tr>
+          <td style="text-align: center; font-weight: bold;">${s.rollNo || '—'}</td>
+          <td>
+            <strong>${s.fullName}</strong><br>
+            <span style="font-size: 9px; color: #64748b; font-family: monospace;">ID: ${s.studentId}</span>
+          </td>
+          <td style="text-align: center; font-weight: bold;">${s.totalDays}</td>
+          <td style="text-align: center; color: #15803d; font-weight: bold;">${s.presentDays}</td>
+          <td style="text-align: center; color: #b91c1c; font-weight: bold;">${s.absentDays}</td>
+          <td style="text-align: center; color: #1d4ed8;">${s.leaveDays}</td>
+          <td style="text-align: center; font-weight: 900; color: #1e3a5f;">${s.attendedDays}</td>
+          <td style="text-align: right; font-weight: 900; font-size: 12px; color: #15803d;">${s.percentage}%</td>
+          <td style="text-align: center; font-weight: 900;">${s.grade}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Annual Attendance Calculation Ledger - Shree Nepal Secondary School</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 15px; }
+            .logo { width: 50px; height: 50px; border-radius: 50%; border: 1px solid #f59e0b; }
+            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; margin: 4px 0 2px; }
+            .school-sub { font-size: 11px; font-weight: 700; color: #4b5563; }
+            .report-title { font-size: 13px; font-weight: 900; background: #fef3c7; color: #78350f; display: inline-block; padding: 4px 12px; border-radius: 4px; margin-top: 6px; text-transform: uppercase; border: 1px solid #fde68a; }
+            .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 15px; font-size: 10px; }
+            .stat-box { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; background: #f8fafc; text-align: center; }
+            .stat-val { font-size: 14px; font-weight: 900; color: #1e3a5f; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 5px; }
+            th { background: #1e3a5f; color: #fff; padding: 8px 6px; text-align: left; font-size: 10.5px; }
+            td { padding: 7px 6px; border-bottom: 1px solid #e2e8f0; }
+            tr:nth-child(even) { background: #f8fafc; }
+            .footer-sig { margin-top: 40px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 180px; text-align: center; padding-top: 4px; margin-top: 40px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <img src="/school_logo.png" class="logo" alt="School Seal" />
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+            <div class="school-sub">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+            <div class="report-title">वार्षिक हाजिरी हिसाब तालिका (Annual Attendance Calculation Ledger)</div>
+          </div>
+
+          <div class="stats-bar">
+            <div class="stat-box">
+              <div>कक्षा / सत्र (Class/Year)</div>
+              <div class="stat-val">${classNameStr} (${yearlyBs})</div>
+            </div>
+            <div class="stat-box">
+              <div>कुल सञ्चालन दिन (Working Days)</div>
+              <div class="stat-val">${yearlyWorkingDays} Days</div>
+            </div>
+            <div class="stat-box">
+              <div>कक्षा औसत हाजिरी %</div>
+              <div class="stat-val">${avgYearlyPercentage}%</div>
+            </div>
+            <div class="stat-box">
+              <div>कुल विद्यार्थी संख्या</div>
+              <div class="stat-val">${yearlyReport.length} Students</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 50px; text-align: center;">Roll No</th>
+                <th>विद्यार्थी विवरण (Student Details)</th>
+                <th style="text-align: center;">सञ्चालन दिन</th>
+                <th style="text-align: center;">उपस्थित</th>
+                <th style="text-align: center;">अनुपस्थित</th>
+                <th style="text-align: center;">विदा</th>
+                <th style="text-align: center;">जम्मा उपस्थिति</th>
+                <th style="text-align: right;">वार्षिक %</th>
+                <th style="text-align: center;">मूल्याङ्कन</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="footer-sig">
+            <div class="sig-line">कक्षा शिक्षकको दस्तखत<br>(Class Teacher Signature)</div>
+            <div class="sig-line">प्रधानाध्यापकको दस्तखत तथा छाप<br>(Headmaster / School Stamp)</div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   // Aggregated Counts for Daily Tab
   const counts = {
     present: Object.values(attendanceMap).filter((a) => a.status === 'PRESENT').length,
@@ -444,30 +670,40 @@ export default function AttendancePage() {
       {activeTab === 'monthly' && (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
-            <div className="flex items-center gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Class:</label>
-                <select
-                  value={monthlyClassId}
-                  onChange={(e) => setMonthlyClassId(e.target.value)}
-                  className="erp-input font-bold text-xs"
-                >
-                  {classesData?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name} {c.section ? `(${c.section})` : ''}</option>
-                  ))}
-                </select>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Class:</label>
+                  <select
+                    value={monthlyClassId}
+                    onChange={(e) => setMonthlyClassId(e.target.value)}
+                    className="erp-input font-bold text-xs"
+                  >
+                    {classesData?.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name} {c.section ? `(${c.section})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Month BS (मिति):</label>
+                  <input
+                    type="text"
+                    placeholder="2083-05"
+                    value={monthlyBs}
+                    onChange={(e) => setMonthlyBs(e.target.value)}
+                    className="erp-input font-mono text-xs font-bold"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Month BS (मिति):</label>
-                <input
-                  type="text"
-                  placeholder="2083-05"
-                  value={monthlyBs}
-                  onChange={(e) => setMonthlyBs(e.target.value)}
-                  className="erp-input font-mono text-xs font-bold"
-                />
-              </div>
+              <button
+                onClick={triggerMonthlyAttendancePrint}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] text-white hover:bg-[#2a5280] px-4 py-2 text-xs font-bold transition shadow-2xs self-end sm:self-center"
+              >
+                <Printer size={15} />
+                <span>Print Monthly Sheet (मासिक हाजिरी प्रिन्ट)</span>
+              </button>
             </div>
           </div>
 
@@ -551,7 +787,7 @@ export default function AttendancePage() {
               </button>
 
               <button
-                onClick={() => window.print()}
+                onClick={triggerYearlyAttendancePrint}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] text-white hover:bg-[#2a5280] px-4 py-2 text-xs font-bold transition shadow-2xs"
               >
                 <Printer size={15} />
