@@ -365,35 +365,51 @@ async function main() {
     const subsToSeed = [nepaliSub, englishSub, mathSub, sciSub].filter(Boolean);
 
     for (const sub of subsToSeed) {
-      const examSub = await prisma.examSubject.upsert({
-        where: { examId_subjectId: { examId: exam.id, subjectId: sub.id } },
-        update: {},
-        create: {
-          examId: exam.id,
-          subjectId: sub.id,
-          fullMarkTheory: 75,
-          passMarkTheory: 27,
-          fullMarkPractical: 25,
-          passMarkPractical: 10,
-        },
+      let examSub = await prisma.examSubject.findFirst({
+        where: { examId: exam.id, subjectId: sub.id },
       });
+      if (!examSub) {
+        examSub = await prisma.examSubject.create({
+          data: {
+            examId: exam.id,
+            subjectId: sub.id,
+          },
+        });
+      }
+
+      let markTitle = await prisma.markTitle.findFirst({
+        where: { examSubjectId: examSub.id },
+      });
+      if (!markTitle) {
+        markTitle = await prisma.markTitle.create({
+          data: {
+            examSubjectId: examSub.id,
+            title: 'Theory',
+            fullMark: 75,
+            passMarkPct: 36,
+          },
+        });
+      }
 
       const enrolledStudents = await prisma.student.findMany({
         where: { classEnrollment: { some: { classId: class10Id } } },
       });
 
       for (const st of enrolledStudents) {
-        await prisma.markEntry.upsert({
-          where: { examSubjectId_studentId: { examSubjectId: examSub.id, studentId: st.id } },
-          update: { markTheory: 65, markPractical: 22 },
-          create: {
-            examSubjectId: examSub.id,
-            studentId: st.id,
-            markTheory: 65,
-            markPractical: 22,
-            enteredById: teacherList[0]?.id || 1,
-          },
+        const existingMark = await prisma.markEntry.findFirst({
+          where: { examSubjectId: examSub.id, markTitleId: markTitle.id, studentId: st.id },
         });
+        if (!existingMark) {
+          await prisma.markEntry.create({
+            data: {
+              examSubjectId: examSub.id,
+              markTitleId: markTitle.id,
+              studentId: st.id,
+              marksObtained: 65,
+              teacherId: teacherList[0]?.id || 1,
+            },
+          });
+        }
       }
     }
     console.log('✅ Exam, ExamClass (Published), ExamSubjects, and MarkEntries seeded!');
