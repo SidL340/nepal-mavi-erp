@@ -92,6 +92,7 @@ async function seedPartiesAndCodes() {
     { accountName: 'School Operational Account (सञ्चालन खाता)', accountNo: '123000987654321', bankName: 'Rastriya Banijya Bank', branch: 'Bishrampur Branch', type: 'Current' },
     { accountName: 'Government Salary & Grant A/C (सरकारी तलब खाता)', accountNo: '567000123456789', bankName: 'Agricultural Development Bank', branch: 'Gaur Branch', type: 'Current' },
     { accountName: 'Internal Reserve & Development A/C (आन्तरिक विकास खाता)', accountNo: '999000888777666', bankName: 'Global IME Bank', branch: 'Bishrampur Branch', type: 'Savings' },
+    { accountName: 'Education & SIP Grant Account (शिक्षा तथा छात्रवृत्ति खाता)', accountNo: '112000554433221', bankName: 'Nepal Bank Limited', branch: 'Bishrampur Branch', type: 'Current' },
   ];
 
   for (const acc of bankAccountsData) {
