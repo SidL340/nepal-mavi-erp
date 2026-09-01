@@ -50,7 +50,14 @@ export default function UserManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
-  // Success Credentials Display Modal (after create or reset)
+  // Bulk Reset & Printable Slips State
+  const [isBulkResetModalOpen, setIsBulkResetModalOpen] = useState(false);
+  const [isPrintSlipsModalOpen, setIsPrintSlipsModalOpen] = useState(false);
+  const [bulkResetResults, setBulkResetResults] = useState<any[]>([]);
+  const [bulkTargetRole, setBulkTargetRole] = useState<string>('STUDENT');
+  const [bulkClassId, setBulkClassId] = useState<string>('');
+
+  // Dialog for generated single credentials
   const [credentialDialog, setCredentialDialog] = useState<{
     isOpen: boolean;
     username: string;
@@ -73,6 +80,33 @@ export default function UserManagementPage() {
 
   // Form State for Reset Password
   const [resetCustomPassword, setResetCustomPassword] = useState<string>('');
+
+  // Fetch classes for bulk student filter
+  const { data: classesList } = useQuery({
+    queryKey: ['classes-list-users'],
+    queryFn: async () => {
+      const res = await api.get('/classes');
+      return res.data?.data || [];
+    },
+  });
+
+  // Bulk Reset Mutation
+  const bulkResetMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/users/bulk-reset-passwords', payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Bulk password reset complete!');
+      setBulkResetResults(data.data || []);
+      setIsBulkResetModalOpen(false);
+      setIsPrintSlipsModalOpen(true);
+      queryClient.invalidateQueries({ queryKey: ['users-list'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to reset passwords.');
+    },
+  });
 
   // ── 1. Fetch Users List ──
   const { data: usersResponse, isLoading: isUsersLoading } = useQuery({
@@ -281,8 +315,16 @@ export default function UserManagementPage() {
             </p>
           </div>
 
-          {/* Top Action Button */}
+          {/* Top Action Buttons */}
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setIsBulkResetModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white px-4.5 py-2.5 text-xs font-black shadow-sm transition"
+            >
+              <KeyRound size={16} />
+              <span>🔑 Reset All Passwords & Print Slips (सबैको पासवर्ड रिसेट र लगइन स्लिप प्रिन्ट)</span>
+            </button>
+
             <button
               onClick={() => {
                 setCreateRole('TEACHER');
@@ -1023,7 +1065,7 @@ export default function UserManagementPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const text = `Nepal School ERP Credentials:\nName: ${credentialDialog.displayName || credentialDialog.username}\nUsername: ${credentialDialog.username}\nPassword: ${credentialDialog.temporaryPassword}\nRole: ${credentialDialog.role}\nPortal URL: http://localhost:3000/login`;
+                  const text = `Nepal School ERP Credentials:\nName: ${credentialDialog.displayName || credentialDialog.username}\nUsername: ${credentialDialog.username}\nPassword: ${credentialDialog.temporaryPassword}\nRole: ${credentialDialog.role}\nPortal URL: https://app.nepalssb.edu.np/login`;
                   copyCredentialsToClipboard(text);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2.5 text-xs font-bold text-white shadow-xs transition"
@@ -1039,6 +1081,165 @@ export default function UserManagementPage() {
               >
                 Done (सम्पन्न)
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 7. BULK RESET PASSWORDS MODAL ────────────────────────────────────── */}
+      {isBulkResetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+              <h3 className="font-extrabold text-sm text-[#1e3a5f]">
+                Bulk Password Reset & Login Slips (सबैको पासवर्ड रिसेट)
+              </h3>
+              <button onClick={() => setIsBulkResetModalOpen(false)}><X size={18} /></button>
+            </div>
+
+            <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+              ⚠️ Warning: This will generate new temporary passwords for all selected users and require them to set a new password upon first login.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                bulkResetMutation.mutate({
+                  targetRole: bulkTargetRole,
+                  classId: bulkTargetRole === 'STUDENT' ? bulkClassId : undefined,
+                });
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Target User Role *</label>
+                <select
+                  value={bulkTargetRole}
+                  onChange={(e) => setBulkTargetRole(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="STUDENT">All Students (सम्पूर्ण विद्यार्थीहरू)</option>
+                  <option value="TEACHER">All Teachers & Staff (सम्पूर्ण शिक्षकहरू)</option>
+                  <option value="ALL">All Users in System (सम्पूर्ण प्रयोगकर्ताहरू)</option>
+                </select>
+              </div>
+
+              {bulkTargetRole === 'STUDENT' && (
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Filter by Class (Optional)</label>
+                  <select
+                    value={bulkClassId}
+                    onChange={(e) => setBulkClassId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">All Classes (सबै कक्षा)</option>
+                    {classesList?.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.section ? `(${c.section})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setIsBulkResetModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" disabled={bulkResetMutation.isPending} className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-xs">
+                  {bulkResetMutation.isPending ? 'Resetting Passwords...' : 'Reset Passwords & Generate Slips'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 8. PRINTABLE LOGIN CREDENTIALS SLIPS / RECEIPTS MODAL ───────────── */}
+      {isPrintSlipsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 my-8">
+            <div className="flex justify-between items-center border-b border-gray-200 pb-3 print:hidden">
+              <div>
+                <h3 className="font-extrabold text-base text-[#1e3a5f]">
+                  Print Login Credentials Slips ({bulkResetResults.length} Slips Ready)
+                </h3>
+                <p className="text-xs text-gray-500">Official student & staff login cards with QR codes and App installation steps</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
+                >
+                  <Receipt size={15} />
+                  <span>Print All Slips (प्रिन्ट गर्नुहोस्)</span>
+                </button>
+                <button onClick={() => setIsPrintSlipsModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Container Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4 print:p-0">
+              {bulkResetResults.map((item: any, idx: number) => {
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
+                return (
+                  <div key={idx} className="border-2 border-dashed border-[#1e3a5f] rounded-2xl p-4 bg-white space-y-3 relative print:break-inside-avoid">
+                    {/* Header with Seal */}
+                    <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
+                      <img src="/school_logo.png" alt="School Emblem Seal" className="w-12 h-12 object-contain" />
+                      <div className="min-w-0 flex-1 text-center">
+                        <h4 className="font-black text-xs text-[#1e3a5f] font-nepali tracking-tight">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</h4>
+                        <p className="text-[10px] font-bold text-gray-700">Shree Nepal Secondary School, Bishrampur</p>
+                        <span className="inline-block mt-0.5 bg-amber-100 text-amber-900 text-[9px] font-black px-2 py-0.2 rounded uppercase">
+                          Portal Access Credentials Card
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Content Grid */}
+                    <div className="grid grid-cols-3 gap-2 items-center text-xs">
+                      {/* Details Column */}
+                      <div className="col-span-2 space-y-1 text-[11px]">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 font-bold">Name:</span>
+                          <strong className="text-gray-900">{item.fullName}</strong>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 font-bold">Role / Class:</span>
+                          <span className="font-extrabold text-blue-900">{item.className}</span>
+                        </div>
+                        {item.studentId !== '—' && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500 font-bold">Student ID / Roll:</span>
+                            <span className="font-mono text-gray-700">{item.studentId} (Roll: {item.rollNo})</span>
+                          </div>
+                        )}
+                        <div className="mt-2 pt-1 border-t border-gray-100 space-y-1">
+                          <div className="flex justify-between bg-blue-50 p-1 rounded font-mono">
+                            <span className="text-gray-600 font-bold">Username:</span>
+                            <strong className="text-[#1e3a5f]">{item.username}</strong>
+                          </div>
+                          <div className="flex justify-between bg-amber-50 p-1 rounded font-mono">
+                            <span className="text-gray-600 font-bold">Password:</span>
+                            <strong className="text-amber-900">{item.temporaryPassword}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* QR Code Column */}
+                      <div className="col-span-1 text-center flex flex-col items-center justify-center border-l border-gray-100 pl-2">
+                        <img src={qrUrl} alt="Login QR Code" className="w-20 h-20 border rounded-lg p-0.5 shadow-2xs" />
+                        <span className="text-[8px] font-bold text-gray-500 mt-1">Scan to Login & Install App</span>
+                      </div>
+                    </div>
+
+                    {/* Footer instructions */}
+                    <div className="text-[8px] text-gray-500 border-t border-dashed border-gray-200 pt-1 text-center">
+                      🌐 Visit <strong>https://app.nepalssb.edu.np/login</strong> or scan QR • Tap "Add to Home Screen" to install Mobile App
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

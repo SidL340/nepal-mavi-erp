@@ -313,6 +313,80 @@ router.post('/:id/reset-password', authenticate, authorize('SUPER_ADMIN', 'ADMIN
   }
 });
 
+// ── 4B. BULK RESET ALL PASSWORDS ─────────────────────────────────────────────
+// POST /api/users/bulk-reset-passwords
+router.post('/bulk-reset-passwords', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const { targetRole = 'ALL', classId } = req.body;
+    const where = { isActive: true };
+
+    if (targetRole && targetRole !== 'ALL') {
+      where.role = targetRole;
+    }
+    // Exclude current logged in admin from accidental mass reset
+    where.id = { not: req.user.id };
+
+    const usersToReset = await prisma.user.findMany({
+      where,
+      include: {
+        teacher: { select: { fullName: true, phone: true } },
+        student: {
+          select: {
+            fullName: true,
+            studentId: true,
+            classEnrollment: {
+              where: { isActive: true },
+              select: { rollNo: true, class: { select: { id: true, name: true, section: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const resetResults = [];
+    for (const u of usersToReset) {
+      if (classId && u.role === 'STUDENT') {
+        const studentClassId = u.student?.classEnrollment?.[0]?.class?.id;
+        if (studentClassId !== parseInt(classId)) continue;
+      }
+
+      const rollNo = u.student?.classEnrollment?.[0]?.rollNo || u.id;
+      const rawPassword = u.role === 'STUDENT' ? `SSB@${rollNo}#${Math.floor(100 + Math.random() * 900)}` : generateTemporaryPassword(u.role);
+      const passwordHash = await bcrypt.hash(rawPassword, 10);
+
+      await prisma.user.update({
+        where: { id: u.id },
+        data: { passwordHash, mustChangePassword: true },
+      });
+
+      const className = u.student?.classEnrollment?.[0]?.class
+        ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
+        : u.teacher?.post || u.role;
+
+      resetResults.push({
+        id: u.id,
+        username: u.username,
+        role: u.role,
+        fullName: u.teacher?.fullName || u.student?.fullName || u.username,
+        studentId: u.student?.studentId || '—',
+        className,
+        rollNo,
+        temporaryPassword: rawPassword,
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: resetResults,
+      count: resetResults.length,
+      message: `Successfully reset passwords for ${resetResults.length} users!`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── 5. DELETE / DEACTIVATE USER ─────────────────────────────────────────────
 // DELETE /api/users/:id
 router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
