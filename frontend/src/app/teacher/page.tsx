@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   Users,
   School,
+  Globe,
+  ExternalLink,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -163,9 +165,21 @@ export default function TeacherPortalPage() {
       {/* Welcome Banner */}
       <div className="rounded-2xl bg-gradient-to-r from-[#1e3a5f] to-[#2a5280] p-6 text-white shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-0.5 text-xs font-bold text-amber-300 mb-2">
-            <Calendar size={13} />
-            <span>BS {todayBSFormatted()}</span>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-0.5 text-xs font-bold text-amber-300">
+              <Calendar size={13} />
+              <span>BS {todayBSFormatted()}</span>
+            </div>
+            <a
+              href="https://nepalssb.edu.np"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-3 py-0.5 text-xs font-black shadow-xs transition"
+            >
+              <Globe size={13} />
+              <span>Visit School Website (nepalssb.edu.np)</span>
+              <ExternalLink size={11} />
+            </a>
           </div>
           <div className="flex items-center gap-2 mt-2">
             <h1 className="text-2xl font-extrabold">Welcome, {displayName}!</h1>

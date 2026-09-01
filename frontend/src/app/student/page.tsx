@@ -25,6 +25,8 @@ import {
   Search,
   School,
   Sparkles,
+  Globe,
+  ExternalLink,
   Phone,
   MapPin,
   Heart,
@@ -256,6 +258,16 @@ export default function StudentPortalPage() {
                   <Calendar size={12} />
                   <span>BS {todayBSFormatted()}</span>
                 </span>
+                <a
+                  href="https://nepalssb.edu.np"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-3 py-0.5 text-[11px] font-black shadow-xs transition"
+                >
+                  <Globe size={12} />
+                  <span>Visit School Website (nepalssb.edu.np)</span>
+                  <ExternalLink size={11} />
+                </a>
               </div>
 
               <h1 className="text-2xl md:text-3xl font-black tracking-wide text-white mt-1.5 font-serif">
