@@ -1336,27 +1336,37 @@ export default function UserManagementPage() {
               </div>
             </div>
 
-            {/* Print Stylesheet for Perfect A4 Sizing & Full Color */}
+            {/* Print Stylesheet for Perfect Multi-Page A4 Grid (9-12 Cards per Page) */}
             <style jsx global>{`
               @media print {
                 @page {
                   size: A4 portrait;
-                  margin: 6mm;
+                  margin: 5mm;
                 }
                 * {
                   -webkit-print-color-adjust: exact !important;
                   print-color-adjust: exact !important;
                 }
+                html, body {
+                  height: auto !important;
+                  overflow: visible !important;
+                  background: white !important;
+                }
                 body * {
                   visibility: hidden !important;
+                }
+                .fixed, .overflow-y-auto {
+                  position: static !important;
+                  overflow: visible !important;
+                  height: auto !important;
+                  max-height: none !important;
+                  display: block !important;
                 }
                 .print-slips-modal-content, .print-slips-modal-content * {
                   visibility: visible !important;
                 }
                 .print-slips-modal-content {
-                  position: absolute !important;
-                  left: 0 !important;
-                  top: 0 !important;
+                  position: static !important;
                   width: 100% !important;
                   max-width: 100% !important;
                   padding: 0 !important;
@@ -1366,15 +1376,15 @@ export default function UserManagementPage() {
                 }
                 .print-slips-grid {
                   display: grid !important;
-                  grid-template-columns: repeat(2, 1fr) !important;
-                  gap: 10px !important;
+                  grid-template-columns: repeat(3, 1fr) !important;
+                  gap: 6px !important;
                 }
                 .print-slip-card {
                   break-inside: avoid !important;
                   page-break-inside: avoid !important;
-                  border: 1.5px dashed #1e3a5f !important;
-                  padding: 12px !important;
-                  border-radius: 12px !important;
+                  border: 1px dashed #1e3a5f !important;
+                  padding: 6px 8px !important;
+                  border-radius: 8px !important;
                   background: white !important;
                 }
               }
@@ -1382,65 +1392,65 @@ export default function UserManagementPage() {
 
             {/* Printable Container Grid */}
             <div className="print-slips-modal-content">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print-slips-grid">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 print-slips-grid">
                 {bulkResetResults.map((item: any, idx: number) => {
-                  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
+                  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
                   return (
-                    <div key={idx} className="border-2 border-dashed border-[#1e3a5f] rounded-2xl p-4 bg-white space-y-3 relative print-slip-card">
+                    <div key={idx} className="border border-dashed border-[#1e3a5f] rounded-xl p-2.5 bg-white space-y-2 relative print-slip-card">
                       {/* Header with Circular Seal */}
-                      <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
-                        <div className="w-11 h-11 shrink-0 rounded-full border border-amber-400 p-0.5 bg-white flex items-center justify-center shadow-xs">
-                          <img src="/school_logo.png" alt="School Emblem Seal" className="w-10 h-10 object-contain rounded-full" />
+                      <div className="flex items-center gap-2 border-b border-gray-100 pb-1.5">
+                        <div className="w-8 h-8 shrink-0 rounded-full border border-amber-400 p-0.5 bg-white flex items-center justify-center">
+                          <img src="/school_logo.png" alt="School Emblem Seal" className="w-7 h-7 object-contain rounded-full" />
                         </div>
                         <div className="min-w-0 flex-1 text-center">
-                          <h4 className="font-black text-xs text-[#1e3a5f] font-nepali tracking-tight">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</h4>
-                          <p className="text-[10px] font-bold text-gray-700">Shree Nepal Secondary School, Bishrampur</p>
-                          <span className="inline-block mt-0.5 bg-amber-100 text-amber-900 text-[9px] font-black px-2 py-0.2 rounded uppercase">
-                            Portal Access Credentials Card
+                          <h4 className="font-black text-[10px] text-[#1e3a5f] font-nepali tracking-tight leading-tight">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</h4>
+                          <p className="text-[8px] font-bold text-gray-600 leading-none">Shree Nepal Sec. School, Bishrampur</p>
+                          <span className="inline-block mt-0.5 bg-amber-100 text-amber-900 text-[8px] font-black px-1.5 py-0.2 rounded uppercase">
+                            Credentials Card
                           </span>
                         </div>
                       </div>
 
                       {/* Content Grid */}
-                      <div className="grid grid-cols-3 gap-2 items-center text-xs">
+                      <div className="grid grid-cols-3 gap-1 items-center text-[10px]">
                         {/* Details Column */}
-                        <div className="col-span-2 space-y-1 text-[11px]">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500 font-bold">Name:</span>
+                        <div className="col-span-2 space-y-0.5">
+                          <div className="truncate">
+                            <span className="text-gray-500 font-bold">Name: </span>
                             <strong className="text-gray-900">{item.fullName}</strong>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500 font-bold">Role / Class:</span>
+                          <div className="truncate">
+                            <span className="text-gray-500 font-bold">Class: </span>
                             <span className="font-extrabold text-blue-900">{item.className}</span>
                           </div>
                           {item.studentId !== '—' && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-500 font-bold">Student ID / Roll:</span>
-                              <span className="font-mono text-gray-700">{item.studentId} (Roll: {item.rollNo})</span>
+                            <div className="truncate">
+                              <span className="text-gray-500 font-bold">Roll / ID: </span>
+                              <span className="font-mono text-gray-700">{item.rollNo} / {item.studentId}</span>
                             </div>
                           )}
-                          <div className="mt-2 pt-1 border-t border-gray-100 space-y-1">
-                            <div className="flex justify-between bg-blue-50 p-1 rounded font-mono">
-                              <span className="text-gray-600 font-bold">Username:</span>
-                              <strong className="text-[#1e3a5f]">{item.username}</strong>
+                          <div className="mt-1 pt-1 border-t border-gray-100 space-y-0.5">
+                            <div className="flex justify-between bg-blue-50/80 px-1 py-0.5 rounded font-mono">
+                              <span className="text-gray-600 font-bold">User:</span>
+                              <strong className="text-[#1e3a5f] truncate max-w-[100px]">{item.username}</strong>
                             </div>
-                            <div className="flex justify-between bg-amber-50 p-1 rounded font-mono">
-                              <span className="text-gray-600 font-bold">Password:</span>
+                            <div className="flex justify-between bg-amber-50/80 px-1 py-0.5 rounded font-mono">
+                              <span className="text-gray-600 font-bold">Pass:</span>
                               <strong className="text-amber-900">{item.temporaryPassword}</strong>
                             </div>
                           </div>
                         </div>
 
                         {/* QR Code Column */}
-                        <div className="col-span-1 text-center flex flex-col items-center justify-center border-l border-gray-100 pl-2">
-                          <img src={qrUrl} alt="Login QR Code" className="w-20 h-20 border rounded-lg p-0.5 shadow-2xs" />
-                          <span className="text-[8px] font-bold text-gray-500 mt-1">Scan to Login & Install App</span>
+                        <div className="col-span-1 text-center flex flex-col items-center justify-center border-l border-gray-100 pl-1">
+                          <img src={qrUrl} alt="Login QR Code" className="w-14 h-14 border rounded-md p-0.5" />
+                          <span className="text-[7px] font-bold text-gray-500 mt-0.5 leading-none">Scan Login</span>
                         </div>
                       </div>
 
                       {/* Footer instructions */}
-                      <div className="text-[8px] text-gray-500 border-t border-dashed border-gray-200 pt-1 text-center">
-                        🌐 Visit <strong>https://app.nepalssb.edu.np/login</strong> or scan QR • Tap "Add to Home Screen" to install Mobile App
+                      <div className="text-[7px] text-gray-500 border-t border-dashed border-gray-200 pt-0.5 text-center leading-none">
+                        🌐 app.nepalssb.edu.np/login • Scan QR to Install App
                       </div>
                     </div>
                   );
