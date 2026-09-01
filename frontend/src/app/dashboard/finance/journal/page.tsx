@@ -95,26 +95,54 @@ export default function JournalVoucherPage() {
     },
   });
 
+  // Fetch Master Expense Heads with Codes
+  const { data: masterExpenseHeads } = useQuery({
+    queryKey: ['master-expense-heads-journal'],
+    queryFn: async () => {
+      const res = await api.get('/expense/heads');
+      return res.data?.data || [];
+    },
+  });
+
+  // Fetch Master Income Heads with Codes
+  const { data: masterIncomeHeads } = useQuery({
+    queryKey: ['master-income-heads-journal'],
+    queryFn: async () => {
+      const res = await api.get('/income/heads');
+      return res.data?.data || [];
+    },
+  });
+
+  // Fetch Master Fee Heads
+  const { data: masterFeeHeads } = useQuery({
+    queryKey: ['master-fee-heads-journal'],
+    queryFn: async () => {
+      const res = await api.get('/income/fee-heads');
+      return res.data?.data || [];
+    },
+  });
+
   // Construct Unified Journal Voucher Records
   const allVouchers: any[] = [];
 
   // 1. Income Vouchers
   (incomeData || []).forEach((inc: any) => {
     const rName = inc.party?.name || inc.sourceOrg || inc.sourceLevel || 'Government Budget';
+    const topicTitle = inc.head ? `${inc.head.code ? `[${inc.head.code}] ` : ''}${inc.head.name}` : 'Government Budget Income';
     allVouchers.push({
       id: `INC-${inc.id}`,
       originalId: inc.id,
       voucherNo: inc.voucherNo || `JV-INC-${new Date().getFullYear()}-${String(inc.id).padStart(4, '0')}`,
       type: 'INCOME',
       typeLabel: 'आम्दानी गोश्वारा भौचर (Income JV)',
-      topic: inc.head?.name || 'Government Budget Income',
+      topic: topicTitle,
       recipientName: rName,
       partyId: inc.partyId || inc.party?.id,
       dateBs: inc.receivedDateBs,
       dateAd: inc.receivedDateAd,
       particulars: `${inc.head?.name || 'Income'} (${rName})`,
       debitAccount: inc.depositedInAccount || (inc.paymentMedium === 'CASH' ? 'नगद हिसाब (Cash A/c)' : 'बैंक हिसाब (Bank Current A/c)'),
-      creditAccount: `आम्दानी शीर्षक: ${inc.head?.name || 'Government Budget Head'}`,
+      creditAccount: `आम्दानी शीर्षक: ${topicTitle}`,
       debitAmount: inc.amount || 0,
       creditAmount: inc.amount || 0,
       paymentMedium: inc.paymentMedium || 'BANK_TRANSFER',
@@ -128,19 +156,20 @@ export default function JournalVoucherPage() {
   // 2. Expense Vouchers
   (expenseData || []).forEach((exp: any) => {
     const rName = exp.party?.name || exp.paidTo || 'Vendor / Supplier';
+    const topicTitle = exp.head ? `${exp.head.code ? `[${exp.head.code}] ` : ''}${exp.head.name}` : 'Operating Expense';
     allVouchers.push({
       id: `EXP-${exp.id}`,
       originalId: exp.id,
       voucherNo: exp.voucherNo || `JV-EXP-${new Date().getFullYear()}-${String(exp.id).padStart(4, '0')}`,
       type: 'EXPENSE',
       typeLabel: 'खर्च गोश्वारा भौचर (Expense JV)',
-      topic: exp.head?.name || 'Operating Expense',
+      topic: topicTitle,
       recipientName: rName,
       partyId: exp.partyId || exp.party?.id,
       dateBs: exp.expenseDateBs,
       dateAd: exp.expenseDateAd,
       particulars: `${exp.head?.name || 'Expense'} (Paid to: ${rName})`,
-      debitAccount: `खर्च शीर्षक: ${exp.head?.name || 'Operating Expense'}`,
+      debitAccount: `खर्च शीर्षक: ${topicTitle}`,
       creditAccount: exp.paidFromAccount || (exp.paymentMedium === 'CASH' ? 'नगद हिसाब (Cash A/c)' : 'बैंक हिसाब (Bank Current A/c)'),
       debitAmount: exp.amount || 0,
       creditAmount: exp.amount || 0,
@@ -202,8 +231,23 @@ export default function JournalVoucherPage() {
     });
   });
 
-  // Unique topics list for topic filter dropdown
-  const allTopics: string[] = Array.from(new Set(allVouchers.map((v) => v.topic))).filter(Boolean);
+  // Build Comprehensive Master Topics List with Accounting Codes
+  const registeredTopicsSet = new Set<string>();
+
+  (masterExpenseHeads || []).forEach((h: any) => {
+    registeredTopicsSet.add(`${h.code ? `[${h.code}] ` : ''}${h.name}`);
+  });
+  (masterIncomeHeads || []).forEach((h: any) => {
+    registeredTopicsSet.add(`${h.code ? `[${h.code}] ` : ''}${h.name}`);
+  });
+  (masterFeeHeads || []).forEach((h: any) => {
+    registeredTopicsSet.add(h.name);
+  });
+  allVouchers.forEach((v) => {
+    if (v.topic) registeredTopicsSet.add(v.topic);
+  });
+
+  const allTopics = Array.from(registeredTopicsSet).filter(Boolean).sort();
 
   // Sort Vouchers by Date Descending
   allVouchers.sort((a, b) => (a.dateBs < b.dateBs ? 1 : -1));
@@ -221,7 +265,11 @@ export default function JournalVoucherPage() {
 
   const filteredVouchers = allVouchers.filter((v) => {
     if (voucherTypeFilter !== 'ALL' && v.type !== voucherTypeFilter) return false;
-    if (topicFilter !== 'ALL' && v.topic !== topicFilter) return false;
+    if (topicFilter !== 'ALL') {
+      const cleanFilter = topicFilter.replace(/^\[.*?\]\s*/, '').toLowerCase();
+      const cleanVTopic = (v.topic || '').replace(/^\[.*?\]\s*/, '').toLowerCase();
+      if (cleanVTopic !== cleanFilter && v.topic !== topicFilter) return false;
+    }
     if (selectedPartyFilter !== 'ALL') {
       const partyObj = partiesData?.find((p: any) => p.id.toString() === selectedPartyFilter);
       if (partyObj) {
