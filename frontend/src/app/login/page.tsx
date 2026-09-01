@@ -102,8 +102,8 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-full shadow-2xl mb-4 p-2 ring-4 ring-amber-400/50">
             <img src="/school_logo.png" alt="Shree Nepal Secondary School Emblem" className="w-20 h-20 object-contain" />
           </div>
-          <h1 className="text-3xl font-black text-white font-serif tracking-wide">Nepal SSB Secondary School ERP</h1>
-          <p className="text-amber-300 mt-1 text-xs font-bold font-nepali">नेपाल एसएसबी माध्यमिक विद्यालय व्यवस्थापन प्रणाली</p>
+          <h1 className="text-3xl font-black text-white font-serif tracking-wide">Nepal Secondary School ERP</h1>
+          <p className="text-amber-300 mt-1 text-xs font-bold font-nepali">नेपाल माध्यमिक विद्यालय व्यवस्थापन प्रणाली</p>
         </div>
 
         {/* Login Card */}
@@ -124,7 +124,7 @@ export default function LoginPage() {
                 <input
                   {...register('username')}
                   type="text"
-                  placeholder="e.g. 3201600058003308 or admin"
+                  placeholder="Username / Student EMIS ID"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1e3a5f] text-xs font-mono font-bold text-gray-900 bg-slate-50/50"
                   autoComplete="username"
                 />
@@ -134,28 +134,15 @@ export default function LoginPage() {
 
             {/* Password */}
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-bold text-gray-700">
-                  Password / पासवर्ड
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsResetModalOpen(true);
-                    setResetSubmitted(false);
-                  }}
-                  className="text-[11px] font-bold text-[#1e3a5f] hover:underline flex items-center gap-1"
-                >
-                  <KeyRound size={11} className="text-amber-500" />
-                  <span>Forgot Password? (बिर्सनुभयो?)</span>
-                </button>
-              </div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Password / पासवर्ड
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter password"
+                  placeholder="Enter Password"
                   className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1e3a5f] text-xs font-mono text-gray-900 bg-slate-50/50"
                   autoComplete="current-password"
                 />
@@ -186,21 +173,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Self Service Reset Trigger Box */}
-          <div className="mt-6 pt-4 border-t border-gray-100 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsResetModalOpen(true);
-                setResetSubmitted(false);
-              }}
-              className="inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-[#1e3a5f] font-medium"
-            >
-              <span>Cannot log in?</span>
-              <strong className="text-[#1e3a5f] underline">Request Password Reset</strong>
-            </button>
-          </div>
         </div>
 
         <p className="text-center text-blue-200 text-xs mt-6">

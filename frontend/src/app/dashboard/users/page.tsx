@@ -1305,12 +1305,53 @@ export default function UserManagementPage() {
               </div>
             </div>
 
+            {/* Print Stylesheet for Perfect A4 Sizing */}
+            <style jsx global>{`
+              @media print {
+                @page {
+                  size: A4 portrait;
+                  margin: 8mm;
+                }
+                body * {
+                  visibility: hidden;
+                }
+                .print-slips-modal-content, .print-slips-modal-content * {
+                  visibility: visible;
+                }
+                .print-slips-modal-content {
+                  position: absolute;
+                  left: 0;
+                  top: 0;
+                  width: 100%;
+                  max-width: 100% !important;
+                  padding: 0 !important;
+                  margin: 0 !important;
+                  background: white !important;
+                  box-shadow: none !important;
+                }
+                .print-slips-grid {
+                  display: grid !important;
+                  grid-template-columns: repeat(2, 1fr) !important;
+                  gap: 12px !important;
+                }
+                .print-slip-card {
+                  break-inside: avoid !important;
+                  page-break-inside: avoid !important;
+                  border: 1.5px dashed #1e3a5f !important;
+                  padding: 10px !important;
+                  border-radius: 12px !important;
+                  background: white !important;
+                }
+              }
+            `}</style>
+
             {/* Printable Container Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4 print:p-0">
-              {bulkResetResults.map((item: any, idx: number) => {
-                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
-                return (
-                  <div key={idx} className="border-2 border-dashed border-[#1e3a5f] rounded-2xl p-4 bg-white space-y-3 relative print:break-inside-avoid">
+            <div className="print-slips-modal-content">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print-slips-grid">
+                {bulkResetResults.map((item: any, idx: number) => {
+                  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
+                  return (
+                    <div key={idx} className="border-2 border-dashed border-[#1e3a5f] rounded-2xl p-4 bg-white space-y-3 relative print-slip-card">
                     {/* Header with Seal */}
                     <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
                       <img src="/school_logo.png" alt="School Emblem Seal" className="w-12 h-12 object-contain" />
@@ -1367,6 +1408,7 @@ export default function UserManagementPage() {
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
         </div>
