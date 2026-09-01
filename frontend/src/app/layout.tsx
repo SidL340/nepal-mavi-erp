@@ -12,7 +12,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Nepal SSB Secondary School ERP | श्री नेपाल मा.वि. विश्रामपुर',
+  title: 'Nepal Secondary School ERP | श्री नेपाल मा.वि. विश्रामपुर',
   description: 'Shree Nepal Secondary School Bishrampur Rautahat Mobile & Web ERP System',
   manifest: '/manifest.json',
   icons: {

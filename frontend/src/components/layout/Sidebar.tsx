@@ -294,8 +294,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-white tracking-wide">NEPAL SSB ERP</p>
-              <p className="truncate text-[10px] font-medium text-amber-400 font-nepali">नेपाल एसएसबी मा.वि.</p>
+              <p className="truncate text-sm font-bold text-white tracking-wide">NEPAL MAVI ERP</p>
+              <p className="truncate text-[10px] font-medium text-amber-400 font-nepali">नेपाल मा.वि.</p>
             </div>
           )}
         </div>
@@ -362,8 +362,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
                   <img src="/school_logo.png" alt="School Emblem Seal" className="w-9 h-9 object-contain rounded-full" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">NEPAL SSB ERP</p>
-                  <p className="text-[10px] font-medium text-amber-400 font-nepali">नेपाल एसएसबी मा.वि.</p>
+                  <p className="text-sm font-bold text-white">NEPAL MAVI ERP</p>
+                  <p className="text-[10px] font-medium text-amber-400 font-nepali">नेपाल मा.वि.</p>
                 </div>
               </div>
               <button

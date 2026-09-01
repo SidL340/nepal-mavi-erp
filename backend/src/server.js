@@ -69,8 +69,8 @@ app.listen(PORT, '0.0.0.0', async () => {
       where: { id: 1 },
       update: {},
       create: {
-        name: 'Nepal SSB Secondary School',
-        nameNepali: 'नेपाल एसएसबी माध्यमिक विद्यालय',
+        name: 'Shree Nepal Secondary School',
+        nameNepali: 'श्री नेपाल माध्यमिक विद्यालय',
         address: 'Nepal',
         level: 'Secondary',
         type: 'Community',

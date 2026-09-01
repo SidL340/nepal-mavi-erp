@@ -1,6 +1,6 @@
 {
-  "name": "Nepal SSB Secondary School ERP",
-  "short_name": "Nepal SSB",
+  "name": "Nepal Secondary School ERP",
+  "short_name": "Nepal Ma.Vi.",
   "description": "Shree Nepal Secondary School Bishrampur Rautahat ERP App",
   "start_url": "/login",
   "display": "standalone",
