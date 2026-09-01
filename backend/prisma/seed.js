@@ -236,8 +236,171 @@ async function main() {
   }
   console.log('✅ Subjects seeded');
 
+  // ── Classes ───────────────────────────────────────────────────────────────
+  const classNames = [
+    'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+    'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
+    'Class 11', 'Class 12'
+  ];
+  const classMap = new Map();
+  for (let i = 0; i < classNames.length; i++) {
+    const cls = await prisma.class.upsert({
+      where: { id: i + 1 },
+      update: {},
+      create: {
+        id: i + 1,
+        name: classNames[i],
+        nameNepali: `कक्षा ${i + 1}`,
+        section: 'A',
+        academicYearId: year.id,
+        orderIndex: i + 1,
+      },
+    });
+    classMap.set(classNames[i], cls.id);
+  }
+  console.log('✅ Classes (1-12) seeded');
+
+  // ── Sample Teachers ───────────────────────────────────────────────────────
+  const teacherUsersData = [
+    { username: 'premlalprasadraut@gmail.com', fullName: 'Premlal Prasad Raut', post: 'Head Teacher', type: 'RASTRIYA' },
+    { username: 'ram.sharma', fullName: 'Ram Kumar Sharma', post: 'Subject Teacher', type: 'RASTRIYA' },
+    { username: 'sita.dahal', fullName: 'Sita Kumari Dahal', post: 'Subject Teacher', type: 'NIJI_SROTH' },
+  ];
+  const defaultTeacherHash = await bcrypt.hash('#%Gautam9845', 10);
+  const teacherList = [];
+
+  for (const tData of teacherUsersData) {
+    const tUser = await prisma.user.upsert({
+      where: { username: tData.username },
+      update: {},
+      create: { username: tData.username, passwordHash: defaultTeacherHash, role: 'TEACHER' },
+    });
+    const teacher = await prisma.teacher.upsert({
+      where: { userId: tUser.id },
+      update: {},
+      create: {
+        userId: tUser.id,
+        fullName: tData.fullName,
+        post: tData.post,
+        type: tData.type,
+        phone: '9845000000',
+      },
+    });
+    teacherList.push(teacher);
+  }
+  console.log('✅ Sample teachers seeded');
+
+  // Assign Class 10 teacher
+  if (classMap.has('Class 10') && teacherList.length > 0) {
+    await prisma.class.update({
+      where: { id: classMap.get('Class 10') },
+      data: { classTeacherId: teacherList[0].id },
+    });
+  }
+
+  // ── Demo Students ────────────────────────────────────────────────────────
+  const studentUsersData = [
+    { username: '320160005', studentId: '320160005', fullName: 'Aadity Kumar Patel', rollNo: 1 },
+    { username: '320160006', studentId: '320160006', fullName: 'Rahul Prasad Raut', rollNo: 2 },
+    { username: '320160007', studentId: '320160007', fullName: 'Priya Kumari Shah', rollNo: 3 },
+  ];
+  const defaultStudentHash = await bcrypt.hash('Student@2081', 10);
+  const class10Id = classMap.get('Class 10');
+
+  for (const sData of studentUsersData) {
+    const sUser = await prisma.user.upsert({
+      where: { username: sData.username },
+      update: {},
+      create: { username: sData.username, passwordHash: defaultStudentHash, role: 'STUDENT' },
+    });
+    const student = await prisma.student.upsert({
+      where: { userId: sUser.id },
+      update: {},
+      create: {
+        userId: sUser.id,
+        studentId: sData.studentId,
+        emisId: sData.studentId,
+        fullName: sData.fullName,
+        gender: 'Male',
+        dateOfBirthBs: '2068-04-15',
+        address: 'Bishrampur, Rautahat',
+      },
+    });
+    if (class10Id) {
+      await prisma.classEnrollment.upsert({
+        where: { studentId_classId: { studentId: student.id, classId: class10Id } },
+        update: {},
+        create: { studentId: student.id, classId: class10Id, rollNo: sData.rollNo, isActive: true },
+      });
+    }
+  }
+  console.log('✅ Demo students seeded & enrolled in Class 10');
+
+  // ── Sample Exam & Published Results ─────────────────────────────────────
+  const exam = await prisma.exam.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      name: 'First Terminal Examination 2081',
+      nameNepali: 'पहिलो त्रैमासिक परीक्षा २०८१',
+      academicYearId: year.id,
+      startDateBs: '2081-05-01',
+      endDateBs: '2081-05-10',
+    },
+  });
+
+  if (class10Id) {
+    await prisma.examClass.upsert({
+      where: { examId_classId: { examId: exam.id, classId: class10Id } },
+      update: { isPublished: true, publishedAt: new Date() },
+      create: { examId: exam.id, classId: class10Id, isPublished: true, publishedAt: new Date() },
+    });
+
+    const nepaliSub = await prisma.subject.findFirst({ where: { code: 'NEP' } });
+    const englishSub = await prisma.subject.findFirst({ where: { code: 'ENG' } });
+    const mathSub = await prisma.subject.findFirst({ where: { code: 'MAT' } });
+    const sciSub = await prisma.subject.findFirst({ where: { code: 'SCI' } });
+
+    const subsToSeed = [nepaliSub, englishSub, mathSub, sciSub].filter(Boolean);
+
+    for (const sub of subsToSeed) {
+      const examSub = await prisma.examSubject.upsert({
+        where: { examId_subjectId: { examId: exam.id, subjectId: sub.id } },
+        update: {},
+        create: {
+          examId: exam.id,
+          subjectId: sub.id,
+          fullMarkTheory: 75,
+          passMarkTheory: 27,
+          fullMarkPractical: 25,
+          passMarkPractical: 10,
+        },
+      });
+
+      const enrolledStudents = await prisma.student.findMany({
+        where: { classEnrollment: { some: { classId: class10Id } } },
+      });
+
+      for (const st of enrolledStudents) {
+        await prisma.markEntry.upsert({
+          where: { examSubjectId_studentId: { examSubjectId: examSub.id, studentId: st.id } },
+          update: { markTheory: 65, markPractical: 22 },
+          create: {
+            examSubjectId: examSub.id,
+            studentId: st.id,
+            markTheory: 65,
+            markPractical: 22,
+            enteredById: teacherList[0]?.id || 1,
+          },
+        });
+      }
+    }
+    console.log('✅ Exam, ExamClass (Published), ExamSubjects, and MarkEntries seeded!');
+  }
+
   console.log('\n🎉 Database seeding complete!');
-  console.log('🔑 Default admin login: admin / Admin@2081');
+  console.log('🔑 Default admin login: admin@nepalssb.edu.np / #Nepal32016');
 }
 
 main()
