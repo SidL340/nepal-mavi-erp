@@ -1310,19 +1310,19 @@ export default function UserManagementPage() {
               @media print {
                 @page {
                   size: A4 portrait;
-                  margin: 8mm;
+                  margin: 6mm;
                 }
                 body * {
-                  visibility: hidden;
+                  visibility: hidden !important;
                 }
                 .print-slips-modal-content, .print-slips-modal-content * {
-                  visibility: visible;
+                  visibility: visible !important;
                 }
                 .print-slips-modal-content {
-                  position: absolute;
-                  left: 0;
-                  top: 0;
-                  width: 100%;
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
                   max-width: 100% !important;
                   padding: 0 !important;
                   margin: 0 !important;
@@ -1332,13 +1332,13 @@ export default function UserManagementPage() {
                 .print-slips-grid {
                   display: grid !important;
                   grid-template-columns: repeat(2, 1fr) !important;
-                  gap: 12px !important;
+                  gap: 10px !important;
                 }
                 .print-slip-card {
                   break-inside: avoid !important;
                   page-break-inside: avoid !important;
                   border: 1.5px dashed #1e3a5f !important;
-                  padding: 10px !important;
+                  padding: 12px !important;
                   border-radius: 12px !important;
                   background: white !important;
                 }
@@ -1352,9 +1352,11 @@ export default function UserManagementPage() {
                   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
                   return (
                     <div key={idx} className="border-2 border-dashed border-[#1e3a5f] rounded-2xl p-4 bg-white space-y-3 relative print-slip-card">
-                    {/* Header with Seal */}
+                    {/* Header with Circular Seal */}
                     <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
-                      <img src="/school_logo.png" alt="School Emblem Seal" className="w-12 h-12 object-contain" />
+                      <div className="w-11 h-11 shrink-0 rounded-full border border-amber-400 p-0.5 bg-white flex items-center justify-center shadow-xs">
+                        <img src="/school_logo.png" alt="School Emblem Seal" className="w-10 h-10 object-contain rounded-full" />
+                      </div>
                       <div className="min-w-0 flex-1 text-center">
                         <h4 className="font-black text-xs text-[#1e3a5f] font-nepali tracking-tight">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</h4>
                         <p className="text-[10px] font-bold text-gray-700">Shree Nepal Secondary School, Bishrampur</p>
