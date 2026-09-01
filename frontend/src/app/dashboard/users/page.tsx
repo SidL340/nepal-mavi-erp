@@ -62,6 +62,207 @@ export default function UserManagementPage() {
   const [printClassId, setPrintClassId] = useState<string>('');
   const [isGeneratingSlips, setIsGeneratingSlips] = useState<boolean>(false);
 
+  const triggerStandalonePrint = (slips: any[]) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const cardsHtml = slips
+      .map((item) => {
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
+        return `
+          <div class="card">
+            <div class="card-header">
+              <img src="/school_logo.png" class="seal" alt="Seal" />
+              <div class="header-titles">
+                <div class="nepali-title">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</div>
+                <div class="eng-title">Shree Nepal Sec. School, Bishrampur</div>
+                <span class="badge">CREDENTIALS CARD</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="details">
+                <div class="truncate"><strong>Name:</strong> ${item.fullName}</div>
+                <div class="truncate"><strong>Class:</strong> ${item.className}</div>
+                ${item.studentId !== '—' ? `<div class="truncate"><strong>Roll / ID:</strong> ${item.rollNo} / ${item.studentId}</div>` : ''}
+                <div class="creds">
+                  <div class="user-row"><span>User:</span> <strong>${item.username}</strong></div>
+                  <div class="pass-row"><span>Pass:</span> <strong>${item.temporaryPassword}</strong></div>
+                </div>
+              </div>
+              <div class="qr-col">
+                <img src="${qrUrl}" class="qr-img" />
+                <div class="qr-label">Scan Login</div>
+              </div>
+            </div>
+            <div class="card-footer">
+              🌐 app.nepalssb.edu.np/login • Scan QR to Install Mobile App
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Student Credentials Slips - Shree Nepal Secondary School</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 5mm;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              margin: 0;
+              padding: 0;
+              background: #fff;
+            }
+            .grid-container {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 6px;
+              padding: 0;
+            }
+            .card {
+              border: 1px dashed #1e3a5f;
+              border-radius: 8px;
+              padding: 6px 8px;
+              background: #fff;
+              page-break-inside: avoid;
+              break-inside: avoid;
+              font-size: 10px;
+            }
+            .card-header {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              border-bottom: 1px solid #f3f4f6;
+              padding-bottom: 4px;
+              margin-bottom: 4px;
+            }
+            .seal {
+              width: 30px;
+              height: 30px;
+              border-radius: 50%;
+              border: 1px solid #f59e0b;
+              object-fit: contain;
+            }
+            .header-titles {
+              flex: 1;
+              text-align: center;
+            }
+            .nepali-title {
+              font-weight: 900;
+              font-size: 10px;
+              color: #1e3a5f;
+              line-height: 1.1;
+            }
+            .eng-title {
+              font-size: 8px;
+              font-weight: 700;
+              color: #4b5563;
+            }
+            .badge {
+              display: inline-block;
+              background: #fef3c7;
+              color: #78350f;
+              font-size: 7.5px;
+              font-weight: 900;
+              padding: 1px 4px;
+              border-radius: 2px;
+              text-transform: uppercase;
+              margin-top: 2px;
+            }
+            .card-body {
+              display: grid;
+              grid-template-columns: 2fr 1fr;
+              gap: 4px;
+              align-items: center;
+            }
+            .details {
+              font-size: 9.5px;
+              line-height: 1.3;
+            }
+            .truncate {
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            .creds {
+              margin-top: 4px;
+              padding-top: 3px;
+              border-top: 1px solid #f3f4f6;
+            }
+            .user-row {
+              background: #eff6ff;
+              padding: 2px 4px;
+              border-radius: 3px;
+              font-family: monospace;
+              display: flex;
+              justify-content: space-between;
+            }
+            .pass-row {
+              background: #fef3c7;
+              padding: 2px 4px;
+              border-radius: 3px;
+              font-family: monospace;
+              display: flex;
+              justify-content: space-between;
+              margin-top: 2px;
+            }
+            .qr-col {
+              text-align: center;
+              border-left: 1px solid #f3f4f6;
+              padding-left: 4px;
+            }
+            .qr-img {
+              width: 54px;
+              height: 54px;
+              border-radius: 4px;
+              border: 1px solid #e5e7eb;
+            }
+            .qr-label {
+              font-size: 7px;
+              font-weight: 700;
+              color: #6b7280;
+              margin-top: 2px;
+            }
+            .card-footer {
+              font-size: 7px;
+              color: #6b7280;
+              border-top: 1px dashed #e5e7eb;
+              padding-top: 2px;
+              margin-top: 4px;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="grid-container">
+            ${cardsHtml}
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   // Dialog for generated single credentials
   const [credentialDialog, setCredentialDialog] = useState<{
     isOpen: boolean;
@@ -1290,7 +1491,7 @@ export default function UserManagementPage() {
                       setBulkResetResults(slips);
                       setIsPrintOnlyModalOpen(false);
                       setIsPrintSlipsModalOpen(true);
-                      setTimeout(() => window.print(), 500);
+                      triggerStandalonePrint(slips);
                     } catch (err: any) {
                       toast.error('Failed to load user slips.');
                     } finally {
@@ -1317,15 +1518,15 @@ export default function UserManagementPage() {
                 <h3 className="font-extrabold text-base text-[#1e3a5f]">
                   Print Login Credentials Slips ({bulkResetResults.length} Slips Ready)
                 </h3>
-                <p className="text-xs text-gray-500">Official student & staff login cards with QR codes and App installation steps</p>
+                <p className="text-xs text-gray-500">Official student & staff login cards (9 cards per A4 page • Multi-page ready)</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => triggerStandalonePrint(bulkResetResults)}
                   className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition"
                 >
                   <Receipt size={16} />
-                  <span>🖨️ Print / Save as PDF (प्रिन्ट वा PDF सेभ गर्नुहोस्)</span>
+                  <span>🖨️ Open Print & PDF Window (प्रिन्ट वा PDF सेभ)</span>
                 </button>
                 <button
                   onClick={() => setIsPrintSlipsModalOpen(false)}
