@@ -38,7 +38,12 @@ export default function AttendancePage() {
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [dateBs, setDateBs] = useState<string>(todayBS());
   const [attendanceMap, setAttendanceMap] = useState<Record<number, { status: AttendanceStatus; remark: string; leaveType: string }>>({});
-  const [activeTab, setActiveTab] = useState<'daily' | 'monthly' | 'yearly'>('daily');
+  const [activeTab, setActiveTab] = useState<'daily' | 'monthly' | 'matrix' | 'yearly'>('daily');
+
+  // Holiday Modal State
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState<boolean>(false);
+  const [holidayTitleInput, setHolidayTitleInput] = useState<string>('सार्वजनिक विदा (Public Holiday)');
+  const [holidayTargetClass, setHolidayTargetClass] = useState<string>('ALL');
 
   // Monthly Tab State
   const [monthlyClassId, setMonthlyClassId] = useState<string>('');
@@ -75,15 +80,19 @@ export default function AttendancePage() {
   const assignedTeacherName = currentClassObj?.classTeacher?.fullName || 'तोकिएको छैन';
 
   // Fetch students & existing attendance for selected class and date
-  const { data: classStudents, isLoading: isStudentsLoading } = useQuery({
+  const { data: classStudentsRes, isLoading: isStudentsLoading } = useQuery({
     queryKey: ['attendance-class', selectedClass, dateBs],
     queryFn: async () => {
-      if (!selectedClass) return [];
+      if (!selectedClass) return { data: [], isHoliday: false, holidayRemark: null };
       const res = await api.get(`/attendance/class/${selectedClass}?dateBs=${dateBs}`);
-      return res.data?.data || [];
+      return res.data || { data: [], isHoliday: false, holidayRemark: null };
     },
     enabled: !!selectedClass,
   });
+
+  const classStudents = classStudentsRes?.data || [];
+  const isTodayHoliday = classStudentsRes?.isHoliday || false;
+  const holidayRemark = classStudentsRes?.holidayRemark || null;
 
   // Fetch Monthly Report
   const { data: monthlyReportData, isLoading: isMonthlyLoading } = useQuery({
@@ -93,7 +102,18 @@ export default function AttendancePage() {
       const res = await api.get(`/attendance/monthly-report/${monthlyClassId}?monthBs=${monthlyBs}`);
       return res.data?.data || [];
     },
-    enabled: activeTab === 'monthly' && !!monthlyClassId,
+    enabled: (activeTab === 'monthly' || activeTab === 'matrix') && !!monthlyClassId,
+  });
+
+  // Fetch Monthly Matrix Grid
+  const { data: monthlyMatrixRes, isLoading: isMatrixLoading } = useQuery({
+    queryKey: ['attendance-monthly-matrix', monthlyClassId, monthlyBs],
+    queryFn: async () => {
+      if (!monthlyClassId) return { matrix: [], dates: [] };
+      const res = await api.get(`/attendance/monthly-matrix/${monthlyClassId}?monthBs=${monthlyBs}`);
+      return res.data?.data || { matrix: [], dates: [] };
+    },
+    enabled: (activeTab === 'monthly' || activeTab === 'matrix') && !!monthlyClassId,
   });
 
   // Fetch Yearly Report
@@ -160,6 +180,176 @@ export default function AttendancePage() {
       toast.error(err.response?.data?.message || 'Failed to save attendance');
     },
   });
+
+  // Mark Holiday Mutation
+  const markHolidayMutation = useMutation({
+    mutationFn: async ({ targetClassId, holidayTitle }: { targetClassId: string; holidayTitle: string }) => {
+      const res = await api.post('/attendance/holiday', {
+        classId: targetClassId,
+        dateBs,
+        holidayName: holidayTitle,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Holiday declared!');
+      setIsHolidayModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-monthly-report'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-monthly-matrix'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to declare holiday.');
+    },
+  });
+
+  // Remove Holiday Mutation
+  const removeHolidayMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.delete('/attendance/holiday', {
+        data: { classId: selectedClass, dateBs },
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Holiday status removed!');
+      queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-monthly-report'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-monthly-matrix'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to remove holiday.');
+    },
+  });
+
+  // Standalone Print Engine for Monthly Register Matrix Book
+  const triggerMonthlyMatrixPrint = () => {
+    if (!monthlyMatrixRes || !monthlyMatrixRes.matrix || monthlyMatrixRes.matrix.length === 0) {
+      toast.error('No monthly matrix data available to print.');
+      return;
+    }
+
+    const currentMonthlyClass = classesData?.find((c: any) => c.id.toString() === monthlyClassId);
+    const classNameStr = currentMonthlyClass ? `${currentMonthlyClass.name} ${currentMonthlyClass.section ? `(${currentMonthlyClass.section})` : ''}` : 'Class';
+    const matrix = monthlyMatrixRes.matrix;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    // Days 1 to 32
+    const dayHeaders = Array.from({ length: 32 }, (_, i) => i + 1)
+      .map((d) => `<th style="width: 22px; text-align: center; font-size: 8.5px; border: 1px solid #cbd5e1;">${d}</th>`)
+      .join('');
+
+    const rowsHtml = matrix
+      .map((s: any) => {
+        const dayCells = Array.from({ length: 32 }, (_, i) => i + 1)
+          .map((d) => {
+            const st = s.dayMap?.[d];
+            let cellText = '—';
+            let color = '#94a3b8';
+
+            if (st === 'PRESENT') { cellText = 'P'; color = '#15803d'; }
+            else if (st === 'ABSENT' || st === 'BUNKED') { cellText = 'A'; color = '#b91c1c'; }
+            else if (st === 'LATE') { cellText = 'T'; color = '#b45309'; }
+            else if (st === 'LEAVE') { cellText = 'L'; color = '#1d4ed8'; }
+            else if (st === 'HOLIDAY') { cellText = 'H'; color = '#d97706'; }
+
+            return `<td style="text-align: center; font-size: 8.5px; font-weight: bold; color: ${color}; border: 1px solid #e2e8f0; padding: 3px 1px;">${cellText}</td>`;
+          })
+          .join('');
+
+        return `
+          <tr>
+            <td style="text-align: center; font-weight: bold; border: 1px solid #cbd5e1;">${s.rollNo || '—'}</td>
+            <td style="border: 1px solid #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
+              <strong>${s.fullName}</strong>
+            </td>
+            ${dayCells}
+            <td style="text-align: center; font-weight: bold; color: #15803d; border: 1px solid #cbd5e1;">${s.present}</td>
+            <td style="text-align: center; font-weight: bold; color: #b91c1c; border: 1px solid #cbd5e1;">${s.absent}</td>
+            <td style="text-align: center; font-weight: bold; color: #d97706; border: 1px solid #cbd5e1;">${s.holiday}</td>
+            <td style="text-align: right; font-weight: 900; color: #1e3a5f; border: 1px solid #cbd5e1;">${s.percentage}%</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Monthly Attendance Register Book - Shree Nepal Secondary School</title>
+          <style>
+            @page { size: A4 landscape; margin: 6mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
+            .school-name { font-size: 14px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .report-title { font-size: 11px; font-weight: 900; background: #fef3c7; color: #78350f; display: inline-block; padding: 2px 10px; border-radius: 4px; uppercase; }
+            .meta-grid { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; margin-bottom: 8px; background: #f8fafc; padding: 6px 10px; border-radius: 4px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+            th { background: #1e3a5f; color: #fff; padding: 5px 3px; text-align: left; font-size: 9px; border: 1px solid #1e3a5f; }
+            td { padding: 4px 3px; }
+            .legend { display: flex; gap: 15px; font-size: 9px; font-weight: 700; margin-top: 8px; }
+            .footer-sig { margin-top: 25px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 160px; text-align: center; padding-top: 3px; margin-top: 30px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट (Shree Nepal Sec. School)</div>
+            <div class="report-title">मासिक विद्यार्थी हाजिरी रजिष्टर पुस्तिका (Monthly Attendance Register Book)</div>
+          </div>
+
+          <div class="meta-grid">
+            <div><strong>कक्षा (Class):</strong> ${classNameStr}</div>
+            <div><strong>महिना (Month BS):</strong> ${monthlyBs}</div>
+            <div><strong>कुल विद्यार्थी (Total Students):</strong> ${matrix.length}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px; text-align: center;">Roll</th>
+                <th style="max-width: 140px;">Student Name</th>
+                ${dayHeaders}
+                <th style="width: 30px; text-align: center;">P</th>
+                <th style="width: 30px; text-align: center;">A</th>
+                <th style="width: 30px; text-align: center;">H</th>
+                <th style="width: 40px; text-align: right;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="legend">
+            <span><strong>Legend:</strong></span>
+            <span style="color: #15803d;">P = Present</span>
+            <span style="color: #b91c1c;">A = Absent</span>
+            <span style="color: #1d4ed8;">L = Leave</span>
+            <span style="color: #d97706;">H = Holiday</span>
+            <span style="color: #b45309;">T = Late</span>
+          </div>
+
+          <div class="footer-sig">
+            <div class="sig-line">कक्षा शिक्षकको दस्तखत (Class Teacher)</div>
+            <div class="sig-line">प्रधानाध्यापकको दस्तखत तथा छाप (Headmaster Stamp)</div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
 
   const handleStatusChange = (studentId: number, status: AttendanceStatus) => {
     setAttendanceMap((prev) => ({
@@ -473,10 +663,10 @@ export default function AttendancePage() {
         </div>
 
         {/* Tab Selector */}
-        <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
           <button
             onClick={() => setActiveTab('daily')}
-            className={`rounded-lg px-3.5 py-1.5 transition ${
+            className={`rounded-lg px-3 py-1.5 transition ${
               activeTab === 'daily' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -484,15 +674,24 @@ export default function AttendancePage() {
           </button>
           <button
             onClick={() => setActiveTab('monthly')}
-            className={`rounded-lg px-3.5 py-1.5 transition ${
+            className={`rounded-lg px-3 py-1.5 transition ${
               activeTab === 'monthly' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Monthly Report (मासिक)
+            Monthly Summary (मासिक विवरण)
+          </button>
+          <button
+            onClick={() => setActiveTab('matrix')}
+            className={`rounded-lg px-3 py-1.5 transition flex items-center gap-1 ${
+              activeTab === 'matrix' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Calendar size={13} />
+            <span>Monthly Register (मासिक रजिष्टर ग्रिड)</span>
           </button>
           <button
             onClick={() => setActiveTab('yearly')}
-            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1 ${
+            className={`rounded-lg px-3 py-1.5 transition flex items-center gap-1 ${
               activeTab === 'yearly' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
@@ -541,11 +740,21 @@ export default function AttendancePage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsHolidayModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-extrabold text-amber-900 hover:bg-amber-100 shadow-2xs"
+              >
+                <Sparkles size={14} className="text-amber-600" />
+                <span>Declare Holiday (विदा घोषणा)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleMarkAllPresent}
-                className="inline-flex items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                disabled={isTodayHoliday}
+                className="inline-flex items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
               >
                 <CheckCheck size={14} />
                 <span>Mark All Present</span>
@@ -553,7 +762,7 @@ export default function AttendancePage() {
 
               <button
                 type="button"
-                disabled={!isClassTeacher || saveAttendanceMutation.isPending}
+                disabled={!isClassTeacher || isTodayHoliday || saveAttendanceMutation.isPending}
                 onClick={() => saveAttendanceMutation.mutate()}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 text-xs font-bold shadow-xs disabled:opacity-50"
               >
@@ -562,6 +771,25 @@ export default function AttendancePage() {
               </button>
             </div>
           </div>
+
+          {/* Holiday Banner if Today is marked as Holiday */}
+          {isTodayHoliday && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-500 text-white p-4 shadow-md font-bold text-xs">
+              <div className="flex items-center gap-3">
+                <Sparkles size={20} className="animate-bounce shrink-0 text-amber-100" />
+                <div>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wide">🎉 Public Holiday Declared on {dateBs}!</h4>
+                  <p className="text-[11px] text-amber-100 mt-0.5">Reason: {holidayRemark || 'School Holiday'}. Attendance is disabled for this day.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => removeHolidayMutation.mutate()}
+                className="px-3.5 py-1.5 bg-white text-amber-950 font-extrabold rounded-xl hover:bg-amber-50 transition shadow-xs text-xs self-start sm:self-auto"
+              >
+                Remove Holiday (विदा रद्द गर्नुहोस्)
+              </button>
+            </div>
+          )}
 
           {!isClassTeacher && (
             <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 font-bold">
@@ -889,6 +1117,190 @@ export default function AttendancePage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB 3: MONTHLY REGISTER MATRIX GRID ────────────────────────────── */}
+      {activeTab === 'matrix' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Select Class (कक्षा):</label>
+                <select
+                  value={monthlyClassId}
+                  onChange={(e) => setMonthlyClassId(e.target.value)}
+                  className="erp-input font-bold text-xs"
+                >
+                  {classesData?.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name} {c.section ? `(${c.section})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-gray-500 mb-1">Month BS (मिति):</label>
+                <input
+                  type="text"
+                  placeholder="2083-05"
+                  value={monthlyBs}
+                  onChange={(e) => setMonthlyBs(e.target.value)}
+                  className="erp-input font-mono text-xs font-bold"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={triggerMonthlyMatrixPrint}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] text-white hover:bg-[#2a5280] px-4 py-2 text-xs font-bold transition shadow-2xs self-end sm:self-center"
+            >
+              <Printer size={15} />
+              <span>Print Monthly Register (मासिक रजिष्टर प्रिन्ट)</span>
+            </button>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
+              <h3 className="font-extrabold text-sm text-[#1e3a5f] flex items-center gap-2">
+                <Calendar size={16} />
+                <span>Monthly Attendance Register Book Matrix — {monthlyBs}</span>
+              </h3>
+              <div className="flex items-center gap-3 text-[10px] font-bold">
+                <span className="text-emerald-700">P = Present</span>
+                <span className="text-rose-700">A = Absent</span>
+                <span className="text-amber-700">H = Holiday</span>
+                <span className="text-blue-700">L = Leave</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-[#1e3a5f] text-white font-bold">
+                  <tr>
+                    <th className="p-2 w-12 text-center border-r border-slate-700">Roll</th>
+                    <th className="p-2 min-w-[140px] border-r border-slate-700">Student Name</th>
+                    {Array.from({ length: 32 }, (_, i) => i + 1).map((d) => (
+                      <th key={d} className="p-1 w-6 text-center text-[10px] border-r border-slate-700 font-mono">
+                        {d}
+                      </th>
+                    ))}
+                    <th className="p-2 text-center text-emerald-300 font-mono">P</th>
+                    <th className="p-2 text-center text-rose-300 font-mono">A</th>
+                    <th className="p-2 text-center text-amber-300 font-mono">H</th>
+                    <th className="p-2 text-right font-mono">%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {isMatrixLoading ? (
+                    <tr><td colSpan={38} className="p-8 text-center text-gray-400">Loading register matrix...</td></tr>
+                  ) : !monthlyMatrixRes?.matrix || monthlyMatrixRes.matrix.length === 0 ? (
+                    <tr><td colSpan={38} className="p-8 text-center text-gray-400">No attendance matrix records found for this month.</td></tr>
+                  ) : (
+                    monthlyMatrixRes.matrix.map((s: any) => (
+                      <tr key={s.studentId} className="hover:bg-slate-50">
+                        <td className="p-2 text-center font-mono font-bold text-gray-700 border-r border-gray-100">{s.rollNo || '—'}</td>
+                        <td className="p-2 font-bold text-gray-900 border-r border-gray-100 truncate max-w-[140px]">{s.fullName}</td>
+                        {Array.from({ length: 32 }, (_, i) => i + 1).map((d) => {
+                          const st = s.dayMap?.[d];
+                          let badge = '—';
+                          let cls = 'text-gray-300';
+                          if (st === 'PRESENT') { badge = 'P'; cls = 'bg-emerald-100 text-emerald-800 font-black'; }
+                          else if (st === 'ABSENT' || st === 'BUNKED') { badge = 'A'; cls = 'bg-rose-100 text-rose-800 font-black'; }
+                          else if (st === 'LATE') { badge = 'T'; cls = 'bg-amber-100 text-amber-800 font-black'; }
+                          else if (st === 'LEAVE') { badge = 'L'; cls = 'bg-blue-100 text-blue-800 font-black'; }
+                          else if (st === 'HOLIDAY') { badge = 'H'; cls = 'bg-amber-200 text-amber-950 font-black'; }
+
+                          return (
+                            <td key={d} className="p-0.5 text-center border-r border-gray-100">
+                              <span className={`inline-block w-5 h-5 leading-5 text-[9px] rounded text-center ${cls}`}>
+                                {badge}
+                              </span>
+                            </td>
+                          );
+                        })}
+                        <td className="p-2 text-center font-mono font-bold text-emerald-700">{s.present}</td>
+                        <td className="p-2 text-center font-mono font-bold text-rose-700">{s.absent}</td>
+                        <td className="p-2 text-center font-mono font-bold text-amber-700">{s.holiday}</td>
+                        <td className="p-2 text-right font-mono font-black text-[#1e3a5f]">{s.percentage}%</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── DECLARE HOLIDAY MODAL ─────────────────────────────────────────── */}
+      {isHolidayModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-[#1e3a5f] flex items-center gap-2">
+                <Sparkles className="text-amber-500" size={18} />
+                <span>Declare Public/School Holiday (विधा घोषणा)</span>
+              </h3>
+              <button onClick={() => setIsHolidayModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Target Class (कक्षा) *</label>
+                <select
+                  value={holidayTargetClass}
+                  onChange={(e) => setHolidayTargetClass(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="ALL">All Classes in School (सम्पूर्ण विद्यालय)</option>
+                  {classesData?.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name} {c.section ? `(${c.section})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Holiday Date BS (मिति) *</label>
+                <input
+                  type="text"
+                  value={dateBs}
+                  onChange={(e) => setDateBs(e.target.value)}
+                  className="erp-input font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Holiday Reason / Title (विदाको नाम) *</label>
+                <input
+                  type="text"
+                  value={holidayTitleInput}
+                  onChange={(e) => setHolidayTitleInput(e.target.value)}
+                  placeholder="e.g. दशैं विदा / सार्वजनिक विदा / घाँटी हेर्ने विदा"
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsHolidayModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={markHolidayMutation.isPending}
+                  onClick={() => markHolidayMutation.mutate({ targetClassId: holidayTargetClass, holidayTitle: holidayTitleInput })}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {markHolidayMutation.isPending ? 'Declaring...' : 'Declare Holiday Now (विदा घोषणा गर्नुस्)'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

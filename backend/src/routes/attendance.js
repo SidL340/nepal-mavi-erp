@@ -83,6 +83,135 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/attendance/holiday — mark a date as Holiday for class or all classes
+router.post('/holiday', authenticate, async (req, res) => {
+  try {
+    const { classId, dateBs, holidayName = 'Holiday' } = req.body;
+    const teacherId = req.user.teacher?.id || null;
+
+    let targetClassIds = [];
+    if (classId === 'ALL' || !classId) {
+      const classes = await prisma.class.findMany({ select: { id: true } });
+      targetClassIds = classes.map((c) => c.id);
+    } else {
+      targetClassIds = [parseInt(classId)];
+    }
+
+    let count = 0;
+    for (const cId of targetClassIds) {
+      const enrollments = await prisma.classEnrollment.findMany({
+        where: { classId: cId, isActive: true },
+        select: { studentId: true },
+      });
+
+      for (const e of enrollments) {
+        await prisma.attendance.upsert({
+          where: { studentId_dateBs: { studentId: e.studentId, dateBs } },
+          update: {
+            status: 'HOLIDAY',
+            remark: holidayName,
+            teacherId,
+          },
+          create: {
+            studentId: e.studentId,
+            classId: cId,
+            dateBs,
+            dateAd: new Date(),
+            status: 'HOLIDAY',
+            remark: holidayName,
+            teacherId,
+          },
+        });
+        count++;
+      }
+    }
+
+    return res.json({ success: true, message: `Marked "${holidayName}" as holiday for ${count} students!`, count });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/attendance/holiday — remove holiday status for a date
+router.delete('/holiday', authenticate, async (req, res) => {
+  try {
+    const { classId, dateBs } = req.body;
+    const where = { dateBs, status: 'HOLIDAY' };
+    if (classId && classId !== 'ALL') where.classId = parseInt(classId);
+
+    const result = await prisma.attendance.deleteMany({ where });
+    return res.json({ success: true, message: `Removed holiday status for ${result.count} records.`, count: result.count });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/attendance/monthly-matrix/:classId?monthBs=2083-05 — Monthly Register Matrix Grid
+router.get('/monthly-matrix/:classId', authenticate, async (req, res) => {
+  try {
+    const { monthBs } = req.query;
+    const classId = parseInt(req.params.classId);
+
+    const enrollments = await prisma.classEnrollment.findMany({
+      where: { classId, isActive: true },
+      include: { student: { select: { id: true, fullName: true, studentId: true } } },
+      orderBy: { rollNo: 'asc' },
+    });
+
+    const records = await prisma.attendance.findMany({
+      where: {
+        classId,
+        dateBs: monthBs ? { startsWith: monthBs } : undefined,
+      },
+    });
+
+    const uniqueDates = Array.from(new Set(records.map((r) => r.dateBs))).sort();
+
+    const matrix = enrollments.map((e) => {
+      const studentRecords = records.filter((r) => r.studentId === e.studentId);
+      const dayMap = {};
+      studentRecords.forEach((r) => {
+        const dayNum = parseInt(r.dateBs.split('-')[2] || '1');
+        dayMap[dayNum] = r.status;
+      });
+
+      const present = studentRecords.filter((r) => r.status === 'PRESENT').length;
+      const absent = studentRecords.filter((r) => r.status === 'ABSENT' || r.status === 'BUNKED').length;
+      const late = studentRecords.filter((r) => r.status === 'LATE').length;
+      const leave = studentRecords.filter((r) => r.status === 'LEAVE').length;
+      const holiday = studentRecords.filter((r) => r.status === 'HOLIDAY').length;
+      const workingDays = studentRecords.filter((r) => r.status !== 'HOLIDAY').length;
+
+      const percentage = workingDays > 0 ? +(((present + late) / workingDays) * 100).toFixed(1) : 0;
+
+      return {
+        studentId: e.student.studentId,
+        fullName: e.student.fullName,
+        rollNo: e.rollNo,
+        dayMap,
+        present,
+        absent,
+        late,
+        leave,
+        holiday,
+        workingDays,
+        percentage,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        matrix,
+        dates: uniqueDates,
+        monthBs: monthBs || 'Current Month',
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/attendance/class/:classId?dateBs=2081-05-15
 router.get('/class/:classId', authenticate, async (req, res) => {
   try {
@@ -105,8 +234,14 @@ router.get('/class/:classId', authenticate, async (req, res) => {
     const attMap = {};
     existingAttendance.forEach(a => { attMap[a.studentId] = a; });
 
+    // Check if date is marked as Holiday for this class
+    const isHoliday = existingAttendance.some(a => a.status === 'HOLIDAY');
+    const holidayRemark = isHoliday ? existingAttendance.find(a => a.status === 'HOLIDAY')?.remark || 'Holiday' : null;
+
     return res.json({
       success: true,
+      isHoliday,
+      holidayRemark,
       data: enrollments.map(e => ({
         ...e.student,
         rollNo: e.rollNo,
