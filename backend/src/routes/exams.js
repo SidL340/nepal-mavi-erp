@@ -4,7 +4,23 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ── EXAMS ─────────────────────────────────────────────────────────────────
+// GET /api/exams/active — list active exams for current active academic year
+router.get('/active', authenticate, async (req, res) => {
+  try {
+    const activeYear = await prisma.academicYear.findFirst({ where: { isActive: true } });
+    const where = { isActive: true };
+    if (activeYear) where.academicYearId = activeYear.id;
+
+    const exams = await prisma.exam.findMany({
+      where,
+      include: { academicYear: true, examClasses: { include: { class: true } } },
+      orderBy: { startDateBs: 'asc' },
+    });
+    return res.json({ success: true, data: exams });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 router.get('/', authenticate, async (req, res) => {
   const { academicYearId } = req.query;

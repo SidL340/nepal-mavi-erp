@@ -111,18 +111,25 @@ export default function StudentPortalPage() {
   });
 
   // ── 4. Fetch Active Exams ──
+  // ── 4. Fetch Active Exams ──
   const { data: examsData } = useQuery({
     queryKey: ['student-exams'],
     queryFn: async () => {
-      const res = await api.get('/exams/active');
-      return res.data?.data || [];
+      try {
+        const res = await api.get('/exams/active');
+        if (res.data?.data && res.data.data.length > 0) return res.data.data;
+      } catch (err) {}
+      const fallback = await api.get('/exams');
+      return fallback.data?.data || [];
     },
   });
 
   // Auto-select first exam when exams load
   useEffect(() => {
-    if (examsData?.length > 0 && !selectedExamId) {
-      setSelectedExamId(examsData[0].id);
+    if (examsData?.length > 0) {
+      if (!selectedExamId || !examsData.some((e: any) => e.id === selectedExamId)) {
+        setSelectedExamId(examsData[0].id);
+      }
     }
   }, [examsData, selectedExamId]);
 
