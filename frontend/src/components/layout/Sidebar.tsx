@@ -289,8 +289,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
             collapsed ? 'justify-center px-2' : 'gap-3'
           )}
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400 text-[#1e3a5f] shadow-md">
-            <Building2 size={22} strokeWidth={2.5} />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-md">
+            <img src="/school_logo.png" alt="School Emblem Seal" className="w-8 h-8 object-contain" />
           </div>
           {!collapsed && (
             <div className="min-w-0">
@@ -358,12 +358,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
           <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-[#1e3a5f] shadow-2xl z-50">
             <div className="flex items-center justify-between border-b border-[#2a4f7c] px-4 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-[#1e3a5f]">
-                  <Building2 size={20} strokeWidth={2.5} />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-md">
+                  <img src="/school_logo.png" alt="School Emblem Seal" className="w-8 h-8 object-contain" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">NEPAL MAVI ERP</p>
-                  <p className="text-[10px] text-amber-400 font-nepali">विद्यालय व्यवस्थापन प्रणाली</p>
+                  <p className="text-sm font-bold text-white">NEPAL SSB ERP</p>
+                  <p className="text-[10px] font-medium text-amber-400 font-nepali">नेपाल एसएसबी मा.वि.</p>
                 </div>
               </div>
               <button

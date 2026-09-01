@@ -12,8 +12,18 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Nepal School ERP | विद्यालय व्यवस्थापन प्रणाली',
-  description: 'Comprehensive Web & Mobile School Management ERP System for Nepal',
+  title: 'Nepal SSB Secondary School ERP | श्री नेपाल मा.वि. विश्रामपुर',
+  description: 'Shree Nepal Secondary School Bishrampur Rautahat Mobile & Web ERP System',
+  manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/school_logo.png', sizes: 'any', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/school_logo.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

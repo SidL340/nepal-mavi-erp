@@ -52,10 +52,14 @@ export default function UserManagementPage() {
 
   // Bulk Reset & Printable Slips State
   const [isBulkResetModalOpen, setIsBulkResetModalOpen] = useState(false);
+  const [isPrintOnlyModalOpen, setIsPrintOnlyModalOpen] = useState(false);
   const [isPrintSlipsModalOpen, setIsPrintSlipsModalOpen] = useState(false);
   const [bulkResetResults, setBulkResetResults] = useState<any[]>([]);
   const [bulkTargetRole, setBulkTargetRole] = useState<string>('STUDENT');
   const [bulkClassId, setBulkClassId] = useState<string>('');
+
+  const [printTargetRole, setPrintTargetRole] = useState<string>('STUDENT');
+  const [printClassId, setPrintClassId] = useState<string>('');
 
   // Dialog for generated single credentials
   const [credentialDialog, setCredentialDialog] = useState<{
@@ -318,11 +322,19 @@ export default function UserManagementPage() {
           {/* Top Action Buttons */}
           <div className="flex flex-wrap items-center gap-2.5">
             <button
+              onClick={() => setIsPrintOnlyModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-4.5 py-2.5 text-xs font-black shadow-sm transition"
+            >
+              <Receipt size={16} />
+              <span>🖨️ Print Login Slips (लगइन स्लिप मात्र प्रिन्ट)</span>
+            </button>
+
+            <button
               onClick={() => setIsBulkResetModalOpen(true)}
               className="inline-flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white px-4.5 py-2.5 text-xs font-black shadow-sm transition"
             >
               <KeyRound size={16} />
-              <span>🔑 Reset All Passwords & Print Slips (सबैको पासवर्ड रिसेट र लगइन स्लिप प्रिन्ट)</span>
+              <span>🔑 Reset Passwords & Print Slips</span>
             </button>
 
             <button
@@ -333,7 +345,7 @@ export default function UserManagementPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-4.5 py-2.5 text-xs font-black shadow-sm transition"
             >
               <UserPlus size={16} />
-              <span>+ Create User Account (नयाँ प्रयोगकर्ता खाता थप्नुहोस्)</span>
+              <span>+ Create User Account</span>
             </button>
           </div>
         </div>
@@ -1174,6 +1186,96 @@ export default function UserManagementPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 7B. PRINT SLIPS ONLY MODAL (WITHOUT RESETTING PASSWORDS) ────────── */}
+      {isPrintOnlyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+              <h3 className="font-extrabold text-sm text-[#1e3a5f]">
+                Print Login Credentials Slips (लगइन स्लिप प्रिन्ट मात्र)
+              </h3>
+              <button onClick={() => setIsPrintOnlyModalOpen(false)}><X size={18} /></button>
+            </div>
+
+            <p className="text-xs text-emerald-800 font-bold bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+              ℹ️ Print official student & staff login cards with QR codes anytime WITHOUT modifying or resetting their passwords.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Target User Role *</label>
+                <select
+                  value={printTargetRole}
+                  onChange={(e) => setPrintTargetRole(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="STUDENT">All Students (सम्पूर्ण विद्यार्थीहरू)</option>
+                  <option value="TEACHER">All Teachers & Staff (सम्पूर्ण शिक्षकहरू)</option>
+                  <option value="ALL">All Users in System (सम्पूर्ण प्रयोगकर्ताहरू)</option>
+                </select>
+              </div>
+
+              {printTargetRole === 'STUDENT' && (
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Filter by Class (Optional)</label>
+                  <select
+                    value={printClassId}
+                    onChange={(e) => setPrintClassId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">All Classes (सबै कक्षा)</option>
+                    {classesList?.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.section ? `(${c.section})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setIsPrintOnlyModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    let filtered = usersList;
+                    if (printTargetRole !== 'ALL') {
+                      filtered = filtered.filter((u: any) => u.role === printTargetRole);
+                    }
+                    if (printClassId && printTargetRole === 'STUDENT') {
+                      filtered = filtered.filter((u: any) => u.student?.classEnrollment?.[0]?.class?.id === parseInt(printClassId));
+                    }
+
+                    const slips = filtered.map((u: any) => {
+                      const className = u.student?.classEnrollment?.[0]?.class
+                        ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
+                        : u.teacher?.post || u.role;
+                      return {
+                        id: u.id,
+                        username: u.username,
+                        role: u.role,
+                        fullName: u.teacher?.fullName || u.student?.fullName || u.username,
+                        studentId: u.student?.studentId || '—',
+                        className,
+                        rollNo: u.student?.classEnrollment?.[0]?.rollNo || u.id,
+                        temporaryPassword: u.role === 'STUDENT' ? `SSB@${u.student?.classEnrollment?.[0]?.rollNo || u.id}` : '••••••••',
+                      };
+                    });
+
+                    setBulkResetResults(slips);
+                    setIsPrintOnlyModalOpen(false);
+                    setIsPrintSlipsModalOpen(true);
+                  }}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
+                >
+                  Generate & Print Slips Now
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

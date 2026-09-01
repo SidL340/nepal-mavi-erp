@@ -99,8 +99,8 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo / Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full shadow-2xl mb-4 p-2">
-            <School className="w-10 h-10 text-[#1e3a5f]" />
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-full shadow-2xl mb-4 p-2 ring-4 ring-amber-400/50">
+            <img src="/school_logo.png" alt="Shree Nepal Secondary School Emblem" className="w-20 h-20 object-contain" />
           </div>
           <h1 className="text-3xl font-black text-white font-serif tracking-wide">Nepal SSB Secondary School ERP</h1>
           <p className="text-amber-300 mt-1 text-xs font-bold font-nepali">नेपाल एसएसबी माध्यमिक विद्यालय व्यवस्थापन प्रणाली</p>
