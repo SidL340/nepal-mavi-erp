@@ -88,7 +88,7 @@ app.listen(PORT, '0.0.0.0', async () => {
     const adminHash = await bcrypt.hash('Admin@2081', 12);
     await prisma.user.upsert({
       where: { username: 'admin' },
-      update: {},
+      update: { passwordHash: adminHash, isActive: true },
       create: { username: 'admin', passwordHash: adminHash, role: 'SUPER_ADMIN' },
     });
 
