@@ -76,11 +76,13 @@ const navConfig: (NavItem | NavSection)[] = [
     nepaliSection: 'आर्थिक तथा तलब',
     roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     items: [
+      { label: 'Finance Portal Hub', nepaliLabel: 'वित्तीय हब पोर्टल', href: '/dashboard/finance', icon: Building2, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Income / Budget', nepaliLabel: 'आम्दानी / बजेट', href: '/dashboard/finance/income', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Expenses', nepaliLabel: 'खर्च', href: '/dashboard/finance/expenses', icon: TrendingDown, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Fee Collection', nepaliLabel: 'शुल्क संकलन', href: '/dashboard/finance/fees', icon: Receipt, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Teacher Payroll', nepaliLabel: 'शिक्षक तलब भत्ता', href: '/dashboard/finance/payroll', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Journal Vouchers', nepaliLabel: 'गोश्वारा भौचर', href: '/dashboard/finance/journal', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Parties / Recipients', nepaliLabel: 'पाउने व्यक्ति/संस्था', href: '/dashboard/finance?tab=parties', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Masters & Heads', nepaliLabel: 'शीर्षक व्यवस्थापन', href: '/dashboard/finance/heads', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     ],
   },

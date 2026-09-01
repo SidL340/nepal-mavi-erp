@@ -38,6 +38,7 @@ app.use('/api/inventory',  require('./routes/inventory'));
 app.use('/api/notices',    require('./routes/notices'));
 app.use('/api/users',      require('./routes/users'));
 app.use('/api/events',     require('./routes/events'));
+app.use('/api/parties',    require('./routes/parties'));
 
 // ── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

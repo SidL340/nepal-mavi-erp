@@ -483,12 +483,94 @@ router.post('/online-pay', authenticate, async (req, res) => {
       include: { student: true, feeHead: true },
     });
 
-    return res.status(201).json({
-      success: true,
-      data: collection,
-      receiptNo,
-      message: 'Online payment submitted successfully!',
+// ── INCOME ENTRIES ────────────────────────────────────────────────────────
+router.get('/entries', authenticate, async (req, res) => {
+  try {
+    const { academicYearId, headId, categoryId, partyId, from, to, q, page = 1, limit = 100 } = req.query;
+    const where = {};
+    if (academicYearId) where.academicYearId = parseInt(academicYearId);
+    if (headId) where.headId = parseInt(headId);
+    if (partyId) where.partyId = parseInt(partyId);
+    if (categoryId) where.head = { categoryId: parseInt(categoryId) };
+    if (from || to) {
+      where.receivedDateBs = {};
+      if (from) where.receivedDateBs.gte = from;
+      if (to) where.receivedDateBs.lte = to;
+    }
+    if (q) {
+      where.OR = [
+        { sourceOrg: { contains: q } },
+        { voucherNo: { contains: q } },
+        { receivedBy: { contains: q } },
+        { chequeNo: { contains: q } },
+        { head: { name: { contains: q } } },
+        { party: { name: { contains: q } } },
+      ];
+    }
+    const [entries, total] = await Promise.all([
+      prisma.incomeEntry.findMany({
+        where,
+        include: { head: { include: { category: true } }, academicYear: true, party: true },
+        orderBy: { receivedDateBs: 'desc' },
+        skip: (parseInt(page) - 1) * parseInt(limit),
+        take: parseInt(limit),
+      }),
+      prisma.incomeEntry.count({ where }),
+    ]);
+    const agg = await prisma.incomeEntry.aggregate({ where, _sum: { amount: true } });
+    return res.json({ success: true, data: entries, total, totalAmount: agg._sum.amount || 0 });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const { receivedDateAd, headId, academicYearId, partyId, bankAccountId, amount, ...rest } = req.body;
+    const entry = await prisma.incomeEntry.create({
+      data: {
+        ...rest,
+        amount: parseFloat(amount),
+        receivedDateAd: receivedDateAd ? new Date(receivedDateAd) : new Date(),
+        headId: parseInt(headId),
+        academicYearId: parseInt(academicYearId),
+        partyId: partyId ? parseInt(partyId) : undefined,
+        bankAccountId: bankAccountId ? parseInt(bankAccountId) : undefined,
+      },
+      include: { head: { include: { category: true } }, party: true },
     });
+    return res.status(201).json({ success: true, data: entry, message: 'Income entry saved.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.put('/entries/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const { receivedDateAd, headId, academicYearId, partyId, bankAccountId, amount, ...rest } = req.body;
+    const updateData = { ...rest };
+    if (amount !== undefined) updateData.amount = parseFloat(amount);
+    if (receivedDateAd) updateData.receivedDateAd = new Date(receivedDateAd);
+    if (headId) updateData.headId = parseInt(headId);
+    if (academicYearId) updateData.academicYearId = parseInt(academicYearId);
+    if (partyId !== undefined) updateData.partyId = partyId ? parseInt(partyId) : null;
+    if (bankAccountId !== undefined) updateData.bankAccountId = bankAccountId ? parseInt(bankAccountId) : null;
+
+    const entry = await prisma.incomeEntry.update({
+      where: { id: parseInt(req.params.id) },
+      data: updateData,
+      include: { head: { include: { category: true } }, party: true },
+    });
+    return res.json({ success: true, data: entry, message: 'Income entry updated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.delete('/entries/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.incomeEntry.delete({ where: { id: parseInt(req.params.id) } });
+    return res.json({ success: true, message: 'Income entry deleted.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

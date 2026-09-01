@@ -83,20 +83,32 @@ router.delete('/heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), asy
 
 router.get('/entries', authenticate, async (req, res) => {
   try {
-    const { academicYearId, headId, categoryId, from, to, page = 1, limit = 50 } = req.query;
+    const { academicYearId, headId, categoryId, partyId, from, to, q, page = 1, limit = 100 } = req.query;
     const where = {};
     if (academicYearId) where.academicYearId = parseInt(academicYearId);
     if (headId) where.headId = parseInt(headId);
+    if (partyId) where.partyId = parseInt(partyId);
     if (categoryId) where.head = { categoryId: parseInt(categoryId) };
     if (from || to) {
       where.expenseDateBs = {};
       if (from) where.expenseDateBs.gte = from;
       if (to) where.expenseDateBs.lte = to;
     }
+    if (q) {
+      where.OR = [
+        { paidTo: { contains: q } },
+        { voucherNo: { contains: q } },
+        { billNo: { contains: q } },
+        { description: { contains: q } },
+        { chequeNo: { contains: q } },
+        { head: { name: { contains: q } } },
+        { party: { name: { contains: q } } },
+      ];
+    }
     const [entries, total] = await Promise.all([
       prisma.expenseEntry.findMany({
         where,
-        include: { head: { include: { category: true } }, academicYear: true },
+        include: { head: { include: { category: true } }, academicYear: true, party: true },
         orderBy: { expenseDateBs: 'desc' },
         skip: (parseInt(page) - 1) * parseInt(limit),
         take: parseInt(limit),
@@ -113,7 +125,7 @@ router.get('/entries', authenticate, async (req, res) => {
 router.get('/entries/:id', authenticate, async (req, res) => {
   const entry = await prisma.expenseEntry.findUnique({
     where: { id: parseInt(req.params.id) },
-    include: { head: { include: { category: true } }, academicYear: true },
+    include: { head: { include: { category: true } }, academicYear: true, party: true },
   });
   if (!entry) return res.status(404).json({ success: false, message: 'Not found.' });
   return res.json({ success: true, data: entry });
@@ -121,18 +133,20 @@ router.get('/entries/:id', authenticate, async (req, res) => {
 
 router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const { expenseDateAd, ...rest } = req.body;
+    const { expenseDateAd, headId, academicYearId, partyId, bankAccountId, amount, ...rest } = req.body;
     const entry = await prisma.expenseEntry.create({
       data: {
         ...rest,
-        amount: parseFloat(rest.amount),
-        expenseDateAd: new Date(expenseDateAd),
-        headId: parseInt(rest.headId),
-        academicYearId: parseInt(rest.academicYearId),
+        amount: parseFloat(amount),
+        expenseDateAd: expenseDateAd ? new Date(expenseDateAd) : new Date(),
+        headId: parseInt(headId),
+        academicYearId: parseInt(academicYearId),
+        partyId: partyId ? parseInt(partyId) : undefined,
+        bankAccountId: bankAccountId ? parseInt(bankAccountId) : undefined,
       },
-      include: { head: { include: { category: true } } },
+      include: { head: { include: { category: true } }, party: true },
     });
-    return res.status(201).json({ success: true, data: entry });
+    return res.status(201).json({ success: true, data: entry, message: 'Expense entry recorded.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -140,12 +154,21 @@ router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNT
 
 router.put('/entries/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const { expenseDateAd, ...rest } = req.body;
+    const { expenseDateAd, headId, academicYearId, partyId, bankAccountId, amount, ...rest } = req.body;
+    const updateData = { ...rest };
+    if (amount !== undefined) updateData.amount = parseFloat(amount);
+    if (expenseDateAd) updateData.expenseDateAd = new Date(expenseDateAd);
+    if (headId) updateData.headId = parseInt(headId);
+    if (academicYearId) updateData.academicYearId = parseInt(academicYearId);
+    if (partyId !== undefined) updateData.partyId = partyId ? parseInt(partyId) : null;
+    if (bankAccountId !== undefined) updateData.bankAccountId = bankAccountId ? parseInt(bankAccountId) : null;
+
     const entry = await prisma.expenseEntry.update({
       where: { id: parseInt(req.params.id) },
-      data: { ...rest, expenseDateAd: expenseDateAd ? new Date(expenseDateAd) : undefined },
+      data: updateData,
+      include: { head: { include: { category: true } }, party: true },
     });
-    return res.json({ success: true, data: entry });
+    return res.json({ success: true, data: entry, message: 'Expense entry updated.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

@@ -331,6 +331,7 @@ model IncomeHead {
   category    IncomeCategory @relation(fields: [categoryId], references: [id])
   name        String         // "Salary Budget", "ICT Budget", "Scholarship"
   nameNepali  String?
+  code        String?        // Accounting code e.g. "1.01.01"
   isActive    Boolean        @default(true)
   createdAt   DateTime       @default(now())
 
@@ -344,19 +345,44 @@ model IncomeEntry {
   head            IncomeHead  @relation(fields: [headId], references: [id])
   academicYearId  Int
   academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  partyId         Int?
+  party           Party?      @relation(fields: [partyId], references: [id])
   sourceLevel     String?     // "Central", "Provincial", "Local", "District"
   sourceOrg       String?     // Name of sending organization
   amount          Float
   receivedDateBs  String
   receivedDateAd  DateTime
   depositedInAccount String?  // Which school bank account
+  bankAccountId   Int?
   receivedBy      String?
   paymentMedium   String?     @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
   paymentRef      String?     // Cheque No / Trans ID / QR Ref
+  chequeNo        String?
+  chequeDateBs    String?
   voucherNo       String?
   remarks         String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+}
+
+// ─── PARTIES / RECIPIENTS ────────────────────────────────────────────────────
+
+model Party {
+  id            Int      @id @default(autoincrement())
+  name          String
+  nameNepali    String?
+  partyType     String   @default("VENDOR") // VENDOR, SUPPLIER, GOVT, CONTRACTOR, TEACHER, OTHER
+  panNo         String?
+  phone         String?
+  email         String?
+  address       String?
+  bankName      String?
+  accountNo     String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  expenseEntries ExpenseEntry[]
+  incomeEntries  IncomeEntry[]
 }
 
 // ─── FINANCE — STUDENT FEE ───────────────────────────────────────────────────
@@ -440,6 +466,7 @@ model ExpenseHead {
   category    ExpenseCategory @relation(fields: [categoryId], references: [id])
   name        String
   nameNepali  String?
+  code        String?         // Accounting code e.g. "20101"
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())
 
@@ -452,13 +479,18 @@ model ExpenseEntry {
   head            ExpenseHead @relation(fields: [headId], references: [id])
   academicYearId  Int
   academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  partyId         Int?
+  party           Party?      @relation(fields: [partyId], references: [id])
   amount          Float
   expenseDateBs   String
   expenseDateAd   DateTime
   paidTo          String?
   paidFromAccount String?
+  bankAccountId   Int?
   paymentMedium   String?     @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
   paymentRef      String?     // Cheque No / Trans ID / QR Ref
+  chequeNo        String?
+  chequeDateBs    String?
   voucherNo       String?
   billNo          String?
   approvedBy      String?
