@@ -51,7 +51,8 @@ export default function IncomePage() {
   // Inline Party Modal State
   const [newPartyName, setNewPartyName] = useState('');
   const [newPartyNameNepali, setNewPartyNameNepali] = useState('');
-  const [newPartyType, setNewPartyType] = useState('GOVT');
+  const [newPartyType, setNewPartyType] = useState('DONOR');
+  const [customPartyType, setCustomPartyType] = useState('');
   const [newPartyPan, setNewPartyPan] = useState('');
   const [newPartyPhone, setNewPartyPhone] = useState('');
 
@@ -615,21 +616,53 @@ export default function IncomePage() {
 
             <form onSubmit={(e) => {
               e.preventDefault();
+              const finalPartyType = newPartyType === 'CUSTOM' ? customPartyType : newPartyType;
               createPartyMutation.mutate({
                 name: newPartyName,
                 nameNepali: newPartyNameNepali,
-                partyType: newPartyType,
+                partyType: finalPartyType || 'DONOR',
                 panNo: newPartyPan,
                 phone: newPartyPhone,
               });
             }} className="space-y-3">
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Organization / Donor Name *</label>
-                <input type="text" required placeholder="Bishrampur Local Municipality / EDC" value={newPartyName} onChange={(e) => setNewPartyName(e.target.value)} className="erp-input font-bold" />
+                <input type="text" required placeholder="Bishrampur Local Municipality / EDC / Donor Name" value={newPartyName} onChange={(e) => setNewPartyName(e.target.value)} className="erp-input font-bold" />
               </div>
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Nepali Name</label>
-                <input type="text" placeholder="विश्रामपुर गाउँपालिका" value={newPartyNameNepali} onChange={(e) => setNewPartyNameNepali(e.target.value)} className="erp-input font-nepali font-bold" />
+                <input type="text" placeholder="विश्रामपुर गाउँपालिका / राम कुमार" value={newPartyNameNepali} onChange={(e) => setNewPartyNameNepali(e.target.value)} className="erp-input font-nepali font-bold" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Party Type (प्रकार)</label>
+                  <select value={newPartyType} onChange={(e) => setNewPartyType(e.target.value)} className="erp-input font-bold">
+                    <option value="DONOR">DONOR (चन्दादाता / दानवीर)</option>
+                    <option value="GOVT">GOVT (सरकारी निकाय / पालिका)</option>
+                    <option value="WORKER">WORKER (श्रमिक / कामदार / इलेक्ट्रिसियन / प्लम्बर)</option>
+                    <option value="SHOPKEEPER">SHOPKEEPER (पसले / खाद्यान्न / किराना / स्टेसनरी)</option>
+                    <option value="SERVICE_PROVIDER">SERVICE PROVIDER (सेवा प्रदायक - बिजुली / इन्टरनेट)</option>
+                    <option value="VENDOR">VENDOR (विक्रेता / पसल)</option>
+                    <option value="SUPPLIER">SUPPLIER (सामग्री सप्लायर)</option>
+                    <option value="CONTRACTOR">CONTRACTOR (ठेकेदार / निर्माण कार्य)</option>
+                    <option value="STAFF">STAFF / TEACHER (शिक्षक तथा कर्मचारी)</option>
+                    <option value="CUSTOM">OTHER (अन्य नयाँ प्रकार लेख्नुहोस्)...</option>
+                  </select>
+                  {newPartyType === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Type custom party type (e.g. Electrician, Groceries...)"
+                      value={customPartyType}
+                      onChange={(e) => setCustomPartyType(e.target.value)}
+                      className="erp-input mt-1 font-bold border-rose-400"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">PAN / Phone</label>
+                  <input type="text" placeholder="Phone or PAN No." value={newPartyPhone} onChange={(e) => setNewPartyPhone(e.target.value)} className="erp-input font-mono" />
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
                 <button type="button" onClick={() => setIsAddPartyModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>

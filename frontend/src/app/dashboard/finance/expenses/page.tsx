@@ -45,6 +45,7 @@ export default function ExpensesPage() {
   const [newPartyName, setNewPartyName] = useState('');
   const [newPartyNameNepali, setNewPartyNameNepali] = useState('');
   const [newPartyType, setNewPartyType] = useState('VENDOR');
+  const [customPartyType, setCustomPartyType] = useState('');
   const [newPartyPan, setNewPartyPan] = useState('');
   const [newPartyPhone, setNewPartyPhone] = useState('');
 
@@ -819,10 +820,11 @@ export default function ExpensesPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                const finalPartyType = newPartyType === 'CUSTOM' ? customPartyType : newPartyType;
                 createPartyMutation.mutate({
                   name: newPartyName,
                   nameNepali: newPartyNameNepali,
-                  partyType: newPartyType,
+                  partyType: finalPartyType || 'VENDOR',
                   panNo: newPartyPan,
                   phone: newPartyPhone,
                 });
@@ -834,7 +836,7 @@ export default function ExpensesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Quality Stationers / NEA"
+                  placeholder="e.g. Quality Stationers / Electrician Ram Kumar / Groceries Shop"
                   value={newPartyName}
                   onChange={(e) => setNewPartyName(e.target.value)}
                   className="erp-input font-bold"
@@ -845,7 +847,7 @@ export default function ExpensesPage() {
                 <label className="block font-bold text-gray-700 mb-1">Nepali Name (नेपाली नाम)</label>
                 <input
                   type="text"
-                  placeholder="क्वालिटी स्टेसनरी"
+                  placeholder="क्वालिटी स्टेसनरी / राम इलेक्ट्रिसियन"
                   value={newPartyNameNepali}
                   onChange={(e) => setNewPartyNameNepali(e.target.value)}
                   className="erp-input font-nepali font-bold"
@@ -854,19 +856,33 @@ export default function ExpensesPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Party Type</label>
+                  <label className="block font-bold text-gray-700 mb-1">Party Type (प्रकार)</label>
                   <select
                     value={newPartyType}
                     onChange={(e) => setNewPartyType(e.target.value)}
                     className="erp-input font-bold"
                   >
-                    <option value="VENDOR">VENDOR (विक्रेता)</option>
-                    <option value="SUPPLIER">SUPPLIER (सप्लायर)</option>
-                    <option value="GOVT">GOVT (सरकारी निकाय)</option>
-                    <option value="CONTRACTOR">CONTRACTOR (ठेकेदार)</option>
-                    <option value="TEACHER">STAFF / TEACHER (शिक्षक)</option>
-                    <option value="OTHER">OTHER (अन्य)</option>
+                    <option value="VENDOR">VENDOR (विक्रेता / पसल)</option>
+                    <option value="SUPPLIER">SUPPLIER (सामग्री सप्लायर)</option>
+                    <option value="WORKER">WORKER (श्रमिक / कामदार / इलेक्ट्रिसियन / प्लम्बर)</option>
+                    <option value="SHOPKEEPER">SHOPKEEPER (पसले / खाद्यान्न / किराना / स्टेसनरी)</option>
+                    <option value="SERVICE_PROVIDER">SERVICE PROVIDER (सेवा प्रदायक - बिजुली / इन्टरनेट)</option>
+                    <option value="CONTRACTOR">CONTRACTOR (ठेकेदार / निर्माण कार्य)</option>
+                    <option value="DONOR">DONOR (चन्दादाता / दानवीर)</option>
+                    <option value="GOVT">GOVT (सरकारी निकाय / पालिका)</option>
+                    <option value="STAFF">STAFF / TEACHER (शिक्षक तथा कर्मचारी)</option>
+                    <option value="CUSTOM">OTHER (अन्य नयाँ प्रकार लेख्नुहोस्)...</option>
                   </select>
+                  {newPartyType === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Type custom party type (e.g. Electrician, Groceries...)"
+                      value={customPartyType}
+                      onChange={(e) => setCustomPartyType(e.target.value)}
+                      className="erp-input mt-1 font-bold border-rose-400"
+                    />
+                  )}
                 </div>
 
                 <div>

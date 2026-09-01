@@ -482,6 +482,11 @@ router.post('/online-pay', authenticate, async (req, res) => {
       },
       include: { student: true, feeHead: true },
     });
+    return res.status(201).json({ success: true, data: collection, message: 'Online payment submitted successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // ── INCOME ENTRIES ────────────────────────────────────────────────────────
 router.get('/entries', authenticate, async (req, res) => {
