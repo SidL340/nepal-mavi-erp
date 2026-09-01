@@ -21,6 +21,7 @@ import {
   Calendar,
   Layers,
   Building2,
+  Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -208,6 +209,196 @@ export default function ExpensesPage() {
     if (finalApprovedBy) data.approvedBy = finalApprovedBy;
 
     addExpenseMutation.mutate(data);
+  };
+
+  const triggerSingleVoucherPrint = (v: any) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const partyName = v.party?.name || v.paidTo || 'Recipient / Party';
+    const topicName = v.head ? `${v.head.code ? `[${v.head.code}] ` : ''}${v.head.name}` : (v.topic || 'Expense Head');
+    const amount = v.amount || 0;
+    const dateBs = v.expenseDateBs || todayBS();
+    const voucherNo = v.voucherNo || `VOUCH-${v.id}`;
+    const paymentMedium = v.paymentMedium || 'CASH';
+    const chequeNo = v.chequeNo || '';
+    const account = v.paidFromAccount || 'School Account';
+    const approvedBy = v.approvedBy || 'Principal (प्रधानाध्यापक)';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Official Journal Voucher - ${voucherNo}</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 2px solid #1e3a5f; padding: 22px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .badge { font-size: 11px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
+            .meta-grid { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 14px; background: #f8fafc; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 14px; }
+            th { background: #1e3a5f; color: #fff; padding: 8px; text-align: left; font-size: 10px; border: 1px solid #1e3a5f; }
+            td { padding: 8px; border: 1px solid #cbd5e1; }
+            .footer-sig { margin-top: 50px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-box { width: 160px; text-align: center; border-top: 1px solid #333; padding-top: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="badge">OFFICIAL GOVERNMENT FORMAT JOURNAL VOUCHER (गोश्वारा भौचर)</div>
+            </div>
+
+            <div class="meta-grid">
+              <div>Voucher No: <strong>${voucherNo}</strong></div>
+              <div>Date (BS): <strong>${dateBs}</strong></div>
+              <div>Paid To / Recipient: <strong style="color: #1e3a5f;">${partyName}</strong></div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align: center;">S.N.</th>
+                  <th>ACCOUNT HEAD & PARTICULARS</th>
+                  <th style="width: 130px; text-align: right;">DEBIT (Dr. रू)</th>
+                  <th style="width: 130px; text-align: right;">CREDIT (Cr. रू)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="text-align: center;">1</td>
+                  <td>
+                    <strong>${topicName}</strong>
+                    <div style="font-size: 10px; color: #555; margin-top: 2px;">Paid to: ${partyName} | Method: ${paymentMedium}${chequeNo ? ` (Cheque No: ${chequeNo})` : ''}</div>
+                  </td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #b91c1c;">रू ${amount.toLocaleString()}</td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #15803d;">रू ${amount.toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="margin-bottom: 20px; font-size: 11px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+              <div><strong>Payment Account:</strong> ${account}</div>
+              <div><strong>Narration / Remarks:</strong> ${v.description || v.remarks || 'Expense Payment Disbursement'}</div>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-box">Prepared By (लेखापाल)</div>
+              <div class="sig-box">Checked By (जाँच गर्ने)</div>
+              <div class="sig-box">Approved By (${approvedBy})</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const triggerFullPartyLedgerPrint = (data: any) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const party = data.party || {};
+    const expenses = data.expenses || [];
+    const incomes = data.incomes || [];
+    const totalExp = data.totalExpenseSum || 0;
+    const totalInc = data.totalIncomeSum || 0;
+    const netBal = totalExp - totalInc;
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Party Ledger Statement - ${party.name || 'Party'}</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 2px solid #1e3a5f; padding: 20px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .party-header { background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 11px; }
+            .summary-box { display: flex; justify-content: space-between; background: #eff6ff; border: 1px solid #bfdbfe; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 14px; }
+            th { background: #1e3a5f; color: #fff; padding: 6px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
+            td { padding: 6px; border: 1px solid #cbd5e1; }
+            .footer-sig { margin-top: 40px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-box { width: 150px; text-align: center; border-top: 1px solid #333; padding-top: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div style="font-size: 12px; font-weight: 900; color: #1e3a5f; margin-top: 4px; text-transform: uppercase;">PARTY LEDGER STATEMENT & VOUCHER REGISTER (पाउने व्यक्ति/संस्था खाता लेजर)</div>
+            </div>
+
+            <div class="party-header">
+              <div style="font-size: 14px; font-weight: 900; color: #1e3a5f;">Party Name: ${party.name} ${party.nameNepali ? `(${party.nameNepali})` : ''}</div>
+              <div>PAN/VAT No: <strong>${party.panNo || 'N/A'}</strong> | Phone: <strong>${party.phone || 'N/A'}</strong> | Type: <strong>${party.partyType || 'VENDOR'}</strong></div>
+            </div>
+
+            <div class="summary-box">
+              <div>Total Expenses Paid: <span style="color: #b91c1c;">रू ${totalExp.toLocaleString()}</span></div>
+              <div>Total Receipts/Income: <span style="color: #15803d;">रू ${totalInc.toLocaleString()}</span></div>
+              <div>Net Ledger Balance: <span style="color: #1e3a5f;">रू ${netBal.toLocaleString()}</span></div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30px; text-align: center;">S.N.</th>
+                  <th style="width: 75px;">Date (BS)</th>
+                  <th style="width: 90px;">Voucher No</th>
+                  <th>Topic & Description</th>
+                  <th style="width: 100px;">Method / Ref</th>
+                  <th style="width: 85px; text-align: right;">Amount (रू)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${expenses.map((e: any, idx: number) => `
+                  <tr>
+                    <td style="text-align: center;">${idx + 1}</td>
+                    <td style="font-family: monospace; font-weight: bold;">${e.expenseDateBs}</td>
+                    <td style="font-family: monospace; font-weight: bold; color: #1e3a5f;">${e.voucherNo || `VOUCH-${e.id}`}</td>
+                    <td><strong>${e.head?.name}</strong>${e.description ? `<div style="font-size: 9px; color: #666;">${e.description}</div>` : ''}</td>
+                    <td style="font-family: monospace;">${e.paymentMedium}${e.chequeNo ? ` (Chk: ${e.chequeNo})` : ''}</td>
+                    <td style="text-align: right; font-family: monospace; font-weight: bold; color: #b91c1c;">रू ${(e.amount || 0).toLocaleString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="footer-sig">
+              <div class="sig-box">Prepared By (लेखापाल)</div>
+              <div class="sig-box">Checked By (जाँच गर्ने)</div>
+              <div class="sig-box">Approved By (प्रधानाध्यापक)</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
   };
 
   const entries = entriesData?.data || [];
@@ -446,16 +637,27 @@ export default function ExpensesPage() {
                       {entry.approvedBy || 'Principal'}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      {entry.partyId && (
+                      <div className="flex items-center justify-center gap-1.5">
                         <button
-                          onClick={() => setInspectPartyId(entry.partyId)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-bold text-[#1e3a5f] hover:bg-slate-50 shadow-2xs"
-                          title="View Party History Vouchers"
+                          onClick={() => triggerSingleVoucherPrint(entry)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-1 text-[11px] font-extrabold shadow-2xs transition"
+                          title="Print Single Official Journal Voucher"
                         >
-                          <Eye size={12} />
-                          <span>Ledger</span>
+                          <Printer size={12} />
+                          <span>Voucher</span>
                         </button>
-                      )}
+
+                        {entry.partyId && (
+                          <button
+                            onClick={() => setInspectPartyId(entry.partyId)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[11px] font-bold text-[#1e3a5f] hover:bg-slate-100 shadow-2xs transition"
+                            title="View Party History & Full Ledger"
+                          >
+                            <Eye size={12} />
+                            <span>Ledger</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -933,9 +1135,18 @@ export default function ExpensesPage() {
                   PAN: {partyVouchersData.party?.panNo || 'N/A'} • Phone: {partyVouchersData.party?.phone || 'N/A'} • Type: {partyVouchersData.party?.partyType}
                 </p>
               </div>
-              <button onClick={() => setInspectPartyId(null)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => triggerFullPartyLedgerPrint(partyVouchersData)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] text-white hover:bg-[#2a5280] px-3.5 py-1.5 text-xs font-bold transition shadow-2xs"
+                >
+                  <Printer size={13} />
+                  <span>Print Full Party Ledger Report (लेखा पाना प्रिन्ट)</span>
+                </button>
+                <button onClick={() => setInspectPartyId(null)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
@@ -948,8 +1159,10 @@ export default function ExpensesPage() {
                 <p className="text-base font-extrabold text-rose-700 font-mono">रू {(partyVouchersData.totalExpenseSum || 0).toLocaleString()}</p>
               </div>
               <div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Total Received Amount</span>
-                <p className="text-base font-extrabold text-emerald-700 font-mono">रू {(partyVouchersData.totalIncomeSum || 0).toLocaleString()}</p>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">Net Party Ledger Balance</span>
+                <p className="text-base font-extrabold text-emerald-700 font-mono">
+                  रू {((partyVouchersData.totalExpenseSum || 0) - (partyVouchersData.totalIncomeSum || 0)).toLocaleString()}
+                </p>
               </div>
             </div>
 
@@ -964,12 +1177,13 @@ export default function ExpensesPage() {
                       <th className="py-2.5 px-3">Expense Head</th>
                       <th className="py-2.5 px-3">Method & Cheque</th>
                       <th className="py-2.5 px-3 text-right">Amount (रू)</th>
+                      <th className="py-2.5 px-3 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-gray-700">
                     {partyVouchersData.expenses?.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-gray-400">No expense vouchers recorded for this party yet.</td>
+                        <td colSpan={6} className="py-6 text-center text-gray-400">No expense vouchers recorded for this party yet.</td>
                       </tr>
                     ) : (
                       partyVouchersData.expenses?.map((e: any) => (
@@ -982,6 +1196,16 @@ export default function ExpensesPage() {
                           </td>
                           <td className="py-2 px-3 text-right font-mono font-black text-rose-700">
                             रू ${(e.amount || 0).toLocaleString()}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <button
+                              onClick={() => triggerSingleVoucherPrint({ ...e, party: partyVouchersData.party })}
+                              className="inline-flex items-center gap-1 rounded bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-0.5 text-[10px] font-extrabold shadow-2xs transition"
+                              title="Print Single Official Journal Voucher"
+                            >
+                              <Printer size={10} />
+                              <span>Print JV</span>
+                            </button>
                           </td>
                         </tr>
                       ))
