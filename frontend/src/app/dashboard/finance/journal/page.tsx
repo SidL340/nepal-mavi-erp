@@ -100,6 +100,7 @@ export default function JournalVoucherPage() {
 
   // 1. Income Vouchers
   (incomeData || []).forEach((inc: any) => {
+    const rName = inc.party?.name || inc.sourceOrg || inc.sourceLevel || 'Government Budget';
     allVouchers.push({
       id: `INC-${inc.id}`,
       originalId: inc.id,
@@ -107,22 +108,26 @@ export default function JournalVoucherPage() {
       type: 'INCOME',
       typeLabel: 'आम्दानी गोश्वारा भौचर (Income JV)',
       topic: inc.head?.name || 'Government Budget Income',
+      recipientName: rName,
+      partyId: inc.partyId || inc.party?.id,
       dateBs: inc.receivedDateBs,
       dateAd: inc.receivedDateAd,
-      particulars: `${inc.head?.name || 'Income'} (${inc.sourceOrg || inc.sourceLevel || 'Government Budget'})`,
+      particulars: `${inc.head?.name || 'Income'} (${rName})`,
       debitAccount: inc.depositedInAccount || (inc.paymentMedium === 'CASH' ? 'नगद हिसाब (Cash A/c)' : 'बैंक हिसाब (Bank Current A/c)'),
       creditAccount: `आम्दानी शीर्षक: ${inc.head?.name || 'Government Budget Head'}`,
       debitAmount: inc.amount || 0,
       creditAmount: inc.amount || 0,
       paymentMedium: inc.paymentMedium || 'BANK_TRANSFER',
-      paymentRef: inc.paymentRef || 'N/A',
+      paymentRef: inc.paymentRef || inc.chequeNo || 'N/A',
+      chequeNo: inc.chequeNo,
       preparedBy: inc.receivedBy || 'Accountant',
-      remarks: inc.remarks || `Received from ${inc.sourceOrg || inc.sourceLevel} towards ${inc.head?.name}`,
+      remarks: inc.remarks || `Received from ${rName} towards ${inc.head?.name}`,
     });
   });
 
   // 2. Expense Vouchers
   (expenseData || []).forEach((exp: any) => {
+    const rName = exp.party?.name || exp.paidTo || 'Vendor / Supplier';
     allVouchers.push({
       id: `EXP-${exp.id}`,
       originalId: exp.id,
@@ -130,15 +135,18 @@ export default function JournalVoucherPage() {
       type: 'EXPENSE',
       typeLabel: 'खर्च गोश्वारा भौचर (Expense JV)',
       topic: exp.head?.name || 'Operating Expense',
+      recipientName: rName,
+      partyId: exp.partyId || exp.party?.id,
       dateBs: exp.expenseDateBs,
       dateAd: exp.expenseDateAd,
-      particulars: `${exp.head?.name || 'Expense'} (Paid to: ${exp.paidTo || 'Supplier'})`,
+      particulars: `${exp.head?.name || 'Expense'} (Paid to: ${rName})`,
       debitAccount: `खर्च शीर्षक: ${exp.head?.name || 'Operating Expense'}`,
       creditAccount: exp.paidFromAccount || (exp.paymentMedium === 'CASH' ? 'नगद हिसाब (Cash A/c)' : 'बैंक हिसाब (Bank Current A/c)'),
       debitAmount: exp.amount || 0,
       creditAmount: exp.amount || 0,
       paymentMedium: exp.paymentMedium || 'CASH',
-      paymentRef: exp.paymentRef || exp.billNo || 'N/A',
+      paymentRef: exp.paymentRef || exp.chequeNo || exp.billNo || 'N/A',
+      chequeNo: exp.chequeNo,
       preparedBy: exp.approvedBy || 'Accountant',
       remarks: exp.description || exp.remarks || `Expense payment for ${exp.head?.name}`,
     });
@@ -146,6 +154,7 @@ export default function JournalVoucherPage() {
 
   // 3. Student Fee Receipts Vouchers
   (feeData || []).forEach((fee: any) => {
+    const rName = fee.student ? `${fee.student.fullName} (${fee.student.studentId})` : 'Student';
     allVouchers.push({
       id: `FEE-${fee.id}`,
       originalId: fee.id,
@@ -153,9 +162,10 @@ export default function JournalVoucherPage() {
       type: 'FEE',
       typeLabel: 'विद्यार्थी शुल्क भौचर (Fee Collection JV)',
       topic: fee.feeHead?.name || 'Student Tuition & Fee',
+      recipientName: rName,
       dateBs: fee.paidDateBs,
       dateAd: fee.paidDateAd,
-      particulars: `${fee.feeHead?.name || 'Student Fee'} - Student: ${fee.student?.fullName || 'Student'} (${fee.student?.studentId})`,
+      particulars: `${fee.feeHead?.name || 'Student Fee'} - Student: ${rName}`,
       debitAccount: fee.depositedInAccount || (fee.paymentMedium === 'CASH' ? 'नगद हिसाब (Cash A/c)' : 'बैंक हिसाब (Bank A/c)'),
       creditAccount: `शुल्क शीर्षक: ${fee.feeHead?.name || 'School Fee Head'}`,
       debitAmount: fee.amount || 0,
@@ -163,12 +173,13 @@ export default function JournalVoucherPage() {
       paymentMedium: fee.paymentMedium || 'CASH',
       paymentRef: fee.paymentRef || 'N/A',
       preparedBy: fee.collectedBy || 'Accountant',
-      remarks: fee.remarks || `Fee collection from ${fee.student?.fullName}`,
+      remarks: fee.remarks || `Fee collection from ${rName}`,
     });
   });
 
   // 4. Payroll Vouchers
   (payrollData || []).forEach((pay: any) => {
+    const rName = pay.teacher ? `${pay.teacher.fullName}` : 'Staff / Teacher';
     allVouchers.push({
       id: `PAY-${pay.id}`,
       originalId: pay.id,
@@ -176,9 +187,10 @@ export default function JournalVoucherPage() {
       type: 'PAYROLL',
       typeLabel: 'शिक्षक तलब गोश्वारा भौचर (Payroll JV)',
       topic: 'Teacher Salary & Allowances (तलब तथा भत्ता)',
+      recipientName: rName,
       dateBs: pay.monthFrom || todayBS(),
       dateAd: pay.createdAt,
-      particulars: `Teacher Payroll: ${pay.teacher?.fullName || 'Staff'} (${pay.monthFrom} to ${pay.monthTo})`,
+      particulars: `Teacher Payroll: ${rName} (${pay.monthFrom} to ${pay.monthTo})`,
       debitAccount: 'शिक्षक तलब तथा भत्ता खर्च हिसाब (Teacher Salary Expense A/c)',
       creditAccount: 'बैंक हिसाब / खुद भुक्तानी (Bank Current A/c & Deductions)',
       debitAmount: pay.khudPaaunuParne || pay.jammaTalabBhata || 0,
@@ -186,7 +198,7 @@ export default function JournalVoucherPage() {
       paymentMedium: 'BANK_TRANSFER',
       paymentRef: 'Payroll Disbursement',
       preparedBy: 'School Accountant',
-      remarks: `Net Salary disbursement for ${pay.teacher?.fullName}`,
+      remarks: `Net Salary disbursement for ${rName}`,
     });
   });
 
@@ -396,6 +408,8 @@ export default function JournalVoucherPage() {
             <div class="meta-grid">
               <div>Voucher No: <strong>${v.voucherNo || 'VOUCH-001'}</strong></div>
               <div>Date: <strong>${v.dateBs || todayBS()} BS</strong></div>
+              <div>Recipient / Party: <strong style="color: #1e3a5f;">${v.recipientName || 'N/A'}</strong></div>
+              <div>Method: <strong>${v.paymentMedium || 'CASH'}${v.chequeNo ? ` (Chk: ${v.chequeNo})` : ''}</strong></div>
             </div>
 
             <table>
