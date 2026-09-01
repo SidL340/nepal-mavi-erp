@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import { todayBSFormatted } from '@/lib/nepali-date';
+import api from '@/lib/api';
+import toast from 'react-hot-toast';
 import {
   Menu,
   Bell,
@@ -11,6 +13,8 @@ import {
   LogOut,
   ChevronDown,
   School,
+  KeyRound,
+  X,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
@@ -45,6 +49,35 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuthStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [isChangePassModalOpen, setIsChangePassModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loadingPass, setLoadingPass] = useState(false);
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match.');
+      return;
+    }
+    setLoadingPass(true);
+    try {
+      await api.post('/users/change-my-password', { newPassword });
+      toast.success('Your password has been changed successfully!');
+      setIsChangePassModalOpen(false);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to change password.');
+    } finally {
+      setLoadingPass(false);
+    }
+  };
 
   const matchedPath = Object.keys(pageTitles).find(
     (k) => pathname === k || (k !== '/dashboard' && pathname.startsWith(k))
@@ -139,8 +172,19 @@ export function Header({ onMenuClick }: HeaderProps) {
               ) : null}
 
               <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setIsChangePassModalOpen(true);
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <KeyRound size={14} className="text-amber-500" />
+                <span>Change Password (पासवर्ड फेर्नुहोस्)</span>
+              </button>
+
+              <button
                 onClick={handleLogout}
-                className="flex w-full items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+                className="flex w-full items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors border-t border-gray-100"
               >
                 <LogOut size={14} />
                 Logout (लगआउट)
@@ -149,6 +193,62 @@ export function Header({ onMenuClick }: HeaderProps) {
           )}
         </div>
       </div>
+
+      {/* ── CHANGE PASSWORD MODAL ───────────────────────────────────────────── */}
+      {isChangePassModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-[#1e3a5f] flex items-center gap-2">
+                <KeyRound className="text-amber-500" size={18} />
+                <span>Change My Password (पासवर्ड फेर्नुहोस्)</span>
+              </h3>
+              <button onClick={() => setIsChangePassModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">New Password (नयाँ पासवर्ड)</label>
+                <input
+                  type="password"
+                  placeholder="Enter new password (min 6 chars)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Confirm New Password (पासवर्ड पुनः टाईप गर्नुहोस्)</label>
+                <input
+                  type="password"
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setIsChangePassModalOpen(false)} className="px-4 py-2 border rounded-xl text-xs font-bold">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingPass}
+                  className="px-5 py-2 bg-[#1e3a5f] hover:bg-[#2a4f7c] text-white font-bold text-xs rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {loadingPass ? 'Updating...' : 'Update Password Now'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

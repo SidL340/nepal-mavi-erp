@@ -256,6 +256,28 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, 
   }
 });
 
+// ── CHANGE MY OWN PASSWORD ──────────────────────────────────────────────────
+// POST /api/users/change-my-password
+router.post('/change-my-password', authenticate, async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword.trim(), 10);
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { passwordHash, mustChangePassword: false },
+    });
+
+    return res.json({ success: true, message: 'Your password has been changed successfully!' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── 4. ADMIN RESET USER PASSWORD ────────────────────────────────────────────
 // POST /api/users/:id/reset-password
 router.post('/:id/reset-password', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
