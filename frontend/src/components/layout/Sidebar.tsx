@@ -345,6 +345,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
               <LogOut size={15} />
             </button>
           </div>
+          {!collapsed && (
+            <div className="mt-1 pt-1.5 border-t border-[#264b75] text-[9px] text-center text-slate-300">
+              Developed by <strong className="text-amber-300 font-bold">Nirmala Tech Innovations</strong>
+            </div>
+          )}
         </div>
       </aside>
 

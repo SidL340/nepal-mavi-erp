@@ -175,9 +175,12 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-blue-200 text-xs mt-6">
-          © {new Date().getFullYear()} Nepal School ERP • All rights reserved
-        </p>
+        <div className="text-center text-blue-200 text-xs mt-6 space-y-1">
+          <p>© {new Date().getFullYear()} Nepal Secondary School ERP • All rights reserved</p>
+          <p className="text-amber-300/90 font-bold text-[11px]">
+            Designed & Developed by <strong className="text-white font-black">Nirmala Tech Innovations Pvt. Ltd.</strong>
+          </p>
+        </div>
       </div>
 
       {/* ─── SELF SERVICE FORGOT PASSWORD MODAL ─────────────────────────────── */}
