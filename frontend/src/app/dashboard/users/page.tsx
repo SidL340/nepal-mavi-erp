@@ -1290,6 +1290,7 @@ export default function UserManagementPage() {
                       setBulkResetResults(slips);
                       setIsPrintOnlyModalOpen(false);
                       setIsPrintSlipsModalOpen(true);
+                      setTimeout(() => window.print(), 500);
                     } catch (err: any) {
                       toast.error('Failed to load user slips.');
                     } finally {
@@ -1310,33 +1311,41 @@ export default function UserManagementPage() {
       {isPrintSlipsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs overflow-y-auto">
           <div className="relative w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 my-8">
-            <div className="flex justify-between items-center border-b border-gray-200 pb-3 print:hidden">
+            {/* Top Action Bar */}
+            <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md flex flex-wrap justify-between items-center border-b border-gray-200 pb-3 print:hidden gap-3">
               <div>
                 <h3 className="font-extrabold text-base text-[#1e3a5f]">
                   Print Login Credentials Slips ({bulkResetResults.length} Slips Ready)
                 </h3>
                 <p className="text-xs text-gray-500">Official student & staff login cards with QR codes and App installation steps</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm"
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition"
                 >
-                  <Receipt size={15} />
-                  <span>Print All Slips (प्रिन्ट गर्नुहोस्)</span>
+                  <Receipt size={16} />
+                  <span>🖨️ Print / Save as PDF (प्रिन्ट वा PDF सेभ गर्नुहोस्)</span>
                 </button>
-                <button onClick={() => setIsPrintSlipsModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
-                  <X size={20} />
+                <button
+                  onClick={() => setIsPrintSlipsModalOpen(false)}
+                  className="px-3 py-2 border border-gray-300 hover:bg-gray-100 font-bold rounded-xl text-xs text-gray-700"
+                >
+                  Close (बन्द गर्नुहोस्)
                 </button>
               </div>
             </div>
 
-            {/* Print Stylesheet for Perfect A4 Sizing */}
+            {/* Print Stylesheet for Perfect A4 Sizing & Full Color */}
             <style jsx global>{`
               @media print {
                 @page {
                   size: A4 portrait;
                   margin: 6mm;
+                }
+                * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
                 }
                 body * {
                   visibility: hidden !important;
@@ -1378,64 +1387,64 @@ export default function UserManagementPage() {
                   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('https://app.nepalssb.edu.np/login')}`;
                   return (
                     <div key={idx} className="border-2 border-dashed border-[#1e3a5f] rounded-2xl p-4 bg-white space-y-3 relative print-slip-card">
-                    {/* Header with Circular Seal */}
-                    <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
-                      <div className="w-11 h-11 shrink-0 rounded-full border border-amber-400 p-0.5 bg-white flex items-center justify-center shadow-xs">
-                        <img src="/school_logo.png" alt="School Emblem Seal" className="w-10 h-10 object-contain rounded-full" />
+                      {/* Header with Circular Seal */}
+                      <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
+                        <div className="w-11 h-11 shrink-0 rounded-full border border-amber-400 p-0.5 bg-white flex items-center justify-center shadow-xs">
+                          <img src="/school_logo.png" alt="School Emblem Seal" className="w-10 h-10 object-contain rounded-full" />
+                        </div>
+                        <div className="min-w-0 flex-1 text-center">
+                          <h4 className="font-black text-xs text-[#1e3a5f] font-nepali tracking-tight">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</h4>
+                          <p className="text-[10px] font-bold text-gray-700">Shree Nepal Secondary School, Bishrampur</p>
+                          <span className="inline-block mt-0.5 bg-amber-100 text-amber-900 text-[9px] font-black px-2 py-0.2 rounded uppercase">
+                            Portal Access Credentials Card
+                          </span>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1 text-center">
-                        <h4 className="font-black text-xs text-[#1e3a5f] font-nepali tracking-tight">श्री नेपाल मा.वि. विश्रामपुर, रौतहट</h4>
-                        <p className="text-[10px] font-bold text-gray-700">Shree Nepal Secondary School, Bishrampur</p>
-                        <span className="inline-block mt-0.5 bg-amber-100 text-amber-900 text-[9px] font-black px-2 py-0.2 rounded uppercase">
-                          Portal Access Credentials Card
-                        </span>
-                      </div>
-                    </div>
 
-                    {/* Content Grid */}
-                    <div className="grid grid-cols-3 gap-2 items-center text-xs">
-                      {/* Details Column */}
-                      <div className="col-span-2 space-y-1 text-[11px]">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 font-bold">Name:</span>
-                          <strong className="text-gray-900">{item.fullName}</strong>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500 font-bold">Role / Class:</span>
-                          <span className="font-extrabold text-blue-900">{item.className}</span>
-                        </div>
-                        {item.studentId !== '—' && (
+                      {/* Content Grid */}
+                      <div className="grid grid-cols-3 gap-2 items-center text-xs">
+                        {/* Details Column */}
+                        <div className="col-span-2 space-y-1 text-[11px]">
                           <div className="flex justify-between">
-                            <span className="text-gray-500 font-bold">Student ID / Roll:</span>
-                            <span className="font-mono text-gray-700">{item.studentId} (Roll: {item.rollNo})</span>
+                            <span className="text-gray-500 font-bold">Name:</span>
+                            <strong className="text-gray-900">{item.fullName}</strong>
                           </div>
-                        )}
-                        <div className="mt-2 pt-1 border-t border-gray-100 space-y-1">
-                          <div className="flex justify-between bg-blue-50 p-1 rounded font-mono">
-                            <span className="text-gray-600 font-bold">Username:</span>
-                            <strong className="text-[#1e3a5f]">{item.username}</strong>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500 font-bold">Role / Class:</span>
+                            <span className="font-extrabold text-blue-900">{item.className}</span>
                           </div>
-                          <div className="flex justify-between bg-amber-50 p-1 rounded font-mono">
-                            <span className="text-gray-600 font-bold">Password:</span>
-                            <strong className="text-amber-900">{item.temporaryPassword}</strong>
+                          {item.studentId !== '—' && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-500 font-bold">Student ID / Roll:</span>
+                              <span className="font-mono text-gray-700">{item.studentId} (Roll: {item.rollNo})</span>
+                            </div>
+                          )}
+                          <div className="mt-2 pt-1 border-t border-gray-100 space-y-1">
+                            <div className="flex justify-between bg-blue-50 p-1 rounded font-mono">
+                              <span className="text-gray-600 font-bold">Username:</span>
+                              <strong className="text-[#1e3a5f]">{item.username}</strong>
+                            </div>
+                            <div className="flex justify-between bg-amber-50 p-1 rounded font-mono">
+                              <span className="text-gray-600 font-bold">Password:</span>
+                              <strong className="text-amber-900">{item.temporaryPassword}</strong>
+                            </div>
                           </div>
+                        </div>
+
+                        {/* QR Code Column */}
+                        <div className="col-span-1 text-center flex flex-col items-center justify-center border-l border-gray-100 pl-2">
+                          <img src={qrUrl} alt="Login QR Code" className="w-20 h-20 border rounded-lg p-0.5 shadow-2xs" />
+                          <span className="text-[8px] font-bold text-gray-500 mt-1">Scan to Login & Install App</span>
                         </div>
                       </div>
 
-                      {/* QR Code Column */}
-                      <div className="col-span-1 text-center flex flex-col items-center justify-center border-l border-gray-100 pl-2">
-                        <img src={qrUrl} alt="Login QR Code" className="w-20 h-20 border rounded-lg p-0.5 shadow-2xs" />
-                        <span className="text-[8px] font-bold text-gray-500 mt-1">Scan to Login & Install App</span>
+                      {/* Footer instructions */}
+                      <div className="text-[8px] text-gray-500 border-t border-dashed border-gray-200 pt-1 text-center">
+                        🌐 Visit <strong>https://app.nepalssb.edu.np/login</strong> or scan QR • Tap "Add to Home Screen" to install Mobile App
                       </div>
                     </div>
-
-                    {/* Footer instructions */}
-                    <div className="text-[8px] text-gray-500 border-t border-dashed border-gray-200 pt-1 text-center">
-                      🌐 Visit <strong>https://app.nepalssb.edu.np/login</strong> or scan QR • Tap "Add to Home Screen" to install Mobile App
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
             </div>
           </div>
