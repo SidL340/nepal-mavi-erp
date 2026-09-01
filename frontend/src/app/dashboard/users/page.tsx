@@ -559,6 +559,31 @@ export default function UserManagementPage() {
                           {/* Actions */}
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* 1-Click Print Individual Slip */}
+                              <button
+                                onClick={() => {
+                                  const className = u.student?.classEnrollment?.[0]?.class
+                                    ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
+                                    : u.teacher?.post || u.role;
+                                  setBulkResetResults([{
+                                    id: u.id,
+                                    username: u.username,
+                                    role: u.role,
+                                    fullName: u.teacher?.fullName || u.student?.fullName || u.username,
+                                    studentId: u.student?.studentId || '—',
+                                    className,
+                                    rollNo: u.student?.classEnrollment?.[0]?.rollNo || u.id,
+                                    temporaryPassword: u.role === 'STUDENT' ? `SSB@${u.student?.classEnrollment?.[0]?.rollNo || u.id}` : '••••••••',
+                                  }]);
+                                  setIsPrintSlipsModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 px-2.5 py-1 text-[11px] font-extrabold shadow-2xs transition"
+                                title="Print Login Slip"
+                              >
+                                <Receipt size={12} />
+                                <span>Print Slip (स्लिप)</span>
+                              </button>
+
                               {/* 1-Click Reset Password */}
                               <button
                                 onClick={() => {

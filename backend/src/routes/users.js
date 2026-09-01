@@ -343,16 +343,15 @@ router.post('/bulk-reset-passwords', authenticate, authorize('SUPER_ADMIN', 'ADM
       },
     });
 
-    const resetResults = [];
-    for (const u of usersToReset) {
+    const resetTasks = usersToReset.map(async (u) => {
       if (classId && u.role === 'STUDENT') {
         const studentClassId = u.student?.classEnrollment?.[0]?.class?.id;
-        if (studentClassId !== parseInt(classId)) continue;
+        if (studentClassId !== parseInt(classId)) return null;
       }
 
       const rollNo = u.student?.classEnrollment?.[0]?.rollNo || u.id;
-      const rawPassword = u.role === 'STUDENT' ? `SSB@${rollNo}#${Math.floor(100 + Math.random() * 900)}` : generateTemporaryPassword(u.role);
-      const passwordHash = await bcrypt.hash(rawPassword, 10);
+      const rawPassword = u.role === 'STUDENT' ? `SSB@${rollNo}` : generateTemporaryPassword(u.role);
+      const passwordHash = await bcrypt.hash(rawPassword, 6);
 
       await prisma.user.update({
         where: { id: u.id },
@@ -363,7 +362,7 @@ router.post('/bulk-reset-passwords', authenticate, authorize('SUPER_ADMIN', 'ADM
         ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
         : u.teacher?.post || u.role;
 
-      resetResults.push({
+      return {
         id: u.id,
         username: u.username,
         role: u.role,
@@ -372,8 +371,11 @@ router.post('/bulk-reset-passwords', authenticate, authorize('SUPER_ADMIN', 'ADM
         className,
         rollNo,
         temporaryPassword: rawPassword,
-      });
-    }
+      };
+    });
+
+    const results = await Promise.all(resetTasks);
+    const resetResults = results.filter(Boolean);
 
     return res.json({
       success: true,
