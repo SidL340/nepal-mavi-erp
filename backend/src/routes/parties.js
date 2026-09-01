@@ -29,7 +29,34 @@ router.get('/', authenticate, async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    return res.json({ success: true, data: parties });
+    // Populate full accurate voucher count combining partyId and name text matches
+    const updatedParties = await Promise.all(
+      parties.map(async (p) => {
+        const [expCount, incCount] = await Promise.all([
+          prisma.expenseEntry.count({
+            where: {
+              OR: [{ partyId: p.id }, { paidTo: { contains: p.name } }]
+            }
+          }),
+          prisma.incomeEntry.count({
+            where: {
+              OR: [{ partyId: p.id }, { sourceOrg: { contains: p.name } }]
+            }
+          })
+        ]);
+
+        return {
+          ...p,
+          vouchersCount: expCount + incCount,
+          _count: {
+            expenseEntries: expCount,
+            incomeEntries: incCount,
+          }
+        };
+      })
+    );
+
+    return res.json({ success: true, data: updatedParties });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

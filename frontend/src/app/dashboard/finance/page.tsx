@@ -478,8 +478,8 @@ export default function UnifiedFinanceHubPage() {
                       </td>
                       <td className="py-3 px-4 font-mono font-bold">{party.panNo || 'N/A'}</td>
                       <td className="py-3 px-4 font-mono">{party.phone || 'N/A'}</td>
-                      <td className="py-3 px-4 font-bold">
-                        {(party._count?.expenseEntries || 0) + (party._count?.incomeEntries || 0)} vouchers
+                      <td className="py-3 px-4 font-bold text-[#1e3a5f]">
+                        {party.vouchersCount ?? ((party._count?.expenseEntries || 0) + (party._count?.incomeEntries || 0))} vouchers
                       </td>
                       <td className="py-3 px-4 text-center">
                         <button
