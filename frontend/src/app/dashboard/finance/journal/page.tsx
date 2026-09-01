@@ -27,14 +27,16 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownLeft,
+  Building,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function JournalVoucherPage() {
-  const [viewMode, setViewMode] = useState<'SEPARATE' | 'COMBINED'>('COMBINED');
+  const [viewMode, setViewMode] = useState<'SEPARATE' | 'COMBINED' | 'PARTY_WISE'>('COMBINED');
   const [voucherTypeFilter, setVoucherTypeFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE' | 'FEE' | 'PAYROLL'>('ALL');
   const [topicFilter, setTopicFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [partyWiseSelectedId, setPartyWiseSelectedId] = useState<string>('ALL');
 
   // Modals
   const [selectedVoucher, setSelectedVoucher] = useState<any>(null);
@@ -499,6 +501,24 @@ export default function JournalVoucherPage() {
     printWin.document.close();
   };
 
+  // Selected Party Object & Vouchers for Party-Wise View Mode
+  const selectedPartyObj = partiesData?.find((p: any) => p.id.toString() === partyWiseSelectedId);
+
+  const partyVouchersList = allVouchers.filter((v) => {
+    if (partyWiseSelectedId === 'ALL') return true;
+    if (v.partyId?.toString() === partyWiseSelectedId) return true;
+    if (selectedPartyObj && v.recipientName?.toLowerCase().includes(selectedPartyObj.name.toLowerCase())) return true;
+    return false;
+  });
+
+  const partyDebitsSum = partyVouchersList
+    .filter((v) => v.type === 'EXPENSE' || v.type === 'PAYROLL')
+    .reduce((acc, curr) => acc + (curr.debitAmount || 0), 0);
+
+  const partyCreditsSum = partyVouchersList
+    .filter((v) => v.type === 'INCOME' || v.type === 'FEE')
+    .reduce((acc, curr) => acc + (curr.creditAmount || 0), 0);
+
   return (
     <div className="space-y-6 pb-16">
       {/* Top Header */}
@@ -573,24 +593,33 @@ export default function JournalVoucherPage() {
       {/* Filter Bar & View Mode Toggle */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 border border-slate-200">
+        <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 border border-slate-200">
           <button
             onClick={() => setViewMode('SEPARATE')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition flex items-center gap-1.5 ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition flex items-center gap-1.5 whitespace-nowrap ${
               viewMode === 'SEPARATE' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <Layers size={13} />
-            <span>Separate Debit / Credit Tables (अलग-अलग खाता तालिका)</span>
+            <span>Separate Debit / Credit Tables</span>
           </button>
           <button
             onClick={() => setViewMode('COMBINED')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition flex items-center gap-1.5 ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition flex items-center gap-1.5 whitespace-nowrap ${
               viewMode === 'COMBINED' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <FileText size={13} />
-            <span>Combined Journal Register (संयुक्त तालिका)</span>
+            <span>Combined Journal Register</span>
+          </button>
+          <button
+            onClick={() => setViewMode('PARTY_WISE')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition flex items-center gap-1.5 whitespace-nowrap ${
+              viewMode === 'PARTY_WISE' ? 'bg-[#1e3a5f] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Building size={13} />
+            <span>Party-Wise Journal Ledger (पाउने पक्ष लेजर)</span>
           </button>
         </div>
 
@@ -855,6 +884,147 @@ export default function JournalVoucherPage() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─── VIEW 3: PARTY-WISE JOURNAL LEDGER REGISTER ───────────────────── */}
+      {viewMode === 'PARTY_WISE' && (
+        <div className="space-y-6">
+          {/* Party Selector Header & Summary */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div>
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <Building size={18} className="text-rose-600" />
+                  <span>Party-Wise Journal Ledger (पाउने व्यक्ति/संस्था अनुसार भौचर लेजर)</span>
+                </h2>
+                <p className="text-xs text-gray-500 font-nepali mt-0.5">
+                  विशिष्ट vendor, सप्लायर वा सरकारी निकाय अनुसार दोहोरो लेखा प्रणाली गोश्वारा भौचर सूची
+                </p>
+              </div>
+
+              {/* Party Selector Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-gray-700 whitespace-nowrap">Select Party / Vendor:</label>
+                <select
+                  value={partyWiseSelectedId}
+                  onChange={(e) => setPartyWiseSelectedId(e.target.value)}
+                  className="erp-input font-bold text-xs text-[#1e3a5f] border-rose-300 min-w-[240px]"
+                >
+                  <option value="ALL">-- All Parties Ledger (सबै पाउने पक्षहरू) --</option>
+                  {partiesData?.map((p: any) => (
+                    <option key={p.id} value={p.id.toString()}>
+                      {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''} [{p.vouchersCount || 0} Vouchers]
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Top Summary Cards for Selected Party */}
+            {selectedPartyObj && (
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Party Name & Type</span>
+                  <p className="text-sm font-extrabold text-[#1e3a5f] mt-0.5">{selectedPartyObj.name}</p>
+                  <span className="text-[10px] font-bold text-rose-700">PAN: {selectedPartyObj.panNo || 'N/A'} • {selectedPartyObj.partyType}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Total Debit Vouchers (खर्च / भुक्तानी)</span>
+                  <p className="text-base font-extrabold text-rose-700 font-mono mt-0.5">
+                    रू {partyDebitsSum.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Total Credit Vouchers (आम्दानी / प्राप्ति)</span>
+                  <p className="text-base font-extrabold text-emerald-700 font-mono mt-0.5">
+                    रू {partyCreditsSum.toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Net Party Ledger Balance</span>
+                  <p className="text-base font-extrabold text-[#1e3a5f] font-mono mt-0.5">
+                    रू {(partyDebitsSum - partyCreditsSum).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Party Vouchers Journal Register Table */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-2xs overflow-hidden">
+            <div className="bg-[#1e3a5f] px-4 py-3 text-white flex items-center justify-between">
+              <h3 className="font-extrabold text-xs uppercase tracking-wider flex items-center gap-2">
+                <FileText size={15} className="text-amber-400" />
+                <span>
+                  {selectedPartyObj ? `Party Journal Ledger: ${selectedPartyObj.name}` : 'All Party Journal Vouchers'}
+                </span>
+              </h3>
+              <span className="text-xs font-mono font-bold bg-slate-800 px-2.5 py-0.5 rounded text-amber-300">
+                {partyVouchersList.length} Vouchers Recorded
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-sans">
+                <thead className="bg-slate-100 text-gray-700 text-[10.5px] uppercase font-extrabold border-b border-gray-200">
+                  <tr>
+                    <th className="py-3 px-4">Date (BS)</th>
+                    <th className="py-3 px-4">Voucher No</th>
+                    <th className="py-3 px-4">Particulars & Accounting Code</th>
+                    <th className="py-3 px-4">Party / Recipient</th>
+                    <th className="py-3 px-4 text-right">Debit (Dr. रू)</th>
+                    <th className="py-3 px-4 text-right">Credit (Cr. रू)</th>
+                    <th className="py-3 px-4 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
+                  {partyVouchersList.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-gray-400 font-nepali">
+                        छानिएको पाउने पक्षका लागि कुनै गोश्वारा भौचर प्रविष्टि भेटिएन।
+                      </td>
+                    </tr>
+                  ) : (
+                    partyVouchersList.map((v) => (
+                      <tr key={v.id} className="hover:bg-slate-50 transition">
+                        <td className="py-3 px-4 font-mono font-bold text-gray-900 whitespace-nowrap">
+                          {v.dateBs}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-[#1e3a5f] whitespace-nowrap">
+                          {v.voucherNo}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-bold text-gray-900 block">{v.particulars}</span>
+                          <span className="text-[10px] text-[#1e3a5f] font-mono font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 inline-block mt-0.5">
+                            {v.topic}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-rose-700">
+                          {v.recipientName || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-extrabold text-rose-700 whitespace-nowrap">
+                          {v.type === 'EXPENSE' || v.type === 'PAYROLL' ? `रू ${(v.debitAmount || 0).toLocaleString()}` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-extrabold text-emerald-700 whitespace-nowrap">
+                          {v.type === 'INCOME' || v.type === 'FEE' ? `रू ${(v.creditAmount || 0).toLocaleString()}` : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => setSelectedVoucher(v)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2.5 py-1 text-xs font-extrabold shadow-2xs transition"
+                          >
+                            <Printer size={12} />
+                            <span>Print JV</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
