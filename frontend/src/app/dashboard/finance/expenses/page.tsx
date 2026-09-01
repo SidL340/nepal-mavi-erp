@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS } from '@/lib/nepali-date';
+import { todayBS, formatDateInput } from '@/lib/nepali-date';
 import {
   TrendingDown,
   Plus,
@@ -22,6 +22,8 @@ import {
   Layers,
   Building2,
   Printer,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -55,6 +57,28 @@ export default function ExpensesPage() {
   const [selectedBankAcc, setSelectedBankAcc] = useState('');
   const [approvedByOption, setApprovedByOption] = useState('Principal (प्रधानाध्यापक)');
   const [customApprovedBy, setCustomApprovedBy] = useState('');
+
+  // Date States with Auto Formatting
+  const [addExpenseDateBs, setAddExpenseDateBs] = useState(todayBS());
+  const [addChequeDateBs, setAddChequeDateBs] = useState(todayBS());
+
+  // Edit Expense State
+  const [editingExpense, setEditingExpense] = useState<any>(null);
+  const [editHeadId, setEditHeadId] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editExpenseDateBs, setEditExpenseDateBs] = useState('');
+  const [editPartyId, setEditPartyId] = useState('');
+  const [editPaidTo, setEditPaidTo] = useState('');
+  const [editPaymentMedium, setEditPaymentMedium] = useState('CASH');
+  const [editBankAccountId, setEditBankAccountId] = useState('');
+  const [editPaidFromAccount, setEditPaidFromAccount] = useState('');
+  const [editChequeNo, setEditChequeNo] = useState('');
+  const [editChequeDateBs, setEditChequeDateBs] = useState('');
+  const [editBillNo, setEditBillNo] = useState('');
+  const [editApprovedByOption, setEditApprovedByOption] = useState('Principal (प्रधानाध्यापक)');
+  const [editCustomApprovedBy, setEditCustomApprovedBy] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
 
   // ── 1. QUERIES ──────────────────────────────────────────────────────────────
   const { data: yearsData } = useQuery({
@@ -209,6 +233,109 @@ export default function ExpensesPage() {
     if (finalApprovedBy) data.approvedBy = finalApprovedBy;
 
     addExpenseMutation.mutate(data);
+  };
+
+  const updateExpenseMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await api.put(`/expense/entries/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Expense entry updated successfully!');
+      setEditingExpense(null);
+      queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update expense');
+    },
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/expense/entries/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Expense entry deleted');
+      queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete expense');
+    },
+  });
+
+  const handleOpenEditModal = (entry: any) => {
+    setEditingExpense(entry);
+    setEditHeadId(entry.headId ? entry.headId.toString() : '');
+    setEditAmount(entry.amount ? entry.amount.toString() : '');
+    setEditExpenseDateBs(entry.expenseDateBs || todayBS());
+    setEditPartyId(entry.partyId ? entry.partyId.toString() : '');
+    setEditPaidTo(entry.paidTo || '');
+    setEditPaymentMedium(entry.paymentMedium || 'CASH');
+    setEditBankAccountId(entry.bankAccountId ? entry.bankAccountId.toString() : '');
+    setEditPaidFromAccount(entry.paidFromAccount || 'School Operational Account');
+    setEditChequeNo(entry.chequeNo || '');
+    setEditChequeDateBs(entry.chequeDateBs || todayBS());
+    setEditBillNo(entry.billNo || '');
+    if (['Principal (प्रधानाध्यापक)', 'SMC Chairperson (विद्यालय व्यवस्थापन समिति अध्यक्ष)', 'Accountant (लेखापाल)', 'Vice Principal (सहायक प्र.अ.)'].includes(entry.approvedBy)) {
+      setEditApprovedByOption(entry.approvedBy);
+      setEditCustomApprovedBy('');
+    } else if (entry.approvedBy) {
+      setEditApprovedByOption('CUSTOM');
+      setEditCustomApprovedBy(entry.approvedBy);
+    } else {
+      setEditApprovedByOption('Principal (प्रधानाध्यापक)');
+      setEditCustomApprovedBy('');
+    }
+    setEditDescription(entry.description || '');
+    setEditRemarks(entry.remarks || '');
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExpense) return;
+
+    const data: any = {
+      headId: parseInt(editHeadId),
+      amount: parseFloat(editAmount),
+      expenseDateBs: editExpenseDateBs,
+      paymentMedium: editPaymentMedium,
+      billNo: editBillNo || null,
+      description: editDescription || null,
+      remarks: editRemarks || null,
+    };
+
+    if (editPartyId) {
+      data.partyId = parseInt(editPartyId);
+      const partyObj = partiesData?.find((p: any) => p.id.toString() === editPartyId);
+      data.paidTo = partyObj ? partyObj.name : editPaidTo;
+    } else {
+      data.partyId = null;
+      data.paidTo = editPaidTo || null;
+    }
+
+    if (editBankAccountId) {
+      const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === editBankAccountId);
+      if (bankObj) {
+        data.bankAccountId = bankObj.id;
+        data.paidFromAccount = `${bankObj.bankName} (${bankObj.accountNo})`;
+      }
+    } else {
+      data.bankAccountId = null;
+      data.paidFromAccount = editPaidFromAccount || 'School Operational Account';
+    }
+
+    if (editPaymentMedium === 'CHEQUE' || editPaymentMedium === 'BANK_TRANSFER') {
+      data.chequeNo = editChequeNo || null;
+      data.chequeDateBs = editChequeDateBs || null;
+    }
+
+    const finalApprovedBy = editApprovedByOption === 'CUSTOM' ? editCustomApprovedBy : editApprovedByOption;
+    data.approvedBy = finalApprovedBy || 'Principal';
+
+    updateExpenseMutation.mutate({ id: editingExpense.id, data });
   };
 
   const triggerSingleVoucherPrint = (v: any) => {
@@ -657,6 +784,28 @@ export default function ExpensesPage() {
                             <span>Ledger</span>
                           </button>
                         )}
+
+                        <button
+                          onClick={() => handleOpenEditModal(entry)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 text-[11px] font-bold shadow-2xs transition"
+                          title="Edit Expense Details"
+                        >
+                          <Edit2 size={12} />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to delete this expense entry?')) {
+                              deleteExpenseMutation.mutate(entry.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 text-[11px] font-bold shadow-2xs transition"
+                          title="Delete Expense Entry"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -738,7 +887,8 @@ export default function ExpensesPage() {
                     required
                     name="expenseDateBs"
                     type="text"
-                    defaultValue={todayBS()}
+                    value={addExpenseDateBs}
+                    onChange={(e) => setAddExpenseDateBs(formatDateInput(e.target.value))}
                     className="erp-input font-mono font-bold"
                   />
                 </div>
@@ -846,7 +996,8 @@ export default function ExpensesPage() {
                     <input
                       name="chequeDateBs"
                       type="text"
-                      defaultValue={todayBS()}
+                      value={addChequeDateBs}
+                      onChange={(e) => setAddChequeDateBs(formatDateInput(e.target.value))}
                       className="erp-input font-mono font-bold border-purple-300"
                     />
                   </div>
@@ -927,6 +1078,270 @@ export default function ExpensesPage() {
                   className="rounded-xl bg-rose-600 px-6 py-2 font-bold text-white hover:bg-rose-700 disabled:opacity-60 shadow-xs"
                 >
                   {addExpenseMutation.isPending ? 'Saving...' : 'Save Expense (खर्च सेभ गर्नुहोस्)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 5.5 EDIT EXPENSE MODAL ──────────────────────────────────────────── */}
+      {editingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <Edit2 size={18} className="text-blue-600" />
+                  <span>Edit Expense Details (खर्च विवरण सम्पादन)</span>
+                </h2>
+                <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
+                  Voucher No: <b className="font-mono text-[#1e3a5f]">{editingExpense.voucherNo || `VOUCH-${editingExpense.id}`}</b>
+                </p>
+              </div>
+              <button onClick={() => setEditingExpense(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
+              {/* Row 1: Expense Topic & Amount */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Expense Topic / Head (शीर्षक & Code) *
+                  </label>
+                  <select
+                    value={editHeadId}
+                    onChange={(e) => setEditHeadId(e.target.value)}
+                    required
+                    className="erp-input font-bold"
+                  >
+                    <option value="">-- Select Expense Topic --</option>
+                    {headsData?.map((h: any) => (
+                      <option key={h.id} value={h.id}>
+                        {h.code ? `[${h.code}] ` : ''}{h.name} {h.nameNepali ? `(${h.nameNepali})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Amount in रू (खर्च रकम) *
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    step="any"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    placeholder="e.g. 15000"
+                    className="erp-input font-bold text-rose-700 font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Expense Date & Recipient / Party */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Expense Date in BS (YYYY-MM-DD) *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={editExpenseDateBs}
+                    onChange={(e) => setEditExpenseDateBs(formatDateInput(e.target.value))}
+                    placeholder="2080-04-03"
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Paid To / Recipient (पाउने व्यक्ति/संस्था)
+                  </label>
+                  <select
+                    value={editPartyId}
+                    onChange={(e) => setEditPartyId(e.target.value)}
+                    className="erp-input font-bold mb-1"
+                  >
+                    <option value="">-- Select Saved Party / Vendor --</option>
+                    {partiesData?.map((p: any) => (
+                      <option key={p.id} value={p.id.toString()}>
+                        {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {!editPartyId && (
+                    <input
+                      type="text"
+                      value={editPaidTo}
+                      onChange={(e) => setEditPaidTo(e.target.value)}
+                      placeholder="Or type Recipient / Vendor name manually..."
+                      className="erp-input font-medium"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Row 3: Payment Method & Paid From Account */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Payment Method (भुक्तानी विधि)
+                  </label>
+                  <select
+                    value={editPaymentMedium}
+                    onChange={(e) => setEditPaymentMedium(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="CASH">CASH (नगद भुक्तानी)</option>
+                    <option value="BANK_TRANSFER">BANK TRANSFER (बैंक ट्रान्सफर)</option>
+                    <option value="CHEQUE">CHEQUE (चेक मार्फत)</option>
+                    <option value="QR_CODE">QR CODE (क्युआर कोड)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Paid From Account (कुन खाताबाट)
+                  </label>
+                  <select
+                    value={editBankAccountId}
+                    onChange={(e) => setEditBankAccountId(e.target.value)}
+                    className="erp-input font-bold mb-1"
+                  >
+                    <option value="">-- Select School Bank Account --</option>
+                    {bankAccountsData?.map((b: any) => (
+                      <option key={b.id} value={b.id.toString()}>
+                        {b.bankName} - {b.accountName} ({b.accountNo})
+                      </option>
+                    ))}
+                  </select>
+                  {!editBankAccountId && (
+                    <input
+                      type="text"
+                      value={editPaidFromAccount}
+                      onChange={(e) => setEditPaidFromAccount(e.target.value)}
+                      className="erp-input"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Conditional Cheque Details */}
+              {(editPaymentMedium === 'CHEQUE' || editPaymentMedium === 'BANK_TRANSFER') && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                  <div>
+                    <label className="block font-extrabold text-purple-950 mb-1">
+                      Cheque / Trans Ref No. (चेक नम्बर)
+                    </label>
+                    <input
+                      type="text"
+                      value={editChequeNo}
+                      onChange={(e) => setEditChequeNo(e.target.value)}
+                      placeholder="e.g. CHQ-98765432"
+                      className="erp-input font-mono font-bold border-purple-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-extrabold text-purple-950 mb-1">
+                      Cheque Date in BS (चेक मिति)
+                    </label>
+                    <input
+                      type="text"
+                      value={editChequeDateBs}
+                      onChange={(e) => setEditChequeDateBs(formatDateInput(e.target.value))}
+                      className="erp-input font-mono font-bold border-purple-300"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Row 4: Bill No & Approved By */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Bill / Voucher Number (बिल/भौचर नं)
+                  </label>
+                  <input
+                    type="text"
+                    value={editBillNo}
+                    onChange={(e) => setEditBillNo(e.target.value)}
+                    placeholder="BILL-2083-042"
+                    className="erp-input font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Approved By (स्वीकृत गर्ने अधिकारी)
+                  </label>
+                  <select
+                    value={editApprovedByOption}
+                    onChange={(e) => setEditApprovedByOption(e.target.value)}
+                    className="erp-input font-bold mb-1"
+                  >
+                    <option value="Principal (प्रधानाध्यापक)">Principal (प्रधानाध्यापक)</option>
+                    <option value="SMC Chairperson (विद्यालय व्यवस्थापन समिति अध्यक्ष)">SMC Chairperson (वि.व्य.स. अध्यक्ष)</option>
+                    <option value="Accountant (लेखापाल)">Accountant (लेखापाल)</option>
+                    <option value="Vice Principal (सहायक प्र.अ.)">Vice Principal (सहायक प्र.अ.)</option>
+                    <option value="CUSTOM">Other Authority (अन्य लेख्नुहोस्)...</option>
+                  </select>
+                  {editApprovedByOption === 'CUSTOM' && (
+                    <input
+                      type="text"
+                      placeholder="Type Authority Name..."
+                      value={editCustomApprovedBy}
+                      onChange={(e) => setEditCustomApprovedBy(e.target.value)}
+                      className="erp-input"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Particulars & Remarks */}
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Description / Particulars (खर्चको विवरण)
+                </label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Details of expense..."
+                  className="erp-input"
+                />
+              </div>
+
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">Remarks (कैफियत)</label>
+                <textarea
+                  rows={2}
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="Any extra remarks..."
+                  className="erp-input"
+                />
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingExpense(null)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateExpenseMutation.isPending}
+                  className="rounded-xl bg-blue-600 px-6 py-2 font-bold text-white hover:bg-blue-700 disabled:opacity-60 shadow-xs"
+                >
+                  {updateExpenseMutation.isPending ? 'Updating...' : 'Update Expense (अपडेट गर्नुहोस्)'}
                 </button>
               </div>
             </form>

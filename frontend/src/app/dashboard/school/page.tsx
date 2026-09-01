@@ -189,6 +189,40 @@ export default function SchoolProfilePage() {
     },
   });
 
+  // Bank Account Edit & Delete state
+  const [editingAccount, setEditingAccount] = useState<any>(null);
+
+  // Update Bank Account Mutation
+  const updateAccountMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await api.put(`/school/bank-accounts/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Bank Account updated successfully!');
+      setEditingAccount(null);
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update account');
+    },
+  });
+
+  // Delete Bank Account Mutation
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/school/bank-accounts/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Bank Account deactivated');
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete account');
+    },
+  });
+
   // Activate Academic Year Mutation
   const activateYearMutation = useMutation({
     mutationFn: async (yearId: number) => {
@@ -661,7 +695,7 @@ export default function SchoolProfilePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {accounts.map((acc: any) => (
-              <div key={acc.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs space-y-2">
+              <div key={acc.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-extrabold text-[#1e3a5f] text-sm">{acc.bankName}</h3>
@@ -672,6 +706,26 @@ export default function SchoolProfilePage() {
                   </span>
                 </div>
                 <p className="font-mono font-bold text-gray-800 text-sm tracking-wider">{acc.accountNo}</p>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    onClick={() => setEditingAccount(acc)}
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 px-2.5 py-1 text-xs font-bold transition"
+                  >
+                    <Edit2 size={12} />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to deactivate this bank account?')) {
+                        deleteAccountMutation.mutate(acc.id);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1 text-xs font-bold transition"
+                  >
+                    <Trash2 size={12} />
+                    <span>Remove</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -959,6 +1013,96 @@ export default function SchoolProfilePage() {
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setIsAddAccountOpen(false)} className="px-3 py-1.5 border rounded-lg">Cancel</button>
                 <button type="submit" className="px-4 py-1.5 bg-[#1e3a5f] text-white font-bold rounded-lg">Save Account</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── EDIT BANK ACCOUNT MODAL ─────────────────────────────────────── */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-bold text-sm text-[#1e3a5f]">Edit School Bank Account</h3>
+              <button onClick={() => setEditingAccount(null)}><X size={16} /></button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                updateAccountMutation.mutate({
+                  id: editingAccount.id,
+                  data: {
+                    bankName: fd.get('bankName'),
+                    accountName: fd.get('accountName'),
+                    accountNo: fd.get('accountNo'),
+                    branch: fd.get('branch'),
+                  },
+                });
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold mb-1">Bank Name *</label>
+                <input
+                  required
+                  name="bankName"
+                  type="text"
+                  defaultValue={editingAccount.bankName}
+                  placeholder="Rastriya Banijya Bank"
+                  className="erp-input font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">Account Title / Name *</label>
+                <input
+                  required
+                  name="accountName"
+                  type="text"
+                  defaultValue={editingAccount.accountName}
+                  placeholder="Nepal Mavi General Account"
+                  className="erp-input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1">Account Number *</label>
+                  <input
+                    required
+                    name="accountNo"
+                    type="text"
+                    defaultValue={editingAccount.accountNo}
+                    placeholder="12300011122"
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Branch</label>
+                  <input
+                    name="branch"
+                    type="text"
+                    defaultValue={editingAccount.branch || ''}
+                    placeholder="Main Branch"
+                    className="erp-input"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingAccount(null)}
+                  className="px-3 py-1.5 border rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateAccountMutation.isPending}
+                  className="px-4 py-1.5 bg-[#1e3a5f] text-white font-bold rounded-lg disabled:opacity-50"
+                >
+                  {updateAccountMutation.isPending ? 'Updating...' : 'Update Account'}
+                </button>
               </div>
             </form>
           </div>

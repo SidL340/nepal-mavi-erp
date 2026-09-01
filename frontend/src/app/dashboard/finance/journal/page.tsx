@@ -347,23 +347,46 @@ export default function JournalVoucherPage() {
       return;
     }
 
+    const totalDrSum = filteredVouchers.reduce((s, v) => s + (v.debitAmount || 0), 0);
+    const totalCrSum = filteredVouchers.reduce((s, v) => s + (v.creditAmount || 0), 0);
+
     const rowsHtml = filteredVouchers
       .map((v: any) => `
         <tr>
-          <td style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace;">${v.voucherNo}</td>
-          <td style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace;">${v.dateBs}</td>
-          <td style="border: 1px solid #cbd5e1;">${v.narration || v.description || '—'}</td>
-          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; color: #15803d;">रू ${(v.totalDr || v.amount || 0).toLocaleString()}</td>
-          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; color: #b91c1c;">रू ${(v.totalCr || v.amount || 0).toLocaleString()}</td>
+          <td rowspan="3" style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; vertical-align: top; padding: 6px;">${v.dateBs}</td>
+          <td rowspan="3" style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; vertical-align: top; padding: 6px; color: #1e3a5f;">${v.voucherNo}</td>
+          <td rowspan="3" style="border: 1px solid #cbd5e1; font-weight: bold; vertical-align: top; padding: 6px; font-size: 9.5px;">${v.topic}</td>
+          <td style="border: 1px solid #cbd5e1; padding: 5px 6px; font-weight: bold;">
+            <span style="color: #15803d; font-weight: 900; margin-right: 4px;">Dr.</span> ${v.debitAccount}
+          </td>
+          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; color: #15803d; padding: 5px 6px;">रू ${(v.debitAmount || 0).toLocaleString()}</td>
+          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; color: #94a3b8; padding: 5px 6px;">—</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #cbd5e1; padding: 5px 6px; font-weight: bold; padding-left: 20px;">
+            <span style="color: #b91c1c; font-weight: 900; margin-right: 4px;">Cr.</span> ${v.creditAccount}
+          </td>
+          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; color: #94a3b8; padding: 5px 6px;">—</td>
+          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; color: #b91c1c; padding: 5px 6px;">रू ${(v.creditAmount || 0).toLocaleString()}</td>
+        </tr>
+        <tr style="background-color: #f8fafc;">
+          <td colspan="3" style="border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 9px; font-style: italic; color: #64748b;">
+            (Narration: ${v.remarks || v.particulars} | Payment Mode: ${v.paymentMedium})
+          </td>
         </tr>
       `)
       .join('');
+
+    const schoolName = school?.name || 'Shree Nepal Secondary School';
+    const schoolNameNepali = school?.nameNepali || 'श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट';
+    const schoolAddress = school?.address || 'Bishrampur, Rautahat';
+    const emisCode = school?.emisCode || '320160005';
 
     printWin.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Journal Ledger Book - Shree Nepal Secondary School</title>
+          <title>Journal Ledger Book - ${schoolName}</title>
           <style>
             @page { size: A4 landscape; margin: 8mm; }
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -374,36 +397,50 @@ export default function JournalVoucherPage() {
             table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
             th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
             td { padding: 5px 4px; }
-            .footer-sig { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .footer-sig { margin-top: 35px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
             .sig-box { width: 160px; text-align: center; border-top: 1px solid #333; padding-top: 3px; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
-            <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+            <div class="school-name">${schoolNameNepali}</div>
+            <div style="font-size: 11px; font-weight: bold; color: #4b5563;">${schoolName} • ${schoolAddress} (IEMIS: ${emisCode})</div>
             <div class="badge">COMPLETE JOURNAL LEDGER BOOK (गोश्वारा भौचर तथा खाता पुस्तक)</div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th style="width: 100px; text-align: center;">VOUCHER NO</th>
-                <th style="width: 90px; text-align: center;">DATE (BS)</th>
-                <th>NARRATION / DESCRIPTION</th>
-                <th style="width: 120px; text-align: right;">DEBIT (रू)</th>
-                <th style="width: 120px; text-align: right;">CREDIT (रू)</th>
+                <th style="width: 85px; text-align: center;">DATE (BS)</th>
+                <th style="width: 105px; text-align: center;">VOUCHER NO</th>
+                <th style="width: 140px;">TOPIC / HEAD</th>
+                <th>PARTICULARS & BREAKDOWN (विस्तृत विवरण)</th>
+                <th style="width: 110px; text-align: right;">DEBIT (Dr. रू)</th>
+                <th style="width: 110px; text-align: right;">CREDIT (Cr. रू)</th>
               </tr>
             </thead>
             <tbody>
               ${rowsHtml}
             </tbody>
+            <tfoot>
+              <tr style="background: #1e3a5f; color: #fff; font-weight: bold; font-size: 10.5px;">
+                <td colspan="4" style="text-align: right; padding: 8px; border: 1px solid #1e3a5f; text-transform: uppercase;">
+                  Total Balancing Summary (कुल सन्तुलित खाता विवरण):
+                </td>
+                <td style="text-align: right; padding: 8px; border: 1px solid #1e3a5f; font-family: monospace; color: #86efac;">
+                  Dr. रू ${totalDrSum.toLocaleString()}
+                </td>
+                <td style="text-align: right; padding: 8px; border: 1px solid #1e3a5f; font-family: monospace; color: #fca5a5;">
+                  Cr. रू ${totalCrSum.toLocaleString()}
+                </td>
+              </tr>
+            </tfoot>
           </table>
 
           <div class="footer-sig">
             <div class="sig-box">Prepared By (लेखापाल)</div>
-            <div class="sig-box">Internal Auditor</div>
-            <div class="sig-box">Headmaster / Stamp</div>
+            <div class="sig-box">Internal Auditor (जाँच गर्ने)</div>
+            <div class="sig-box">Approved By (प्रधानाध्यापक)</div>
           </div>
 
           <script>
@@ -425,6 +462,10 @@ export default function JournalVoucherPage() {
     }
 
     const v = selectedVoucher;
+    const schoolName = school?.name || 'Shree Nepal Secondary School';
+    const schoolNameNepali = school?.nameNepali || 'श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट';
+    const schoolAddress = school?.address || 'Bishrampur, Rautahat';
+    const emisCode = school?.emisCode || '320160005';
 
     printWin.document.write(`
       <!DOCTYPE html>
@@ -450,8 +491,8 @@ export default function JournalVoucherPage() {
         <body>
           <div class="card">
             <div class="header">
-              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
-              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="school-name">${schoolNameNepali}</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">${schoolName} • ${schoolAddress} (IEMIS: ${emisCode})</div>
               <div class="badge">NEPAL GOVT FORMAT JOURNAL VOUCHER (गोश्वारा भौचर)</div>
             </div>
 
@@ -467,28 +508,39 @@ export default function JournalVoucherPage() {
                 <tr>
                   <th style="width: 40px; text-align: center;">S.N.</th>
                   <th>ACCOUNT HEAD & PARTICULARS</th>
-                  <th style="width: 120px; text-align: right;">DEBIT (रू)</th>
-                  <th style="width: 120px; text-align: right;">CREDIT (रू)</th>
+                  <th style="width: 120px; text-align: right;">DEBIT (Dr. रू)</th>
+                  <th style="width: 120px; text-align: right;">CREDIT (Cr. रू)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td style="text-align: center;">1</td>
-                  <td><strong>${v.description || v.narration || 'Journal Entry'}</strong></td>
-                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #15803d;">रू ${(v.totalDr || v.amount || 0).toLocaleString()}</td>
-                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #b91c1c;">रू ${(v.totalCr || v.amount || 0).toLocaleString()}</td>
+                  <td>
+                    <strong style="color: #15803d;">Dr. ${v.debitAccount}</strong>
+                    <div style="font-size: 9.5px; color: #555; margin-top: 2px;">${v.particulars} (${v.topic})</div>
+                  </td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #15803d;">रू ${(v.debitAmount || 0).toLocaleString()}</td>
+                  <td style="text-align: right; font-family: monospace; color: #94a3b8;">—</td>
+                </tr>
+                <tr>
+                  <td style="text-align: center;">2</td>
+                  <td>
+                    <strong style="color: #b91c1c; padding-left: 12px;">Cr. ${v.creditAccount}</strong>
+                  </td>
+                  <td style="text-align: right; font-family: monospace; color: #94a3b8;">—</td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #b91c1c;">रू ${(v.creditAmount || 0).toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>
 
             <div style="margin-bottom: 20px; font-size: 11px; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
-              <strong>Narration:</strong> ${v.narration || v.description || 'N/A'}
+              <strong>Narration / Remarks:</strong> ${v.remarks || v.particulars || 'N/A'}
             </div>
 
             <div class="footer-sig">
               <div class="sig-box">Prepared By (लेखापाल)</div>
               <div class="sig-box">Checked By</div>
-              <div class="sig-box">Approved By (प्र.अ.)</div>
+              <div class="sig-box">Approved By (प्रधानाध्यापक)</div>
             </div>
           </div>
 

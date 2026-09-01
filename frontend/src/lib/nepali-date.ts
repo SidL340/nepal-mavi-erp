@@ -65,3 +65,13 @@ export function bsToAD(bsStr: string): string {
     return new Date().toISOString().slice(0, 10);
   }
 }
+
+// Auto-formats input as YYYY-MM-DD as user types numbers (e.g. 20800403 -> 2080-04-03)
+export function formatDateInput(val: string): string {
+  if (!val) return '';
+  const digits = val.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+}
+

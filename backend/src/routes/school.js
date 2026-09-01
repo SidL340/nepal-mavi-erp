@@ -83,6 +83,30 @@ router.post('/bank-accounts', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
   }
 });
 
+router.put('/bank-accounts/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const acc = await prisma.bankAccount.update({
+      where: { id: parseInt(req.params.id) },
+      data: req.body,
+    });
+    return res.json({ success: true, data: acc, message: 'Bank account updated successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.delete('/bank-accounts/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.bankAccount.update({
+      where: { id: parseInt(req.params.id) },
+      data: { isActive: false },
+    });
+    return res.json({ success: true, message: 'Bank account deactivated successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── DASHBOARD STATS ───────────────────────────────────────────────────────
 
 router.get('/dashboard', authenticate, async (req, res) => {
