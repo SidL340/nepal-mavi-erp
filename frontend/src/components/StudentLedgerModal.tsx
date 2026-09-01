@@ -82,6 +82,102 @@ export default function StudentLedgerModal({ studentId, isOpen, onClose }: Stude
     }
   };
 
+  const triggerStudentLedgerPrint = () => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const rowsHtml = items
+      .map(
+        (c: any, idx: number) => `
+        <tr>
+          <td style="text-align: center; border: 1px solid #cbd5e1;">${idx + 1}</td>
+          <td style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace;">${c.dateBs}</td>
+          <td style="border: 1px solid #cbd5e1;">${c.particulars || c.headName || 'Fee Transaction'}</td>
+          <td style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace;">${c.receiptNo || '—'}</td>
+          <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; color: #15803d;">रू ${(c.crAmount || c.paidAmount || 0).toLocaleString()}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Student Ledger Statement - ${student.fullName || 'Student'}</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .badge { font-size: 11px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
+            th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
+            td { padding: 5px 4px; }
+            .summary-box { display: flex; justify-content: space-between; background: #1e3a5f; color: #fff; padding: 10px 15px; border-radius: 6px; margin-bottom: 12px; }
+            .footer-sig { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 150px; text-align: center; padding-top: 3px; margin-top: 35px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+            <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+            <div class="badge">STUDENT ACCOUNT LEDGER STATEMENT (विद्यार्थी खाता लेजर)</div>
+          </div>
+
+          <div class="meta-grid">
+            <div><strong>Student Name:</strong> ${student.fullName || '—'}</div>
+            <div><strong>EMIS / Student ID:</strong> ${student.studentId || '—'}</div>
+            <div><strong>Class:</strong> ${student.className || '—'}</div>
+            <div><strong>Guardian Contact:</strong> ${student.guardianContact || '—'}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px; text-align: center;">S.N.</th>
+                <th style="width: 80px; text-align: center;">DATE (BS)</th>
+                <th>PARTICULARS / FEE HEAD</th>
+                <th style="width: 90px; text-align: center;">RECEIPT NO</th>
+                <th style="width: 100px; text-align: right;">AMOUNT (रू)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="summary-box">
+            <div>
+              <span style="font-size: 9px; uppercase; opacity: 0.9;">TOTAL PAID AMOUNT</span>
+              <div style="font-size: 18px; font-weight: 900; color: #4ade80;">रू ${totalPaid.toLocaleString()}</div>
+            </div>
+            <div style="text-align: right;">
+              <span style="font-size: 9px; uppercase; opacity: 0.9;">NET OUTSTANDING DUE</span>
+              <div style="font-size: 18px; font-weight: 900; color: ${netOutstanding > 0 ? '#f87171' : '#fff'};">रू ${netOutstanding.toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div class="footer-sig">
+            <div class="sig-line">Date: ${todayBS()} BS<br>Accountant Signature</div>
+            <div class="sig-line">Headmaster / Stamp</div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
       <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
@@ -108,7 +204,7 @@ export default function StudentLedgerModal({ studentId, isOpen, onClose }: Stude
               <span>Export CSV (एक्सेल)</span>
             </button>
             <button
-              onClick={() => window.print()}
+              onClick={triggerStudentLedgerPrint}
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] text-white hover:bg-[#2a5280] px-4 py-2 text-xs font-bold transition shadow-2xs"
             >
               <Printer size={15} />

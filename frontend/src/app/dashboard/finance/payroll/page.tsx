@@ -187,6 +187,111 @@ export default function PayrollPage() {
 
   const payrolls = payrollsData || [];
 
+  const triggerPayrollSlipPrint = () => {
+    if (!selectedSlip) return;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const p = selectedSlip;
+    const teacherName = p.teacher?.fullName || p.teacherName || '—';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Salary Slip - ${teacherName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 2px solid #1e3a5f; padding: 20px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 17px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .badge { font-size: 11px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
+            th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
+            td { padding: 5px 4px; border-bottom: 1px solid #e2e8f0; }
+            .footer-sig { margin-top: 40px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-box { width: 150px; text-align: center; border-top: 1px solid #333; padding-top: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="badge">TEACHER & STAFF SALARY PAYSLIP (तलब भर्पाई भरपाइ)</div>
+            </div>
+
+            <div class="meta-grid">
+              <div>Employee Name: <strong>${teacherName}</strong></div>
+              <div>Period: <strong>${p.monthFromBs} ~ ${p.monthToBs} BS</strong></div>
+              <div>Type: <strong>${p.payrollType || 'RASTRIYA'}</strong></div>
+              <div>Designation / Taha: <strong>${p.teacher?.post || 'Teacher'} (${p.teacher?.taha || 'Primary'})</strong></div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>EARNING HEADS (पारिश्रमिक तथा भत्ता)</th>
+                  <th style="text-align: right; width: 120px;">AMOUNT (रू)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Mool Talab (मुल तलब बेसिक)</td><td style="text-align: right; font-family: monospace;">${(p.basicSalary || 0).toLocaleString()}</td></tr>
+                <tr><td>Grade Amount (ग्रेड रकम)</td><td style="text-align: right; font-family: monospace;">${(p.gradeRakam || 0).toLocaleString()}</td></tr>
+                <tr><td>Grade Sahit Talab (ग्रेड सहित तलब)</td><td style="text-align: right; font-family: monospace; font-weight: bold;">${(p.gradeSahitTalab || 0).toLocaleString()}</td></tr>
+                <tr><td>Mahangi Bhata (महङ्गी भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.mahangiBhata || 0).toLocaleString()}</td></tr>
+                <tr><td>Pra-A / Incharge Bhata (प्र.अ. / इन्चार्ज भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.praABhata || 0).toLocaleString()}</td></tr>
+                <tr style="background: #f8fafc; font-weight: bold;"><td>Traimasik Total Gross Salary (त्रिमासिक जम्मा तलब भत्ता)</td><td style="text-align: right; font-family: monospace; font-size: 11px; color: #1e3a5f;">${(p.traimasikSalary || 0).toLocaleString()}</td></tr>
+              </tbody>
+            </table>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>DEDUCTION HEADS (कट्टी विवरण)</th>
+                  <th style="text-align: right; width: 120px;">AMOUNT (रू)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Karmachari Sanchaya Kosh 10% (कर्मचारी सञ्चय कोष)</td><td style="text-align: right; font-family: monospace;">${(p.ssk10 || 0).toLocaleString()}</td></tr>
+                <tr><td>Kosh Sapati / Loan (कोष सापती कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.sapatiKatti || 0).toLocaleString()}</td></tr>
+                <tr><td>Bima Katti (बीमा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.bimaKatti || 0).toLocaleString()}</td></tr>
+                <tr><td>Social Security Tax 1% (सामाजिक सुरक्षा कर)</td><td style="text-align: right; font-family: monospace;">${(p.tax1 || 0).toLocaleString()}</td></tr>
+                <tr style="background: #fff1f2; font-weight: bold; color: #9f1239;"><td>Total Deductions (जम्मा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.totalDeductions || 0).toLocaleString()}</td></tr>
+              </tbody>
+            </table>
+
+            <div style="background: #ecfdf5; border: 1.5px solid #059669; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span style="font-size: 10px; font-weight: bold; color: #065f46; text-transform: uppercase;">KHUD PAAUNU PARNE (खुद पाउने रकम NET PAYABLE):</span>
+                <div style="font-size: 8.5px; color: #047857;">Directly Deposited to Bank Account</div>
+              </div>
+              <strong style="font-size: 20px; color: #047857; font-family: monospace; font-weight: 900;">रू ${(p.khudPaaunuParne || 0).toLocaleString()}</strong>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-box">Employee Signature</div>
+              <div class="sig-box">Accountant (लेखापाल)</div>
+              <div class="sig-box">Headmaster / Stamp</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -709,7 +814,7 @@ export default function PayrollPage() {
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={triggerPayrollSlipPrint}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-1.5 text-xs font-bold text-white hover:bg-[#2a5280]"
               >
                 <Printer size={14} />

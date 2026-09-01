@@ -744,6 +744,249 @@ export default function ExamsPage() {
   ));
   const assignedTeacherName = currentClassSubject?.teacher?.fullName || 'तोकिएको छैन';
 
+  const triggerSingleMarksheetPrint = () => {
+    if (!selectedMarksheet) return;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const school = selectedMarksheet.school || {};
+    const student = selectedMarksheet;
+    const subjects = selectedMarksheet.subjects || [];
+
+    const rowsHtml = subjects
+      .map((sr: any, idx: number) => {
+        const isNG = sr.finalGrade === 'NG' || sr.isAbsent;
+        return `
+          <tr>
+            <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold;">${idx + 1}</td>
+            <td style="border: 1px solid #cbd5e1;"><strong>${sr.subjectName}</strong></td>
+            <td style="text-align: center; border: 1px solid #cbd5e1;">${sr.creditHour || '4.0'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1;">${sr.theory?.letterGrade || '—'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; color: #6b21a8;">${sr.practical?.letterGrade || '—'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold; background: #eff6ff; color: ${isNG ? '#b91c1c' : '#1e3a5f'};">${sr.finalGrade || 'A'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold; color: ${isNG ? '#b91c1c' : '#111'};">${sr.gradePoint !== undefined ? sr.gradePoint.toFixed(1) : '3.6'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; color: ${isNG ? '#b91c1c' : '#15803d'}; font-weight: bold;">${isNG ? 'Needs Imp.' : (sr.remarks?.split(' ')[0] || 'Good')}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Grade Sheet - ${student.fullName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 3px double #1e3a5f; padding: 15px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .report-title { font-size: 12px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
+            th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
+            td { padding: 5px 4px; }
+            .summary-box { display: flex; justify-content: space-between; background: #1e3a5f; color: #fff; padding: 10px 15px; border-radius: 6px; margin-bottom: 12px; }
+            .footer-sig { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 150px; text-align: center; padding-top: 3px; margin-top: 35px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="report-title">${student.examName || 'EXAMINATION'} — OFFICIAL GRADE SHEET</div>
+            </div>
+
+            <div class="meta-grid">
+              <div><strong>Student Name:</strong> ${student.fullName}</div>
+              <div><strong>Symbol No.:</strong> ${student.symbolNo || '—'}</div>
+              <div><strong>Class:</strong> ${student.className || '—'}</div>
+              <div><strong>Roll No / EMIS:</strong> ${student.rollNo || '—'} / ${student.studentId || '—'}</div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30px; text-align: center;">S.N.</th>
+                  <th>SUBJECT NAME</th>
+                  <th style="width: 45px; text-align: center;">CREDIT</th>
+                  <th style="width: 45px; text-align: center;">TH</th>
+                  <th style="width: 45px; text-align: center;">PR</th>
+                  <th style="width: 55px; text-align: center;">GRADE</th>
+                  <th style="width: 45px; text-align: center;">GP</th>
+                  <th style="width: 70px; text-align: center;">REMARKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+
+            <div class="summary-box">
+              <div>
+                <span style="font-size: 9px; uppercase; opacity: 0.9;">GRADE POINT AVERAGE (GPA)</span>
+                <div style="font-size: 22px; font-weight: 900; color: #fef08a;">${student.gpa !== undefined ? student.gpa.toFixed(2) : '3.60'} / 4.00</div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 9px; uppercase; opacity: 0.9;">OVERALL EVALUATION GRADE</span>
+                <div style="font-size: 22px; font-weight: 900; color: #fff;">${student.overallGrade || 'A'}</div>
+              </div>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-line">Date: ${todayBS()} BS<br>Class Teacher</div>
+              <div class="sig-line">Exam Controller</div>
+              <div class="sig-line">Headmaster / Stamp</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const triggerBulkGradeSheetsPrint = () => {
+    if (!bulkMarksheetsData || !bulkMarksheetsData.students || bulkMarksheetsData.students.length === 0) {
+      toast.error('No grade sheets available to print.');
+      return;
+    }
+
+    const targetStudents = bulkMarksheetsData.students.filter((st: any) =>
+      selectedStudentIdsForPrint.includes(st.studentInternalId || st.studentId)
+    );
+
+    if (targetStudents.length === 0) {
+      toast.error('Please select at least one student grade sheet to print.');
+      return;
+    }
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const sheetsHtml = targetStudents
+      .map((student: any, pageIdx: number) => {
+        const subjects = student.subjects || [];
+        const rowsHtml = subjects
+          .map((sr: any, idx: number) => {
+            const isNG = sr.finalGrade === 'NG' || sr.isAbsent;
+            return `
+              <tr>
+                <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold;">${idx + 1}</td>
+                <td style="border: 1px solid #cbd5e1;"><strong>${sr.subjectName}</strong></td>
+                <td style="text-align: center; border: 1px solid #cbd5e1;">${sr.creditHour || '4.0'}</td>
+                <td style="text-align: center; border: 1px solid #cbd5e1;">${sr.theory?.letterGrade || '—'}</td>
+                <td style="text-align: center; border: 1px solid #cbd5e1; color: #6b21a8;">${sr.practical?.letterGrade || '—'}</td>
+                <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold; background: #eff6ff; color: ${isNG ? '#b91c1c' : '#1e3a5f'};">${sr.finalGrade || 'A'}</td>
+                <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold; color: ${isNG ? '#b91c1c' : '#111'};">${sr.gradePoint !== undefined ? sr.gradePoint.toFixed(1) : '3.6'}</td>
+                <td style="text-align: center; border: 1px solid #cbd5e1; color: ${isNG ? '#b91c1c' : '#15803d'}; font-weight: bold;">${isNG ? 'Needs Imp.' : (sr.remarks?.split(' ')[0] || 'Good')}</td>
+              </tr>
+            `;
+          })
+          .join('');
+
+        return `
+          <div class="card ${pageIdx < targetStudents.length - 1 ? 'page-break' : ''}">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="report-title">${student.examName || 'EXAMINATION'} — OFFICIAL GRADE SHEET</div>
+            </div>
+
+            <div class="meta-grid">
+              <div><strong>Student Name:</strong> ${student.fullName}</div>
+              <div><strong>Symbol No.:</strong> ${student.symbolNo || '—'}</div>
+              <div><strong>Class:</strong> ${student.className || '—'}</div>
+              <div><strong>Roll No / EMIS:</strong> ${student.rollNo || '—'} / ${student.studentId || '—'}</div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30px; text-align: center;">S.N.</th>
+                  <th>SUBJECT NAME</th>
+                  <th style="width: 45px; text-align: center;">CREDIT</th>
+                  <th style="width: 45px; text-align: center;">TH</th>
+                  <th style="width: 45px; text-align: center;">PR</th>
+                  <th style="width: 55px; text-align: center;">GRADE</th>
+                  <th style="width: 45px; text-align: center;">GP</th>
+                  <th style="width: 70px; text-align: center;">REMARKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+
+            <div class="summary-box">
+              <div>
+                <span style="font-size: 9px; uppercase; opacity: 0.9;">GRADE POINT AVERAGE (GPA)</span>
+                <div style="font-size: 22px; font-weight: 900; color: #fef08a;">${student.gpa !== undefined ? student.gpa.toFixed(2) : '3.60'} / 4.00</div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 9px; uppercase; opacity: 0.9;">OVERALL EVALUATION GRADE</span>
+                <div style="font-size: 22px; font-weight: 900; color: #fff;">${student.overallGrade || 'A'}</div>
+              </div>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-line">Date: ${todayBS()} BS<br>Class Teacher</div>
+              <div class="sig-line">Exam Controller</div>
+              <div class="sig-line">Headmaster / Stamp</div>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bulk Grade Sheets — Shree Nepal Secondary School</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 3px double #1e3a5f; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+            .page-break { page-break-after: always; break-after: page; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .report-title { font-size: 12px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
+            th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
+            td { padding: 5px 4px; }
+            .summary-box { display: flex; justify-content: space-between; background: #1e3a5f; color: #fff; padding: 10px 15px; border-radius: 6px; margin-bottom: 12px; }
+            .footer-sig { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 150px; text-align: center; padding-top: 3px; margin-top: 35px; }
+          </style>
+        </head>
+        <body>
+          ${sheetsHtml}
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   const exams = examsData || [];
 
   return (
@@ -2145,24 +2388,24 @@ export default function ExamsPage() {
               </div>
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2.5 no-print pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setSelectedMarksheet(null)}
-                className="rounded-xl border border-gray-200 px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition"
-              >
-                Close (बन्द गर्नुहोस्)
-              </button>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-6 py-2 text-xs font-bold text-white shadow-sm transition"
-              >
-                <Printer size={15} />
-                <span>Print Official Grade Sheet (प्रिन्ट गर्नुहोस्)</span>
-              </button>
-            </div>
+  {/* Modal Actions */}
+  <div className="flex items-center justify-end gap-2.5 no-print pt-2 border-t border-gray-100">
+    <button
+      type="button"
+      onClick={() => setSelectedMarksheet(null)}
+      className="rounded-xl border border-gray-200 px-5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition"
+    >
+      Close (बन्द गर्नुहोस्)
+    </button>
+    <button
+      type="button"
+      onClick={triggerSingleMarksheetPrint}
+      className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-6 py-2 text-xs font-bold text-white shadow-sm transition"
+    >
+      <Printer size={15} />
+      <span>Print Official Grade Sheet (प्रिन्ट गर्नुहोस्)</span>
+    </button>
+  </div>
           </div>
         </div>
       )}
@@ -2395,7 +2638,7 @@ export default function ExamsPage() {
 
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={triggerBulkGradeSheetsPrint}
                   disabled={selectedStudentIdsForPrint.length === 0}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-1.5 text-xs font-bold text-white shadow-sm transition disabled:opacity-50"
                 >

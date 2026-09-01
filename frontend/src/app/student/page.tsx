@@ -228,6 +228,248 @@ export default function StudentPortalPage() {
 
   const displayName = student?.fullName || user?.username || 'Student';
 
+  const triggerStudentMarksheetPrint = () => {
+    if (!marksheetData) return;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const m = marksheetData;
+    const subjects = m.subjects || [];
+
+    const rowsHtml = subjects
+      .map((sr: any, idx: number) => {
+        const isNG = sr.finalGrade === 'NG' || sr.isAbsent;
+        return `
+          <tr>
+            <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold;">${idx + 1}</td>
+            <td style="border: 1px solid #cbd5e1;"><strong>${sr.subjectName}</strong></td>
+            <td style="text-align: center; border: 1px solid #cbd5e1;">${sr.creditHour || '4.0'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1;">${sr.theory?.letterGrade || '—'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; color: #6b21a8;">${sr.practical?.letterGrade || '—'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold; background: #eff6ff; color: ${isNG ? '#b91c1c' : '#1e3a5f'};">${sr.finalGrade || 'A'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; font-weight: bold; color: ${isNG ? '#b91c1c' : '#111'};">${sr.gradePoint !== undefined ? sr.gradePoint.toFixed(1) : '3.6'}</td>
+            <td style="text-align: center; border: 1px solid #cbd5e1; color: ${isNG ? '#b91c1c' : '#15803d'}; font-weight: bold;">${isNG ? 'Needs Imp.' : (sr.remarks?.split(' ')[0] || 'Good')}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>My Grade Sheet - ${student?.fullName || 'Student'}</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 3px double #1e3a5f; padding: 15px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .report-title { font-size: 12px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
+            th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
+            td { padding: 5px 4px; }
+            .summary-box { display: flex; justify-content: space-between; background: #1e3a5f; color: #fff; padding: 10px 15px; border-radius: 6px; margin-bottom: 12px; }
+            .footer-sig { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-line { border-top: 1px solid #333; width: 150px; text-align: center; padding-top: 3px; margin-top: 35px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="report-title">${m.examName || 'EXAMINATION'} — OFFICIAL GRADE SHEET</div>
+            </div>
+
+            <div class="meta-grid">
+              <div><strong>Student Name:</strong> ${student?.fullName}</div>
+              <div><strong>Symbol No.:</strong> ${symbolNo || '—'}</div>
+              <div><strong>Class:</strong> ${className} (${section})</div>
+              <div><strong>Roll No / EMIS:</strong> ${rollNo} / ${student?.studentId || '—'}</div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 30px; text-align: center;">S.N.</th>
+                  <th>SUBJECT NAME</th>
+                  <th style="width: 45px; text-align: center;">CREDIT</th>
+                  <th style="width: 45px; text-align: center;">TH</th>
+                  <th style="width: 45px; text-align: center;">PR</th>
+                  <th style="width: 55px; text-align: center;">GRADE</th>
+                  <th style="width: 45px; text-align: center;">GP</th>
+                  <th style="width: 70px; text-align: center;">REMARKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+
+            <div class="summary-box">
+              <div>
+                <span style="font-size: 9px; uppercase; opacity: 0.9;">GRADE POINT AVERAGE (GPA)</span>
+                <div style="font-size: 22px; font-weight: 900; color: #fef08a;">${m.gpa !== undefined ? m.gpa.toFixed(2) : '3.60'} / 4.00</div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-size: 9px; uppercase; opacity: 0.9;">OVERALL EVALUATION GRADE</span>
+                <div style="font-size: 22px; font-weight: 900; color: #fff;">${m.overallGrade || 'A'}</div>
+              </div>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-line">Date: ${todayBS()} BS<br>Class Teacher</div>
+              <div class="sig-line">Exam Controller</div>
+              <div class="sig-line">Headmaster / Stamp</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const triggerStudentIdCardPrint = () => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Student ID Card - ${student?.fullName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; display: flex; justify-content: center; padding-top: 20px; }
+            .id-card { width: 340px; border: 3px solid #1e3a5f; border-radius: 12px; overflow: hidden; background: #fff; }
+            .header { background: #1e3a5f; color: #fff; padding: 10px; text-align: center; }
+            .body { padding: 15px; }
+            .sig-line { border-top: 1px solid #333; width: 100px; text-align: center; font-size: 8px; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="id-card">
+            <div class="header">
+              <div style="font-size: 12px; font-weight: 900;">${school?.name || 'NEPAL MODEL SECONDARY SCHOOL'}</div>
+              <div style="font-size: 9px; color: #fde047;">${school?.nameNepali || 'नेपाल आदर्श मा.वि.'}</div>
+              <div style="display: inline-block; background: #facc15; color: #1e3a5f; font-size: 8px; font-weight: 900; padding: 2px 8px; border-radius: 10px; margin-top: 4px;">STUDENT IDENTITY CARD</div>
+            </div>
+            <div class="body">
+              <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                <div style="width: 70px; height: 80px; border: 1.5px solid #1e3a5f; border-radius: 6px; overflow: hidden; background: #f1f5f9; display: flex; align-items: center; justify-content: center;">
+                  ${student?.photoUrl ? `<img src="${student.photoUrl}" style="width:100%; height:100%; object-fit:cover;" />` : `<span style="font-size: 24px;">👤</span>`}
+                </div>
+                <div>
+                  <div style="font-size: 13px; font-weight: 900; color: #111;">${student?.fullName}</div>
+                  <div style="font-size: 10px; font-weight: bold; color: #1e3a5f;">Class: ${className} (${section})</div>
+                  <div style="font-size: 10px;">Roll No: <strong>${rollNo}</strong></div>
+                  <div style="font-size: 10px;">Blood Group: <strong style="color: #b91c1c;">${student?.bloodGroup || 'O+'}</strong></div>
+                </div>
+              </div>
+              <div style="border: 1px solid #e2e8f0; padding: 6px; border-radius: 6px; font-size: 9.5px; margin-bottom: 10px;">
+                <div>Symbol No: <strong>${symbolNo}</strong></div>
+                <div>EMIS ID: <strong>${student?.studentId}</strong></div>
+                <div>DOB: <strong>${student?.dateOfBirthBs || '2068-05-12'} BS</strong></div>
+                <div>Guardian Contact: <strong>${student?.guardianContact || student?.phone || '98XXXXXXXX'}</strong></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div style="font-size: 8px; color: #1e3a5f; font-weight: bold;">OFFICIAL SEAL</div>
+                <div class="sig-line">Principal Signature</div>
+              </div>
+            </div>
+          </div>
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const triggerStudentReceiptPrint = () => {
+    if (!selectedReceiptForPrint) return;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const r = selectedReceiptForPrint;
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Fee Receipt - ${r.receiptNo}</title>
+          <style>
+            @page { size: A5 landscape; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 2px solid #1e3a5f; padding: 15px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
+            .school-name { font-size: 15px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .badge { font-size: 10px; font-weight: 900; background: #1e3a5f; color: #fff; display: inline-block; padding: 2px 10px; border-radius: 4px; uppercase; }
+            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px; background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; }
+            .footer-sig { margin-top: 25px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-box { width: 140px; text-align: center; border-top: 1px solid #333; padding-top: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 10px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="badge" style="margin-top: 4px;">OFFICIAL FEE RECEIPT (शुल्क रसिद)</div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 10.5px; margin-bottom: 8px;">
+              <span>Receipt No: <strong>${r.receiptNo}</strong></span>
+              <span>Date: <strong>${r.paidDateBs} BS</strong></span>
+            </div>
+
+            <div class="grid">
+              <div>Student Name: <strong>${student?.fullName}</strong></div>
+              <div>Class & Roll: <strong>${className} (${section}) • Roll #${rollNo}</strong></div>
+              <div>Fee Head: <strong>${r.feeHead?.name}</strong></div>
+            </div>
+
+            <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-weight: bold; color: #065f46;">TOTAL PAID AMOUNT (जम्मा भुक्तानी):</span>
+              <strong style="font-size: 16px; color: #047857; font-family: monospace;">रू ${(r.amount || 0).toLocaleString()}</strong>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-box">Depositor Signature</div>
+              <div class="sig-box">Accountant (लेखापाल)</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="space-y-6 pb-16">
       {/* ─── 1. TOP IDENTITY & BRANDING HEADER (NO-PRINT) ───────────────────── */}
@@ -707,7 +949,7 @@ export default function StudentPortalPage() {
             </div>
 
             <button
-              onClick={() => window.print()}
+              onClick={triggerStudentMarksheetPrint}
               disabled={!marksheetData}
               className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 text-xs font-bold text-white shadow-xs transition disabled:opacity-50"
             >
@@ -1347,7 +1589,7 @@ export default function StudentPortalPage() {
                 <span>Change Photo (≤50KB)</span>
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={triggerStudentIdCardPrint}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 text-xs font-bold text-white shadow-xs transition"
               >
                 <Printer size={15} />
@@ -1525,7 +1767,7 @@ export default function StudentPortalPage() {
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={triggerStudentReceiptPrint}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-1.5 text-xs font-bold text-white hover:bg-[#2a5280]"
               >
                 <Printer size={14} />

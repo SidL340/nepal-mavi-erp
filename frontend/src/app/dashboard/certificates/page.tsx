@@ -95,6 +95,78 @@ export default function CertificatesPage() {
 
   const certificates = certsData || [];
 
+  const triggerCertificatePrint = () => {
+    if (!selectedCertForPrint) return;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const c = selectedCertForPrint;
+    const certTypeTitle = c.certificateType === 'CHARACTER' ? 'CHARACTER CERTIFICATE' : 'TRANSFER CERTIFICATE (T.C.)';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${certTypeTitle} - ${c.studentName || 'Student'}</title>
+          <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 13px; line-height: 1.8; }
+            .card { border: 4px double #1e3a5f; padding: 25px; border-radius: 8px; position: relative; min-height: 90vh; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; margin-bottom: 20px; }
+            .school-name { font-size: 20px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .sub-title { font-size: 12px; font-weight: bold; color: #4b5563; }
+            .cert-badge { font-size: 14px; font-weight: 900; background: #fef3c7; color: #78350f; display: inline-block; padding: 4px 16px; border-radius: 6px; margin-top: 8px; border: 1px solid #fde68a; uppercase; }
+            .meta-bar { display: flex; justify-content: space-between; font-weight: bold; font-size: 11px; margin-bottom: 20px; color: #374151; }
+            .content-body { font-size: 13.5px; text-align: justify; margin-bottom: 40px; }
+            .footer-sig { position: absolute; bottom: 30px; left: 25px; right: 25px; display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; }
+            .sig-box { width: 160px; text-align: center; border-top: 1px solid #333; padding-top: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div class="sub-title">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div style="font-size: 11px; color: #6b7280;">ESTD: 2025 BS • EMIS CODE: 320160002</div>
+              <div class="cert-badge">${certTypeTitle}</div>
+            </div>
+
+            <div class="meta-bar">
+              <div>Ref No: <strong>${c.certificateNo || 'SNSS-2083-001'}</strong></div>
+              <div>Date: <strong>${c.issuedDateBs || todayBS()} BS</strong></div>
+            </div>
+
+            <div class="content-body">
+              This is to certify that <strong>${c.studentName}</strong>, Son/Daughter of <strong>${c.fatherName || '—'}</strong> & <strong>${c.motherName || '—'}</strong>, resident of <strong>${c.address || 'Bishrampur, Rautahat'}</strong>, was a bonafide student of this institution.
+              <br/><br/>
+              He/She was enrolled in <strong>Class ${c.className || '10'}</strong> (Roll No: <strong>${c.rollNo || '—'}</strong>, EMIS ID: <strong>${c.studentId || '—'}</strong>) during the academic session <strong>${c.academicYear || '2083'} BS</strong>.
+              <br/><br/>
+              To the best of our knowledge and school records, his/her moral conduct, character, and academic attitude were <strong>${c.remarks || 'EXCELLENT (उत्कृष्ट)'}</strong>. He/She bears a good moral character and has not taken part in any activity detrimental to the discipline of the school.
+              <br/><br/>
+              We wish him/her all success and prosperity in future academic endeavors.
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-box">Class Teacher</div>
+              <div class="sig-box">School Seal (छाप)</div>
+              <div class="sig-box">Headmaster / Principal</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -504,7 +576,7 @@ export default function CertificatesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={triggerCertificatePrint}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-1.5 text-xs font-bold text-white hover:bg-[#2a5280]"
               >
                 <Printer size={14} />

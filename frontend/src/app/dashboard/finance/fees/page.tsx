@@ -220,6 +220,75 @@ function FeeCollectionContent() {
     });
   };
 
+  const triggerFeeReceiptPrint = () => {
+    if (!latestReceipt) return;
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const r = latestReceipt;
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Fee Receipt - ${r.receiptNo || 'Receipt'}</title>
+          <style>
+            @page { size: A5 landscape; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
+            .card { border: 2px solid #1e3a5f; padding: 15px; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
+            .school-name { font-size: 15px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .badge { font-size: 10px; font-weight: 900; background: #1e3a5f; color: #fff; display: inline-block; padding: 2px 10px; border-radius: 4px; uppercase; }
+            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px; background: #f8fafc; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0; }
+            .footer-sig { margin-top: 25px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .sig-box { width: 140px; text-align: center; border-top: 1px solid #333; padding-top: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 10px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
+              <div class="badge" style="margin-top: 4px;">OFFICIAL FEE RECEIPT (शुल्क रसिद)</div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 10.5px; margin-bottom: 8px;">
+              <span>Receipt No: <strong>${r.receiptNo || 'REC-001'}</strong></span>
+              <span>Date: <strong>${r.paidDateBs || todayBS()} BS</strong></span>
+            </div>
+
+            <div class="grid">
+              <div>Student Name: <strong>${r.studentName || '—'}</strong></div>
+              <div>Class & Roll: <strong>${r.className || '—'} (Roll #${r.rollNo || '—'})</strong></div>
+              <div>EMIS ID: <strong>${r.studentId || '—'}</strong></div>
+              <div>Fee Head: <strong>${r.feeHeadName || 'School Fee'}</strong></div>
+            </div>
+
+            <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <span style="font-weight: bold; color: #065f46;">TOTAL PAID AMOUNT (जम्मा भुक्तानी):</span>
+              <strong style="font-size: 16px; color: #047857; font-family: monospace;">रू ${(r.amount || 0).toLocaleString()}</strong>
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-box">Depositor Signature</div>
+              <div class="sig-box">Accountant (लेखापाल)</div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="space-y-6 pb-16">
       {/* Top Header */}
@@ -715,7 +784,7 @@ function FeeCollectionContent() {
             <div className="flex items-center justify-between border-b border-gray-100 pb-2 no-print">
               <span className="font-extrabold text-sm text-[#1e3a5f]">Print Official Fee Receipt</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => window.print()} className="rounded-lg bg-[#1e3a5f] text-white px-3 py-1 text-xs font-bold">
+                <button onClick={triggerFeeReceiptPrint} className="rounded-lg bg-[#1e3a5f] text-white px-3 py-1 text-xs font-bold">
                   Print
                 </button>
                 <button onClick={() => setLatestReceipt(null)} className="text-gray-400 hover:text-gray-600">
