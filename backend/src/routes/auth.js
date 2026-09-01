@@ -28,9 +28,9 @@ router.post('/login', async (req, res) => {
     if (!valid)
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN,
-    });
+    const secret = process.env.JWT_SECRET || 'nepal_ssb_erp_secret_key_2081';
+    const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+    const token = jwt.sign({ id: user.id, role: user.role }, secret, { expiresIn });
 
     return res.json({
       success: true,
