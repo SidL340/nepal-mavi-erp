@@ -4,7 +4,7 @@
   "description": "Nepal School ERP — Express.js API Server",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "npx prisma db push && node prisma/seed.js && node prisma/seed_custom_heads.js && node src/server.js",
     "dev": "nodemon src/server.js",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
