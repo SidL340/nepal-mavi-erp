@@ -197,9 +197,28 @@ export default function JournalVoucherPage() {
   allVouchers.sort((a, b) => (a.dateBs < b.dateBs ? 1 : -1));
 
   // Filter Vouchers
+  const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>('ALL');
+
+  const { data: partiesData } = useQuery({
+    queryKey: ['parties-journal'],
+    queryFn: async () => {
+      const res = await api.get('/parties');
+      return res.data?.data || [];
+    },
+  });
+
   const filteredVouchers = allVouchers.filter((v) => {
     if (voucherTypeFilter !== 'ALL' && v.type !== voucherTypeFilter) return false;
     if (topicFilter !== 'ALL' && v.topic !== topicFilter) return false;
+    if (selectedPartyFilter !== 'ALL') {
+      const partyObj = partiesData?.find((p: any) => p.id.toString() === selectedPartyFilter);
+      if (partyObj) {
+        const pName = partyObj.name.toLowerCase();
+        const vPart = (v.particulars || '').toLowerCase();
+        const vRem = (v.remarks || '').toLowerCase();
+        if (!vPart.includes(pName) && !vRem.includes(pName)) return false;
+      }
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
@@ -207,7 +226,8 @@ export default function JournalVoucherPage() {
         v.particulars.toLowerCase().includes(q) ||
         (v.topic && v.topic.toLowerCase().includes(q)) ||
         v.debitAccount.toLowerCase().includes(q) ||
-        v.creditAccount.toLowerCase().includes(q)
+        v.creditAccount.toLowerCase().includes(q) ||
+        (v.paymentRef && v.paymentRef.toLowerCase().includes(q))
       );
     }
     return true;
