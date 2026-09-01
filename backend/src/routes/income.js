@@ -509,6 +509,7 @@ router.get('/entries', authenticate, async (req, res) => {
         { receivedBy: { contains: q } },
         { chequeNo: { contains: q } },
         { head: { name: { contains: q } } },
+        { head: { code: { contains: q } } },
         { party: { name: { contains: q } } },
       ];
     }
