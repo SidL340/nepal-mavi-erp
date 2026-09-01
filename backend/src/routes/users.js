@@ -74,7 +74,7 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
               photoUrl: true,
               classEnrollment: {
                 where: { isActive: true },
-                select: { rollNo: true, class: { select: { name: true, section: true } } },
+                select: { rollNo: true, class: { select: { id: true, name: true, section: true } } },
               },
             },
           },

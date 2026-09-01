@@ -1254,9 +1254,15 @@ export default function UserManagementPage() {
                       let fetchedUsers = res.data?.data?.users || [];
 
                       if (printClassId && printTargetRole === 'STUDENT') {
-                        fetchedUsers = fetchedUsers.filter(
-                          (u: any) => u.student?.classEnrollment?.[0]?.class?.id === parseInt(printClassId)
-                        );
+                        const targetClass = classesList?.find((c: any) => String(c.id) === String(printClassId));
+                        const targetClassName = targetClass?.name?.toLowerCase() || '';
+
+                        fetchedUsers = fetchedUsers.filter((u: any) => {
+                          const studentClass = u.student?.classEnrollment?.[0]?.class;
+                          if (!studentClass) return false;
+                          return String(studentClass.id) === String(printClassId) ||
+                                 (targetClassName && studentClass.name?.toLowerCase() === targetClassName);
+                        });
                       }
 
                       if (fetchedUsers.length === 0) {
