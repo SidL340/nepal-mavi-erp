@@ -13,16 +13,42 @@ router.post('/login', async (req, res) => {
     if (!username || !password)
       return res.status(400).json({ success: false, message: 'Username and password required.' });
 
-    const user = await prisma.user.findUnique({
-      where: { username },
+    const cleanUsername = username.trim();
+
+    // Find user by username or linked student details
+    let user = await prisma.user.findFirst({
+      where: { username: cleanUsername },
       include: {
         teacher: { select: { id: true, fullName: true, photoUrl: true } },
         student: { select: { id: true, fullName: true, studentId: true, photoUrl: true } },
       },
     });
 
+    if (!user) {
+      const studentRec = await prisma.student.findFirst({
+        where: {
+          OR: [
+            { studentId: cleanUsername },
+            { emisId: cleanUsername },
+            { phone: cleanUsername },
+          ],
+        },
+        include: {
+          user: {
+            include: {
+              teacher: { select: { id: true, fullName: true, photoUrl: true } },
+              student: { select: { id: true, fullName: true, studentId: true, photoUrl: true } },
+            },
+          },
+        },
+      });
+      if (studentRec?.user) {
+        user = studentRec.user;
+      }
+    }
+
     if (!user || !user.isActive)
-      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+      return res.status(401).json({ success: false, message: 'Invalid username or password.' });
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid)
