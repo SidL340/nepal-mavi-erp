@@ -421,28 +421,26 @@ router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN
     });
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
 
-    const whereClass = { examId };
-    if (classIds && Array.isArray(classIds) && classIds.length > 0) {
-      whereClass.classId = { in: classIds.map(id => parseInt(id)) };
+    const targetClassIds = classIds && Array.isArray(classIds) && classIds.length > 0
+      ? classIds.map(id => parseInt(id))
+      : (await prisma.class.findMany({ select: { id: true } })).map(c => c.id);
+
+    for (const cid of targetClassIds) {
+      await prisma.examClass.upsert({
+        where: { examId_classId: { examId, classId: cid } },
+        update: { isPublished: Boolean(isPublished), publishedAt: isPublished ? new Date() : null },
+        create: { examId, classId: cid, isPublished: Boolean(isPublished), publishedAt: isPublished ? new Date() : null },
+      });
     }
 
-    await prisma.examClass.updateMany({
-      where: whereClass,
-      data: { isPublished: Boolean(isPublished), publishedAt: isPublished ? new Date() : null },
-    });
-
     if (isPublished) {
-      const targetClassIds = classIds && Array.isArray(classIds) && classIds.length > 0
-        ? classIds.map(id => parseInt(id))
-        : exam.examClasses.map(ec => ec.classId);
-
       for (const cid of targetClassIds) {
         const cls = await prisma.class.findUnique({ where: { id: cid } });
         await prisma.notice.create({
           data: {
             title: `📢 Exam Results Published: ${exam.name} (${cls?.name || 'Class'})`,
             body: `Official examination results for ${exam.name} (${cls?.name || 'Class'}) have been published by school administration. You can now view and print your Grade Sheet from your Student Portal!`,
-            type: 'GENERAL',
+            type: 'EXAM',
             targetClassId: cid,
             postedDateBs: '2081-05-15',
             createdBy: req.user.id,
@@ -454,7 +452,7 @@ router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN
         data: {
           title: `📢 Exam Results Published: ${exam.name}`,
           body: `Official examination results for ${exam.name} have been published by administration. Students can view and print their Grade Sheets from the Student Portal.`,
-          type: 'GENERAL',
+          type: 'EXAM',
           targetRole: 'STUDENT',
           postedDateBs: '2081-05-15',
           createdBy: req.user.id,

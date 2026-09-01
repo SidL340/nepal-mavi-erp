@@ -15,9 +15,12 @@ import {
   Radio,
   CheckCircle2,
 } from 'lucide-react';
+import { useAuthStore } from '@/lib/auth-store';
 import toast from 'react-hot-toast';
 
 export default function NoticesPage() {
+  const { user } = useAuthStore();
+  const canPublish = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'TEACHER';
   const queryClient = useQueryClient();
   const [filterType, setFilterType] = useState('');
   const [isComposeModalOpen, setIsComposeModalOpen] = useState(false);
@@ -110,13 +113,15 @@ export default function NoticesPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsComposeModalOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
-        >
-          <Plus size={14} />
-          <span>Publish Notice / Send SMS</span>
-        </button>
+        {canPublish && (
+          <button
+            onClick={() => setIsComposeModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
+          >
+            <Plus size={14} />
+            <span>Publish Notice / Send SMS</span>
+          </button>
+        )}
       </div>
 
       {/* Filter Tabs */}
