@@ -714,6 +714,18 @@ export default function StudentPortalPage() {
             <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-gray-400">
               Loading your academic marksheet and evaluation...
             </div>
+          ) : marksheetData?.isPublished === false ? (
+            <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-12 text-center space-y-4 shadow-sm">
+              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+                <Bell size={32} />
+              </div>
+              <div className="max-w-md mx-auto space-y-1">
+                <h3 className="text-lg font-black text-amber-950">Result Pending (नतिजा प्रकाशन प्रतीक्षामा)</h3>
+                <p className="text-xs text-amber-800 leading-relaxed font-nepali">
+                  यस परीक्षाको आधिकारिक नतिजा विद्यालय प्रशासनबाट प्रकाशन भइसकेको छैन। नतिजा प्रकाशन पश्चात् तपाईंको ग्रेडसिट यहाँ उपलब्ध हुनेछ।
+                </p>
+              </div>
+            </div>
           ) : !marksheetData ? (
             <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-gray-400">
               No examination marks entered for this exam yet.

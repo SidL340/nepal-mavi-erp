@@ -393,6 +393,45 @@ function getOverallGradeFromGpa(gpa) {
   return { letterGrade: 'NG', remarks: 'Non-Graded (अवर्गीकृत)' };
 }
 
+// POST /api/exams/:id/publish-result
+router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const examId = parseInt(req.params.id);
+    const { classIds, isPublished = true } = req.body;
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) return res.status(404).json({ success: false, message: 'Exam not found.' });
+
+    const whereClass = { examId };
+    if (classIds && Array.isArray(classIds) && classIds.length > 0) {
+      whereClass.classId = { in: classIds.map(id => parseInt(id)) };
+    }
+
+    await prisma.examClass.updateMany({
+      where: whereClass,
+      data: { isPublished: Boolean(isPublished), publishedAt: isPublished ? new Date() : null },
+    });
+
+    if (isPublished) {
+      await prisma.notice.create({
+        data: {
+          title: `📢 Exam Results Published: ${exam.name}`,
+          body: `Official results for ${exam.name} have been published by administration. Students can view and print their Grade Sheets from the Student Portal.`,
+          type: 'EXAM',
+          postedDateBs: '2081-05-15',
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: isPublished ? `Results for ${exam.name} published successfully!` : `Results status updated.`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/exams/:examId/marksheet/:studentId
 router.get('/:examId/marksheet/:studentId', authenticate, async (req, res) => {
   try {
@@ -407,6 +446,21 @@ router.get('/:examId/marksheet/:studentId', authenticate, async (req, res) => {
     });
 
     const activeEnrollment = student?.classEnrollment?.find(ce => ce.isActive);
+
+    // If request comes from a STUDENT, verify result publication for their class
+    if (req.user.role === 'STUDENT' && activeEnrollment) {
+      const examClass = await prisma.examClass.findFirst({
+        where: { examId, classId: activeEnrollment.classId },
+      });
+      if (!examClass || !examClass.isPublished) {
+        return res.json({
+          success: true,
+          isPublished: false,
+          data: null,
+          message: `Results for "${exam?.name || 'this exam'}" have not been published by administration yet.`,
+        });
+      }
+    }
     const yearName = exam?.academicYear?.year || '2083';
     const className = activeEnrollment?.class?.name || '';
     const rollNo = activeEnrollment?.rollNo || 1;

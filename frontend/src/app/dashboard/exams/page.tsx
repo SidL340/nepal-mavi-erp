@@ -10,6 +10,7 @@ import {
   Plus,
   Printer,
   Award,
+  Bell,
   Users,
   CheckCircle2,
   X,
@@ -152,6 +153,31 @@ export default function ExamsPage() {
   const [bulkMarksheetsData, setBulkMarksheetsData] = useState<any>(null);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [selectedStudentIdsForPrint, setSelectedStudentIdsForPrint] = useState<number[]>([]);
+
+  // Publish Results state
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+  const [publishExamId, setPublishExamId] = useState('');
+  const [publishClassId, setPublishClassId] = useState('');
+
+  const publishResultMutation = useMutation({
+    mutationFn: async () => {
+      if (!publishExamId) throw new Error('Please select an exam to publish.');
+      const res = await api.post(`/exams/${publishExamId}/publish-result`, {
+        classIds: publishClassId ? [parseInt(publishClassId)] : undefined,
+        isPublished: true,
+      });
+      return res.data;
+    },
+    onSuccess: (data: any) => {
+      toast.success(data.message || 'Exam results published successfully!');
+      setIsPublishModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['exams'] });
+      queryClient.invalidateQueries({ queryKey: ['student-exams'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to publish results');
+    },
+  });
 
   const handleOpenBulkPrint = async () => {
     if (!ledgerExamId || !ledgerClassId) {
@@ -569,6 +595,19 @@ export default function ExamsPage() {
               Class Ledger & Ranking (लेजर)
             </button>
           </div>
+
+          {isAdmin && (
+            <button
+              onClick={() => {
+                if (exams?.length > 0) setPublishExamId(exams[0].id.toString());
+                setIsPublishModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white shadow-2xs transition"
+            >
+              <Bell size={14} />
+              <span>📢 Publish Results (नतिजा प्रकाशन)</span>
+            </button>
+          )}
 
           {activeTab === 'exams' && isAdmin && (
             <button
@@ -2533,6 +2572,81 @@ export default function ExamsPage() {
                     </div>
                   </div>
                 ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ─── PUBLISH RESULTS MODAL ────────────────────────────────────────── */}
+      {isPublishModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-[#1e3a5f] flex items-center gap-2">
+                <Bell size={18} className="text-amber-500" />
+                <span>Publish Exam Results (परीक्षा नतिजा प्रकाशन)</span>
+              </h3>
+              <button onClick={() => setIsPublishModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-2xl flex items-start gap-2">
+                <Sparkles size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  Publishing results will make official Grade Sheets visible to students & parents in the Student Portal, and send an automated notice notification!
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Select Exam (परीक्षा छनोट गर्नुहोस्) *</label>
+                <select
+                  value={publishExamId}
+                  onChange={(e) => setPublishExamId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-xs font-bold bg-white"
+                >
+                  <option value="">-- Select Terminal Exam --</option>
+                  {exams.map((ex: any) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.name} {ex.nameNepali ? `(${ex.nameNepali})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Target Class (कुन कक्षाको नतिजा प्रकाशन गर्ने?)</label>
+                <select
+                  value={publishClassId}
+                  onChange={(e) => setPublishClassId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-xs font-bold bg-white"
+                >
+                  <option value="">All Classes (सबै कक्षाहरू)</option>
+                  {classesData?.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.section ? `(${c.section})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsPublishModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl text-xs font-bold text-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={publishResultMutation.isPending || !publishExamId}
+                  onClick={() => publishResultMutation.mutate()}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl shadow-md disabled:opacity-50 transition"
+                >
+                  {publishResultMutation.isPending ? 'Publishing...' : '📢 Publish Results Now'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
