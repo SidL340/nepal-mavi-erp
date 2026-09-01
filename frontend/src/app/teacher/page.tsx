@@ -29,6 +29,37 @@ export default function TeacherPortalPage() {
 
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [isProblemModalOpen, setIsProblemModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
+
+  // Profile Edit State
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editPanNo, setEditPanNo] = useState('');
+
+  // Update Profile Mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async () => {
+      const teacherId = user?.teacher?.id;
+      if (!teacherId) throw new Error('Teacher record not found.');
+      const res = await api.put(`/teachers/${teacherId}`, {
+        fullName: editFullName,
+        phone: editPhone,
+        email: editEmail,
+        address: editAddress,
+        panNo: editPanNo,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Your teacher profile details updated successfully!');
+      setIsEditProfileModalOpen(false);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update profile.');
+    },
+  });
 
   // Notice Form State
   const [noticeTitle, setNoticeTitle] = useState('');
@@ -136,7 +167,23 @@ export default function TeacherPortalPage() {
             <Calendar size={13} />
             <span>BS {todayBSFormatted()}</span>
           </div>
-          <h1 className="text-2xl font-extrabold">Welcome, {displayName}!</h1>
+          <div className="flex items-center gap-2 mt-2">
+            <h1 className="text-2xl font-extrabold">Welcome, {displayName}!</h1>
+            <button
+              onClick={() => {
+                const tObj = (user?.teacher as any) || {};
+                setEditFullName(tObj.fullName || '');
+                setEditPhone(tObj.phone || '');
+                setEditEmail(tObj.email || '');
+                setEditAddress(tObj.address || '');
+                setEditPanNo(tObj.panNo || '');
+                setIsEditProfileModalOpen(true);
+              }}
+              className="ml-auto px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold rounded-lg text-[10px] flex items-center gap-1.5 shadow-xs transition"
+            >
+              <span>✏️ Edit Profile</span>
+            </button>
+          </div>
           <p className="text-xs text-blue-200 mt-0.5 font-nepali">
             शिक्षक पोर्टल: आजको कक्षा हाजिरी लिनुहोस्, अङ्क प्रविष्टि गर्नुहोस्, कक्षामा सूचना पठाउनुहोस् वा प्रशासनलाई समस्या दर्ता गर्नुहोस्
           </p>
@@ -560,6 +607,99 @@ export default function TeacherPortalPage() {
                   className="rounded-xl bg-rose-600 hover:bg-rose-700 px-5 py-2 font-bold text-white disabled:opacity-60"
                 >
                   {reportProblemMutation.isPending ? 'Submitting...' : 'Submit Report to Admin (प्रतिवेदन बुझाउनुहोस्)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ── EDIT TEACHER PROFILE MODAL ────────────────────────────────────── */}
+      {isEditProfileModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-[#1e3a5f]">
+                ✏️ Edit My Profile Details (शिक्षक विवरण सम्पादन)
+              </h3>
+              <button onClick={() => setIsEditProfileModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateProfileMutation.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name (पुरा नाम)</label>
+                <input
+                  type="text"
+                  required
+                  value={editFullName}
+                  onChange={(e) => setEditFullName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number (फोन नं.)</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Email (इमेल)</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Address (ठेगाना)</label>
+                  <input
+                    type="text"
+                    value={editAddress}
+                    onChange={(e) => setEditAddress(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">PAN Number (पान नं.)</label>
+                  <input
+                    type="text"
+                    value={editPanNo}
+                    onChange={(e) => setEditPanNo(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfileModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl text-xs font-bold text-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateProfileMutation.isPending}
+                  className="px-5 py-2 bg-[#1e3a5f] hover:bg-[#2a4f7c] text-white font-bold text-xs rounded-xl shadow-xs disabled:opacity-50"
+                >
+                  {updateProfileMutation.isPending ? 'Updating...' : 'Save Profile Changes'}
                 </button>
               </div>
             </form>

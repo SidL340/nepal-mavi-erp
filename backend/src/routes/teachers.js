@@ -102,20 +102,25 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
 });
 
 // PUT /api/teachers/:id
-router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   try {
+    const teacherId = parseInt(req.params.id);
+    if (req.user.role === 'TEACHER' && req.user.teacher?.id !== teacherId) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You can only edit your own details.' });
+    }
+
     const { subjectIds, ...rest } = req.body;
     const teacher = await prisma.teacher.update({
-      where: { id: parseInt(req.params.id) },
+      where: { id: teacherId },
       data: rest,
     });
-    if (subjectIds) {
+    if (subjectIds && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
       await prisma.teacherSubject.deleteMany({ where: { teacherId: teacher.id } });
       await prisma.teacherSubject.createMany({
         data: subjectIds.map(sid => ({ teacherId: teacher.id, subjectId: sid })),
       });
     }
-    return res.json({ success: true, data: teacher });
+    return res.json({ success: true, data: teacher, message: 'Teacher details updated successfully!' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error.' });
