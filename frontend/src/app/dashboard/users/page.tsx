@@ -60,6 +60,7 @@ export default function UserManagementPage() {
 
   const [printTargetRole, setPrintTargetRole] = useState<string>('STUDENT');
   const [printClassId, setPrintClassId] = useState<string>('');
+  const [isGeneratingSlips, setIsGeneratingSlips] = useState<boolean>(false);
 
   // Dialog for generated single credentials
   const [credentialDialog, setCredentialDialog] = useState<{
@@ -1241,38 +1242,57 @@ export default function UserManagementPage() {
                 <button type="button" onClick={() => setIsPrintOnlyModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
                 <button
                   type="button"
-                  onClick={() => {
-                    let filtered = usersList;
-                    if (printTargetRole !== 'ALL') {
-                      filtered = filtered.filter((u: any) => u.role === printTargetRole);
-                    }
-                    if (printClassId && printTargetRole === 'STUDENT') {
-                      filtered = filtered.filter((u: any) => u.student?.classEnrollment?.[0]?.class?.id === parseInt(printClassId));
-                    }
+                  disabled={isGeneratingSlips}
+                  onClick={async () => {
+                    setIsGeneratingSlips(true);
+                    try {
+                      const params = new URLSearchParams();
+                      if (printTargetRole !== 'ALL') params.append('role', printTargetRole);
+                      params.append('limit', '1000');
 
-                    const slips = filtered.map((u: any) => {
-                      const className = u.student?.classEnrollment?.[0]?.class
-                        ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
-                        : u.teacher?.post || u.role;
-                      return {
-                        id: u.id,
-                        username: u.username,
-                        role: u.role,
-                        fullName: u.teacher?.fullName || u.student?.fullName || u.username,
-                        studentId: u.student?.studentId || '—',
-                        className,
-                        rollNo: u.student?.classEnrollment?.[0]?.rollNo || u.id,
-                        temporaryPassword: u.role === 'STUDENT' ? `SSB@${u.student?.classEnrollment?.[0]?.rollNo || u.id}` : '••••••••',
-                      };
-                    });
+                      const res = await api.get(`/users?${params.toString()}`);
+                      let fetchedUsers = res.data?.data?.users || [];
 
-                    setBulkResetResults(slips);
-                    setIsPrintOnlyModalOpen(false);
-                    setIsPrintSlipsModalOpen(true);
+                      if (printClassId && printTargetRole === 'STUDENT') {
+                        fetchedUsers = fetchedUsers.filter(
+                          (u: any) => u.student?.classEnrollment?.[0]?.class?.id === parseInt(printClassId)
+                        );
+                      }
+
+                      if (fetchedUsers.length === 0) {
+                        toast.error('No users found matching the selected class/role.');
+                        setIsGeneratingSlips(false);
+                        return;
+                      }
+
+                      const slips = fetchedUsers.map((u: any) => {
+                        const className = u.student?.classEnrollment?.[0]?.class
+                          ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
+                          : u.teacher?.post || u.role;
+                        return {
+                          id: u.id,
+                          username: u.username,
+                          role: u.role,
+                          fullName: u.teacher?.fullName || u.student?.fullName || u.username,
+                          studentId: u.student?.studentId || '—',
+                          className,
+                          rollNo: u.student?.classEnrollment?.[0]?.rollNo || u.id,
+                          temporaryPassword: u.role === 'STUDENT' ? `SSB@${u.student?.classEnrollment?.[0]?.rollNo || u.id}` : '••••••••',
+                        };
+                      });
+
+                      setBulkResetResults(slips);
+                      setIsPrintOnlyModalOpen(false);
+                      setIsPrintSlipsModalOpen(true);
+                    } catch (err: any) {
+                      toast.error('Failed to load user slips.');
+                    } finally {
+                      setIsGeneratingSlips(false);
+                    }
                   }}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-50"
                 >
-                  Generate & Print Slips Now
+                  {isGeneratingSlips ? 'Loading Slips...' : 'Generate & Print Slips Now'}
                 </button>
               </div>
             </div>
