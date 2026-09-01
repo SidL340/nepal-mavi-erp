@@ -1447,53 +1447,24 @@ export default function UserManagementPage() {
                   onClick={async () => {
                     setIsGeneratingSlips(true);
                     try {
-                      const params = new URLSearchParams();
-                      if (printTargetRole !== 'ALL') params.append('role', printTargetRole);
-                      params.append('limit', '1000');
+                      const res = await api.post('/users/bulk-reset-passwords', {
+                        targetRole: printTargetRole,
+                        classId: printClassId || undefined,
+                      });
+                      const slips = res.data?.data || [];
 
-                      const res = await api.get(`/users?${params.toString()}`);
-                      let fetchedUsers = res.data?.data?.users || [];
-
-                      if (printClassId && printTargetRole === 'STUDENT') {
-                        const targetClass = classesList?.find((c: any) => String(c.id) === String(printClassId));
-                        const targetClassName = targetClass?.name?.toLowerCase() || '';
-
-                        fetchedUsers = fetchedUsers.filter((u: any) => {
-                          const studentClass = u.student?.classEnrollment?.[0]?.class;
-                          if (!studentClass) return false;
-                          return String(studentClass.id) === String(printClassId) ||
-                                 (targetClassName && studentClass.name?.toLowerCase() === targetClassName);
-                        });
-                      }
-
-                      if (fetchedUsers.length === 0) {
+                      if (slips.length === 0) {
                         toast.error('No users found matching the selected class/role.');
                         setIsGeneratingSlips(false);
                         return;
                       }
-
-                      const slips = fetchedUsers.map((u: any) => {
-                        const className = u.student?.classEnrollment?.[0]?.class
-                          ? `${u.student.classEnrollment[0].class.name} (${u.student.classEnrollment[0].class.section || 'A'})`
-                          : u.teacher?.post || u.role;
-                        return {
-                          id: u.id,
-                          username: u.username,
-                          role: u.role,
-                          fullName: u.teacher?.fullName || u.student?.fullName || u.username,
-                          studentId: u.student?.studentId || '—',
-                          className,
-                          rollNo: u.student?.classEnrollment?.[0]?.rollNo || u.id,
-                          temporaryPassword: u.role === 'STUDENT' ? `SSB@${u.student?.classEnrollment?.[0]?.rollNo || u.id}` : '••••••••',
-                        };
-                      });
 
                       setBulkResetResults(slips);
                       setIsPrintOnlyModalOpen(false);
                       setIsPrintSlipsModalOpen(true);
                       triggerStandalonePrint(slips);
                     } catch (err: any) {
-                      toast.error('Failed to load user slips.');
+                      toast.error(err.response?.data?.message || 'Failed to generate user slips.');
                     } finally {
                       setIsGeneratingSlips(false);
                     }
