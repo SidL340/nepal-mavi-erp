@@ -56,9 +56,46 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n🏫 Nepal School ERP Server running on http://0.0.0.0:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  try {
+    const prisma = require('./lib/prisma');
+    const bcrypt = require('bcryptjs');
+
+    // Ensure school profile exists
+    await prisma.school.upsert({
+      where: { id: 1 },
+      update: {},
+      create: {
+        name: 'Nepal SSB Secondary School',
+        nameNepali: 'नेपाल एसएसबी माध्यमिक विद्यालय',
+        address: 'Nepal',
+        level: 'Secondary',
+        type: 'Community',
+      },
+    });
+
+    // Ensure active academic year exists
+    await prisma.academicYear.upsert({
+      where: { id: 1 },
+      update: {},
+      create: { year: '2081-82', startDateBs: '2081-04-01', endDateBs: '2082-03-31', isActive: true },
+    });
+
+    // Ensure super admin user exists
+    const adminHash = await bcrypt.hash('Admin@2081', 12);
+    await prisma.user.upsert({
+      where: { username: 'admin' },
+      update: {},
+      create: { username: 'admin', passwordHash: adminHash, role: 'SUPER_ADMIN' },
+    });
+
+    console.log('✅ Auto-seed verified: Super Admin user ready (admin / Admin@2081)');
+  } catch (err) {
+    console.error('⚠️ Auto-seed notice:', err.message);
+  }
 });
 
 module.exports = app;
