@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { todayBS } from '@/lib/nepali-date';
@@ -25,8 +26,10 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function FeeCollectionPortal() {
+function FeeCollectionPortalContent() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const queryStudentId = searchParams.get('studentId');
 
   // Selected student state for fee collection
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -95,6 +98,23 @@ export default function FeeCollectionPortal() {
     },
     enabled: studentSearchQuery.length >= 2,
   });
+
+  // Auto-fetch student if studentId is provided in URL
+  const { data: initialStudentData } = useQuery({
+    queryKey: ['student-fee-initial', queryStudentId],
+    queryFn: async () => {
+      if (!queryStudentId) return null;
+      const res = await api.get(`/students/${queryStudentId}`);
+      return res.data?.data || null;
+    },
+    enabled: !!queryStudentId,
+  });
+
+  useEffect(() => {
+    if (initialStudentData) {
+      setSelectedStudent(initialStudentData);
+    }
+  }, [initialStudentData]);
 
   // Fee Collections History
   const { data: collectionsData, isLoading: isLoadingCollections } = useQuery({
@@ -807,5 +827,13 @@ export default function FeeCollectionPortal() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function FeeCollectionPortal() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm font-bold text-gray-500">Loading Fee Collection Portal...</div>}>
+      <FeeCollectionPortalContent />
+    </Suspense>
   );
 }
