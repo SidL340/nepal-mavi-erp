@@ -14,13 +14,19 @@ import {
   CheckCircle2,
   Calendar,
   Building,
+  Edit2,
+  Trash2,
+  UserCheck,
+  Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function PayrollPage() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPayroll, setEditingPayroll] = useState<any>(null);
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
   const [monthFrom, setMonthFrom] = useState('2081-04');
   const [monthTo, setMonthTo] = useState('2081-06');
   const [selectedSlip, setSelectedSlip] = useState<any>(null);
@@ -50,7 +56,7 @@ export default function PayrollPage() {
   const [peshki, setPeshki] = useState<number>(0);
   const [remarks, setRemarks] = useState('');
 
-  // Fetch Teachers
+  // Fetch Teachers (Directly synced with Teacher Module)
   const { data: teachersData } = useQuery({
     queryKey: ['teachers'],
     queryFn: async () => {
@@ -61,22 +67,21 @@ export default function PayrollPage() {
 
   // Fetch Salary Scales
   const { data: scalesData } = useQuery({
-    queryKey: ['salary-scales'],
+    queryKey: ['salary-scales-list'],
     queryFn: async () => {
       const res = await api.get('/payroll/salary-scales/list');
       return res.data?.data || [];
     },
   });
 
-  // Fetch Academic Years
-  const { data: yearsData } = useQuery({
-    queryKey: ['academic-years'],
+  // Fetch Active Academic Year
+  const { data: schoolProfile } = useQuery({
+    queryKey: ['school-profile'],
     queryFn: async () => {
-      const res = await api.get('/classes/academic-years/all');
-      return res.data?.data || [];
+      const res = await api.get('/school/profile');
+      return res.data?.data;
     },
   });
-  const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0];
 
   // Fetch Payroll History
   const { data: payrollsData, isLoading } = useQuery({
@@ -87,7 +92,9 @@ export default function PayrollPage() {
     },
   });
 
-  // ─── LIVE NEPAL GOVERNMENT PAYROLL ENGINE ─────────────────────────────────
+  const activeYear = schoolProfile?.academicYears?.find((y: any) => y.isActive);
+
+  // ── LIVE FORM FORMULA CALCULATIONS ──────────────────────────────────────
   const gradeRakam = gradeNo * gradeAmount;
   const gradeSahitTalab = moolTalab + gradeRakam;
   const karmachari10Pct = +(gradeSahitTalab * 0.10).toFixed(2);
@@ -114,15 +121,15 @@ export default function PayrollPage() {
   const samajikSurakshaKar1Pct = +(kulRakam * 0.01).toFixed(2);
   const khudPaaunuParne = +(kulRakam - samajikSurakshaKar1Pct).toFixed(2);
 
-  // Auto-detect teacher scale on teacher change
+  // Auto-detect teacher scale on teacher selection
   const handleTeacherChange = (teacherId: string) => {
     setSelectedTeacherId(teacherId);
     if (!teacherId) return;
     const teacher = teachersData?.find((t: any) => t.id.toString() === teacherId);
     if (teacher?.taha) {
       setTaha(teacher.taha);
-      const matchedScale = scalesData?.find((s: any) => 
-        s.taha.toLowerCase().includes(teacher.taha.toLowerCase()) || 
+      const matchedScale = scalesData?.find((s: any) =>
+        s.taha.toLowerCase().includes(teacher.taha.toLowerCase()) ||
         teacher.taha.toLowerCase().includes(s.taha.toLowerCase())
       );
       if (matchedScale) {
@@ -133,7 +140,6 @@ export default function PayrollPage() {
     }
   };
 
-  // Handle Scale select
   const handleScaleSelect = (scaleId: string) => {
     const scale = scalesData?.find((s: any) => s.id.toString() === scaleId);
     if (scale) {
@@ -144,11 +150,56 @@ export default function PayrollPage() {
     }
   };
 
+  // Handle Quick Generate from Teacher Card
+  const handleQuickGenerateForTeacher = (teacher: any) => {
+    setEditingPayroll(null);
+    setSelectedTeacherId(teacher.id.toString());
+    if (teacher.taha) {
+      setTaha(teacher.taha);
+      const matchedScale = scalesData?.find((s: any) =>
+        s.taha.toLowerCase().includes(teacher.taha.toLowerCase()) ||
+        teacher.taha.toLowerCase().includes(s.taha.toLowerCase())
+      );
+      if (matchedScale) {
+        setMoolTalab(matchedScale.moolTalab);
+        setGradeAmount(matchedScale.gradeAmount);
+        setShreni(matchedScale.shreni || '');
+      }
+    }
+    setIsModalOpen(true);
+  };
+
+  // Open Edit Modal & Populate State
+  const handleOpenEditModal = (p: any) => {
+    setEditingPayroll(p);
+    setSelectedTeacherId(p.teacherId?.toString() || '');
+    setMonthFrom(p.monthFrom || '2081-04');
+    setMonthTo(p.monthTo || '2081-06');
+    setTaha(p.taha || 'रा.प. द्वितीय श्रेणी');
+    setShreni(p.shreni || 'द्वितीय');
+    setMoolTalab(p.moolTalab || 0);
+    setGradeNo(p.gradeNo || 0);
+    setGradeAmount(p.gradeAmount || 0);
+    setMahangiGhata(p.mahangiGhata || 0);
+    setPraABhata(p.praABhata || 0);
+    setSahayakPraABhata(p.sahayakPraABhata || 0);
+    setPrabiInchargeBhata(p.prabiInchargeBhata || 0);
+    setMabiInchargeBhata(p.mabiInchargeBhata || 0);
+    setOtherBhata(p.otherBhata || 0);
+    setKarmachariKoshSapati(p.karmachariKoshSapati || 0);
+    setBimaKati(p.bimaKati || 0);
+    setPeshkiKati(p.peshkiKati || 0);
+    setIncludeChaadparba(Boolean(p.chaadparbaKharcha));
+    setPeshki(p.peshki || 0);
+    setRemarks(p.remarks || '');
+    setIsModalOpen(true);
+  };
+
   // Create Payroll Mutation
   const createPayrollMutation = useMutation({
     mutationFn: async () => {
       if (!selectedTeacherId) throw new Error('Please select a teacher');
-      const res = await api.post('/payroll', {
+      const payload = {
         teacherId: parseInt(selectedTeacherId),
         academicYearId: activeYear?.id || 1,
         monthFrom,
@@ -170,22 +221,59 @@ export default function PayrollPage() {
         includeChaadparba,
         peshki,
         remarks,
-      });
-      return res.data;
+      };
+      if (editingPayroll) {
+        const res = await api.put(`/payroll/${editingPayroll.id}`, payload);
+        return res.data;
+      } else {
+        const res = await api.post('/payroll', payload);
+        return res.data;
+      }
     },
     onSuccess: (data) => {
-      toast.success('Teacher Payroll generated & saved successfully!');
+      toast.success(editingPayroll ? 'Payroll record updated successfully!' : 'Teacher Payroll generated & saved successfully!');
       setIsModalOpen(false);
+      setEditingPayroll(null);
       setSelectedSlip(data.data);
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     },
     onError: (err: any) => {
-      toast.error(err.message || err.response?.data?.message || 'Failed to generate payroll');
+      toast.error(err.message || err.response?.data?.message || 'Failed to save payroll');
+    },
+  });
+
+  // Delete Payroll Mutation with Fallback
+  const deletePayrollMutation = useMutation({
+    mutationFn: async (id: number) => {
+      try {
+        const res = await api.delete(`/payroll/${id}`);
+        return res.data;
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          const res = await api.post(`/payroll/${id}/delete`);
+          return res.data;
+        }
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      toast.success('Payroll record deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['payrolls'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete payroll record.');
     },
   });
 
   const payrolls = payrollsData || [];
+
+  // Filtered teachers list for quick selection
+  const filteredTeachers = (teachersData || []).filter((t: any) =>
+    t.fullName?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
+    t.panNo?.includes(teacherSearchTerm)
+  );
 
   const triggerPayrollSlipPrint = () => {
     if (!selectedSlip) return;
@@ -223,32 +311,32 @@ export default function PayrollPage() {
         <body>
           <div class="card">
             <div class="header">
-              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
-              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">Shree Nepal Secondary School, Bishrampur, Rautahat</div>
-              <div class="badge">TEACHER & STAFF SALARY PAYSLIP (तलब भर्पाई भरपाइ)</div>
+              <div class="school-name">${schoolProfile?.name || 'SHREE NEPAL SECONDARY SCHOOL'}</div>
+              <div style="font-size: 10px; color: #64748b;">${schoolProfile?.address || 'Nepal'} | Teacher & Staff Official Pay Slip</div>
+              <div class="badge">PERIOD: ${p.monthFrom || ''} TO ${p.monthTo || ''}</div>
             </div>
 
             <div class="meta-grid">
-              <div>Employee Name: <strong>${teacherName}</strong></div>
-              <div>Period: <strong>${p.monthFromBs} ~ ${p.monthToBs} BS</strong></div>
-              <div>Type: <strong>${p.payrollType || 'RASTRIYA'}</strong></div>
-              <div>Designation / Taha: <strong>${p.teacher?.post || 'Teacher'} (${p.teacher?.taha || 'Primary'})</strong></div>
+              <div><strong>TEACHER NAME:</strong> ${teacherName}</div>
+              <div><strong>TYPE / TAHA:</strong> ${p.taha || '—'}</div>
+              <div><strong>PAN NO:</strong> ${p.teacher?.panNo || 'N/A'}</div>
+              <div><strong>ACCOUNT NO:</strong> ${p.teacher?.bankAccountNo || 'Bank Deposit'}</div>
             </div>
 
             <table>
               <thead>
                 <tr>
-                  <th>EARNING HEADS (पारिश्रमिक तथा भत्ता)</th>
+                  <th>EARNING HEADS (निकासा शिर्षक)</th>
                   <th style="text-align: right; width: 120px;">AMOUNT (रू)</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td>Mool Talab (मुल तलब बेसिक)</td><td style="text-align: right; font-family: monospace;">${(p.basicSalary || 0).toLocaleString()}</td></tr>
-                <tr><td>Grade Amount (ग्रेड रकम)</td><td style="text-align: right; font-family: monospace;">${(p.gradeRakam || 0).toLocaleString()}</td></tr>
-                <tr><td>Grade Sahit Talab (ग्रेड सहित तलब)</td><td style="text-align: right; font-family: monospace; font-weight: bold;">${(p.gradeSahitTalab || 0).toLocaleString()}</td></tr>
-                <tr><td>Mahangi Bhata (महङ्गी भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.mahangiBhata || 0).toLocaleString()}</td></tr>
+                <tr><td>Mool Talab / Basic Salary (मूल तलब)</td><td style="text-align: right; font-family: monospace;">${(p.moolTalab || 0).toLocaleString()}</td></tr>
+                <tr><td>Grade Rakam (${p.gradeNo || 0} Grades) (ग्रेड रकम)</td><td style="text-align: right; font-family: monospace;">${(p.gradeRakam || 0).toLocaleString()}</td></tr>
+                <tr style="background: #f1f5f9; font-weight: bold;"><td>Grade Sahit Salary (ग्रेड सहित तलब)</td><td style="text-align: right; font-family: monospace;">${(p.gradeSahitTalab || 0).toLocaleString()}</td></tr>
+                <tr><td>Mahangi Bhata (महँगी भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.mahangiGhata || 0).toLocaleString()}</td></tr>
                 <tr><td>Pra-A / Incharge Bhata (प्र.अ. / इन्चार्ज भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.praABhata || 0).toLocaleString()}</td></tr>
-                <tr style="background: #f8fafc; font-weight: bold;"><td>Traimasik Total Gross Salary (त्रिमासिक जम्मा तलब भत्ता)</td><td style="text-align: right; font-family: monospace; font-size: 11px; color: #1e3a5f;">${(p.traimasikSalary || 0).toLocaleString()}</td></tr>
+                <tr style="background: #f8fafc; font-weight: bold;"><td>Traimasik Total Gross Salary (त्रिमासिक जम्मा तलब भत्ता)</td><td style="text-align: right; font-family: monospace; font-size: 11px; color: #1e3a5f;">${(p.traimasikTalan || 0).toLocaleString()}</td></tr>
               </tbody>
             </table>
 
@@ -260,11 +348,11 @@ export default function PayrollPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr><td>Karmachari Sanchaya Kosh 10% (कर्मचारी सञ्चय कोष)</td><td style="text-align: right; font-family: monospace;">${(p.ssk10 || 0).toLocaleString()}</td></tr>
-                <tr><td>Kosh Sapati / Loan (कोष सापती कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.sapatiKatti || 0).toLocaleString()}</td></tr>
+                <tr><td>Karmachari Sanchaya Kosh 10% (कर्मचारी सञ्चय कोष)</td><td style="text-align: right; font-family: monospace;">${(p.karmachari10Pct || 0).toLocaleString()}</td></tr>
+                <tr><td>Kosh Sapati / Loan (कोष सापती कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.karmachariKoshSapati || 0).toLocaleString()}</td></tr>
                 <tr><td>Bima Katti (बीमा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.bimaKatti || 0).toLocaleString()}</td></tr>
-                <tr><td>Social Security Tax 1% (सामाजिक सुरक्षा कर)</td><td style="text-align: right; font-family: monospace;">${(p.tax1 || 0).toLocaleString()}</td></tr>
-                <tr style="background: #fff1f2; font-weight: bold; color: #9f1239;"><td>Total Deductions (जम्मा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.totalDeductions || 0).toLocaleString()}</td></tr>
+                <tr><td>Social Security Tax 1% (सामाजिक सुरक्षा कर)</td><td style="text-align: right; font-family: monospace;">${(p.samajikSurakshaKar1Pct || 0).toLocaleString()}</td></tr>
+                <tr style="background: #fff1f2; font-weight: bold; color: #9f1239;"><td>Total Deductions (जम्मा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.jammaKati || 0).toLocaleString()}</td></tr>
               </tbody>
             </table>
 
@@ -306,7 +394,11 @@ export default function PayrollPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingPayroll(null);
+            setSelectedTeacherId('');
+            setIsModalOpen(true);
+          }}
           className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
         >
           <Plus size={14} />
@@ -314,8 +406,66 @@ export default function PayrollPage() {
         </button>
       </div>
 
+      {/* ── REGISTERED TEACHERS DIRECT QUICK SELECTION ────────────────────────── */}
+      <div className="rounded-2xl border border-blue-100 bg-linear-to-r from-blue-50/70 to-indigo-50/50 p-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <UserCheck className="text-blue-700" size={18} />
+            <h2 className="text-sm font-bold text-[#1e3a5f]">
+              Registered Teachers List (शिक्षक सूची) — Direct Payroll Generation
+            </h2>
+            <span className="rounded-full bg-blue-200 text-blue-900 px-2 py-0.5 text-[10px] font-black">
+              {teachersData?.length || 0} Teachers
+            </span>
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2 text-gray-400" size={14} />
+            <input
+              type="text"
+              placeholder="Search teacher by name/PAN..."
+              value={teacherSearchTerm}
+              onChange={(e) => setTeacherSearchTerm(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {!teachersData || teachersData.length === 0 ? (
+          <p className="text-xs text-gray-500 italic p-2">
+            No active teachers registered yet. Add teachers in <strong className="text-blue-700">Teachers Page</strong> to manage payroll.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {filteredTeachers.map((t: any) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-gray-100 shadow-2xs hover:border-blue-300 transition"
+              >
+                <div className="overflow-hidden pr-2">
+                  <p className="text-xs font-bold text-gray-900 truncate">{t.fullName}</p>
+                  <p className="text-[10px] text-gray-500 truncate">{t.taha || t.post || 'Teacher'}</p>
+                </div>
+                <button
+                  onClick={() => handleQuickGenerateForTeacher(t)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 text-[10px] font-bold shrink-0 transition"
+                >
+                  <Plus size={11} />
+                  <span>Payroll</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Payroll Records Table */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-slate-50 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-[#1e3a5f]">Generated Payroll History (निकासा विवरण)</h2>
+          <span className="text-xs font-semibold text-gray-500">{payrolls.length} Total Payroll Slips</span>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-gray-700">
             <thead className="bg-[#1e3a5f] text-white">
@@ -327,7 +477,7 @@ export default function PayrollPage() {
                 <th className="px-4 py-3.5 font-bold uppercase text-right">त्रैमासिक निकासा</th>
                 <th className="px-4 py-3.5 font-bold uppercase text-right">जम्मा कट्टी</th>
                 <th className="px-4 py-3.5 font-bold uppercase text-right">खुद पाउने रकम</th>
-                <th className="px-4 py-3.5 font-bold uppercase text-center">Slip</th>
+                <th className="px-4 py-3.5 font-bold uppercase text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -343,7 +493,7 @@ export default function PayrollPage() {
               ) : (
                 payrolls.map((p: any) => (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3.5 font-bold text-gray-900">{p.teacher?.fullName}</td>
+                    <td className="px-4 py-3.5 font-bold text-gray-900">{p.teacher?.fullName || '—'}</td>
                     <td className="px-4 py-3.5">
                       <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
                         {p.teacher?.type === 'RASTRIYA' ? 'स्थाई (Govt)' : 'निजी स्रोत'}
@@ -363,14 +513,39 @@ export default function PayrollPage() {
                     <td className="px-4 py-3.5 text-right font-mono font-extrabold text-emerald-700 text-sm">
                       रू {p.khudPaaunuParne?.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <button
-                        onClick={() => setSelectedSlip(p)}
-                        className="rounded-lg p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-700"
-                        title="View & Print Pay Slip"
-                      >
-                        <Printer size={15} />
-                      </button>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSelectedSlip(p)}
+                          className="inline-flex items-center gap-1 rounded bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-1 text-[10px] font-extrabold shadow-2xs transition"
+                          title="Print Pay Slip"
+                        >
+                          <Printer size={12} />
+                          <span>Slip</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEditModal(p)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 text-[10px] font-bold shadow-2xs transition"
+                          title="Edit Payroll Record"
+                        >
+                          <Edit2 size={12} />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete payroll record for "${p.teacher?.fullName || 'Teacher'}"?`)) {
+                              deletePayrollMutation.mutate(p.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 text-[10px] font-bold shadow-2xs transition"
+                          title="Delete Payroll Record"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -380,331 +555,260 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* ─── PAYROLL CREATION & LIVE CALCULATION MODAL ───────────────────────── */}
+      {/* ── GENERATE / EDIT PAYROLL MODAL ────────────────────────────────────── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto border border-gray-100">
+            <div className="flex items-center justify-between border-b pb-3">
               <div>
-                <h2 className="text-base font-extrabold text-[#1e3a5f]">Teacher Payroll Calculator (नेपाल सरकार तलब फारम)</h2>
-                <p className="text-[11px] text-gray-500 font-nepali">
-                  ग्रेड रकम = ग्रेड संख्या × ग्रेड दर | खुद रकम = त्रैमासिक तलब - कट्टी - १% कर
+                <h3 className="text-lg font-bold text-[#1e3a5f]">
+                  {editingPayroll ? 'Edit Teacher Payroll Record (तलब संशोधन)' : 'Nepal Government Teacher Payroll Engine (नेपाल सरकार शिक्षक निकासा)'}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {editingPayroll ? `Editing record #${editingPayroll.id}` : 'Select registered teacher or scale to auto-compute salary & deductions'}
                 </p>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 text-xs">
-              {/* Left 7 Cols: Inputs */}
-              <div className="lg:col-span-7 space-y-4">
-                {/* Teacher Selection */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Form Input Columns */}
+              <div className="md:col-span-2 space-y-4">
+                {/* 1. Teacher & Scale Selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Select Teacher (शिक्षक) *:</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Select Teacher (शिक्षक)</label>
                     <select
                       value={selectedTeacherId}
                       onChange={(e) => handleTeacherChange(e.target.value)}
-                      className="erp-input font-bold"
+                      className="w-full rounded-lg border border-gray-300 p-2 text-xs bg-white font-medium"
                     >
-                      <option value="">Choose Teacher</option>
+                      <option value="">-- Choose Registered Teacher --</option>
                       {teachersData?.map((t: any) => (
                         <option key={t.id} value={t.id}>
-                          {t.fullName} — {t.taha || (t.type === 'RASTRIYA' ? 'स्थाई' : 'निजी')}
+                          {t.fullName} ({t.type === 'RASTRIYA' ? 'Govt' : 'Private'} - {t.taha || 'General'})
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Taha / Sreni (तह/श्रेणी स्केल) *:</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Scale Preset (तह/श्रेणी)</label>
                     <select
-                      value={scalesData?.find((s: any) => s.taha === taha)?.id || ''}
                       onChange={(e) => handleScaleSelect(e.target.value)}
-                      className="erp-input font-bold text-[#1e3a5f]"
+                      className="w-full rounded-lg border border-gray-300 p-2 text-xs bg-white"
                     >
-                      <option value="">Select Taha / Sreni</option>
+                      <option value="">-- Select Scale Preset --</option>
                       {scalesData?.map((s: any) => (
                         <option key={s.id} value={s.id}>
-                          {s.taha} (मूल: रू {s.moolTalab?.toLocaleString()} | ग्रेड: रू {s.gradeAmount})
+                          {s.taha} ({s.shreni}) — Rs. {s.moolTalab}
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                {/* Period */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Period & Scale Info */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Month From (महिना देखि):</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Month From (BS)</label>
                     <input
                       type="text"
                       value={monthFrom}
                       onChange={(e) => setMonthFrom(e.target.value)}
                       placeholder="2081-04"
-                      className="erp-input font-mono font-bold"
+                      className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Month To (महिना सम्म):</label>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Month To (BS)</label>
                     <input
                       type="text"
                       value={monthTo}
                       onChange={(e) => setMonthTo(e.target.value)}
                       placeholder="2081-06"
-                      className="erp-input font-mono font-bold"
+                      className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono"
                     />
                   </div>
-                </div>
-
-                {/* Basic Salary & Grades */}
-                <div className="rounded-xl bg-slate-50 p-3 border border-slate-100 space-y-3">
-                  <span className="font-bold text-[#1e3a5f] block">१. मूल तलब र ग्रेड रकम</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">मूल तलब (Basic):</label>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Mool Talab (मूल तलब)</label>
+                    <input
+                      type="number"
+                      value={moolTalab}
+                      onChange={(e) => setMoolTalab(Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Grade No & Amount</label>
+                    <div className="flex gap-1">
                       <input
                         type="number"
-                        value={moolTalab}
-                        onChange={(e) => setMoolTalab(Number(e.target.value))}
-                        className="erp-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">ग्रेड संख्या:</label>
-                      <input
-                        type="number"
+                        placeholder="No"
                         value={gradeNo}
                         onChange={(e) => setGradeNo(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-1/2 rounded-lg border border-gray-300 p-2 text-xs font-mono"
                       />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">प्रति ग्रेड दर:</label>
                       <input
                         type="number"
+                        placeholder="Amt"
                         value={gradeAmount}
                         onChange={(e) => setGradeAmount(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-1/2 rounded-lg border border-gray-300 p-2 text-xs font-mono"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Allowances (भत्ता) */}
-                <div className="rounded-xl bg-slate-50 p-3 border border-slate-100 space-y-2">
-                  <span className="font-bold text-[#1e3a5f] block">२. भत्ता शीर्षकहरू (Allowances)</span>
-                  <div className="grid grid-cols-3 gap-2">
+                {/* Allowances Section */}
+                <div className="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100 space-y-2">
+                  <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-wide">
+                    Allowances & Perks (भत्ता तथा सुविधाहरू)
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                     <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">महङ्गी भत्ता:</label>
+                      <label className="text-[11px] text-gray-600">Mahangi Bhata (महँगी)</label>
                       <input
                         type="number"
                         value={mahangiGhata}
                         onChange={(e) => setMahangiGhata(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">प्र.अ. भत्ता:</label>
+                      <label className="text-[11px] text-gray-600">Pra-A Bhata (प्र.अ.)</label>
                       <input
                         type="number"
                         value={praABhata}
                         onChange={(e) => setPraABhata(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">सहायक प्र.अ. भत्ता:</label>
-                      <input
-                        type="number"
-                        value={sahayakPraABhata}
-                        onChange={(e) => setSahayakPraABhata(Number(e.target.value))}
-                        className="erp-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">प्रा.वि. इन्चार्ज:</label>
+                      <label className="text-[11px] text-gray-600">Incharge Bhata</label>
                       <input
                         type="number"
                         value={prabiInchargeBhata}
                         onChange={(e) => setPrabiInchargeBhata(Number(e.target.value))}
-                        className="erp-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">मा.वि. इन्चार्ज:</label>
-                      <input
-                        type="number"
-                        value={mabiInchargeBhata}
-                        onChange={(e) => setMabiInchargeBhata(Number(e.target.value))}
-                        className="erp-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">अन्य भत्ता:</label>
-                      <input
-                        type="number"
-                        value={otherBhata}
-                        onChange={(e) => setOtherBhata(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Deductions (कट्टी) */}
-                <div className="rounded-xl bg-rose-50/40 p-3 border border-rose-100 space-y-2">
-                  <span className="font-bold text-rose-800 block">३. कट्टी रकम (Deductions)</span>
-                  <div className="grid grid-cols-3 gap-2">
+                {/* Deductions Section */}
+                <div className="bg-rose-50/50 p-3.5 rounded-xl border border-rose-100 space-y-2">
+                  <span className="text-xs font-extrabold text-rose-800 uppercase tracking-wide">
+                    Deductions (कट्टी विवरणहरू)
+                  </span>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">कोष सापटी कट्टी:</label>
+                      <label className="text-[11px] text-gray-600">Kosh Sapati (सापती)</label>
                       <input
                         type="number"
                         value={karmachariKoshSapati}
                         onChange={(e) => setKarmachariKoshSapati(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">बीमा कट्टी:</label>
+                      <label className="text-[11px] text-gray-600">Bima Katti (बीमा)</label>
                       <input
                         type="number"
                         value={bimaKati}
                         onChange={(e) => setBimaKati(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-gray-600 mb-0.5">पेश्की कट्टी:</label>
+                      <label className="text-[11px] text-gray-600">Peshki Katti (पेश्की)</label>
                       <input
                         type="number"
                         value={peshkiKati}
                         onChange={(e) => setPeshkiKati(Number(e.target.value))}
-                        className="erp-input"
+                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Festival and Remarks */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50 border border-amber-200">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-amber-900">
-                    <input
-                      type="checkbox"
-                      checked={includeChaadparba}
-                      onChange={(e) => setIncludeChaadparba(e.target.checked)}
-                      className="rounded text-[#1e3a5f]"
-                    />
-                    <span>चाडपर्व खर्च समावेश गर्ने (= १ महिना ग्रेड सहित तलब)</span>
-                  </label>
+                {/* Remarks */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Remarks / Note</label>
+                  <input
+                    type="text"
+                    value={remarks}
+                    onChange={(e) => setRemarks(e.target.value)}
+                    placeholder="Optional voucher remarks..."
+                    className="w-full rounded-lg border border-gray-300 p-2 text-xs"
+                  />
                 </div>
               </div>
 
-              {/* Right 5 Cols: Live Summary Output */}
-              <div className="lg:col-span-5 rounded-2xl bg-slate-900 text-white p-5 space-y-3 font-mono shadow-inner">
-                <span className="text-xs font-bold text-amber-400 uppercase tracking-widest block border-b border-slate-700 pb-2">
-                  LIVE CALCULATION SHEET (निकासा विवरण)
-                </span>
-
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between text-slate-300">
-                    <span>मूल तलब (Basic):</span>
-                    <span>रू {moolTalab.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span>ग्रेड रकम ({gradeNo} × {gradeAmount}):</span>
-                    <span>+ रू {gradeRakam.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-amber-300 border-t border-slate-700 pt-1">
-                    <span>ग्रेड सहित तलब:</span>
-                    <span>रू {gradeSahitTalab.toLocaleString()}</span>
+              {/* Live Preview Column */}
+              <div className="bg-[#1e3a5f] text-white p-5 rounded-2xl flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center gap-1.5 border-b border-blue-800 pb-2 mb-3">
+                    <Calculator size={16} className="text-amber-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                      Live Payroll Computation
+                    </h4>
                   </div>
 
-                  <div className="flex justify-between text-slate-300">
-                    <span>जम्मा मासिक भत्ता:</span>
-                    <span>+ रू {jammaBhata.toLocaleString()}</span>
-                  </div>
-
-                  <div className="flex justify-between font-bold text-white border-t border-slate-700 pt-1">
-                    <span>जम्मा मासिक (तलब+भत्ता):</span>
-                    <span>रू {jammaTalabBhata.toLocaleString()}</span>
-                  </div>
-
-                  <div className="flex justify-between font-extrabold text-blue-300 bg-slate-800 p-1.5 rounded">
-                    <span>त्रैमासिक तलब (३ महिना):</span>
-                    <span>रू {traimasikTalan.toLocaleString()}</span>
-                  </div>
-
-                  {/* Deductions breakdown */}
-                  <div className="border-t border-slate-700 pt-2 space-y-1 text-[11px] text-rose-300">
-                    <div className="flex justify-between">
-                      <span>कर्मचारी संचय कोष (१०%):</span>
-                      <span>- रू {karmachari10Pct.toLocaleString()}</span>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between border-b border-blue-900/60 pb-1">
+                      <span className="text-gray-300">Basic + Grade ({gradeNo} Grades):</span>
+                      <span className="font-mono font-bold">Rs. {gradeSahitTalab.toLocaleString()}</span>
                     </div>
-                    {karmachariKoshSapati > 0 && (
-                      <div className="flex justify-between">
-                        <span>कोष सापटी कट्टी:</span>
-                        <span>- रू {karmachariKoshSapati.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {bimaKati > 0 && (
-                      <div className="flex justify-between">
-                        <span>बीमा कट्टी:</span>
-                        <span>- रू {bimaKati.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {peshkiKati > 0 && (
-                      <div className="flex justify-between">
-                        <span>पेश्की कट्टी:</span>
-                        <span>- रू {peshkiKati.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-bold text-rose-400">
-                      <span>जम्मा कट्टी:</span>
-                      <span>- रू {jammaKati.toLocaleString()}</span>
+
+                    <div className="flex justify-between border-b border-blue-900/60 pb-1">
+                      <span className="text-gray-300">10% SSK (सञ्चय कोष):</span>
+                      <span className="font-mono font-semibold text-rose-300">- Rs. {karmachari10Pct.toLocaleString()}</span>
+                    </div>
+
+                    <div className="flex justify-between border-b border-blue-900/60 pb-1">
+                      <span className="text-gray-300">Total Allowances (भत्ता):</span>
+                      <span className="font-mono font-semibold text-emerald-300">+ Rs. {jammaBhata.toLocaleString()}</span>
+                    </div>
+
+                    <div className="flex justify-between border-b border-blue-900/60 pb-1 pt-1 font-bold text-amber-300">
+                      <span>3-Month Gross (त्रिमासिक):</span>
+                      <span className="font-mono">Rs. {traimasikTalan.toLocaleString()}</span>
+                    </div>
+
+                    <div className="flex justify-between border-b border-blue-900/60 pb-1 text-rose-300">
+                      <span>Total Deductions (कट्टी):</span>
+                      <span className="font-mono">- Rs. {jammaKati.toLocaleString()}</span>
+                    </div>
+
+                    <div className="flex justify-between border-b border-blue-900/60 pb-1 text-gray-300">
+                      <span>1% Social Security Tax:</span>
+                      <span className="font-mono">- Rs. {samajikSurakshaKar1Pct.toLocaleString()}</span>
                     </div>
                   </div>
+                </div>
 
-                  {includeChaadparba && (
-                    <div className="flex justify-between font-bold text-amber-300">
-                      <span>चाडपर्व खर्च:</span>
-                      <span>+ रू {chaadparbaKharcha.toLocaleString()}</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between text-slate-300 border-t border-slate-700 pt-1">
-                    <span>कुल रकम (कर अघि):</span>
-                    <span>रू {kulRakam.toLocaleString()}</span>
+                <div className="bg-emerald-950/80 border border-emerald-500/40 p-3.5 rounded-xl">
+                  <span className="text-[10px] text-emerald-300 uppercase font-bold tracking-wider">
+                    NET PAYABLE TO TEACHER (खुद पाउने रकम):
+                  </span>
+                  <div className="text-2xl font-black font-mono text-emerald-400 mt-1">
+                    Rs. {khudPaaunuParne.toLocaleString()}
                   </div>
-
-                  <div className="flex justify-between text-rose-400">
-                    <span>सामाजिक सुरक्षा कर (१%):</span>
-                    <span>- रू {samajikSurakshaKar1Pct.toLocaleString()}</span>
-                  </div>
-
-                  {/* Grand Net Total */}
-                  <div className="mt-3 rounded-xl bg-emerald-950 border border-emerald-500/30 p-3 text-emerald-300">
-                    <span className="text-[10px] uppercase font-bold tracking-wider block text-emerald-400">
-                      KHUD PAAUNU PARNE (खुद पाउने रकम)
-                    </span>
-                    <p className="text-xl font-extrabold text-white mt-1">
-                      रू {khudPaaunuParne.toLocaleString()}
-                    </p>
-                  </div>
-
-                  <p className="text-[10px] text-slate-500 pt-1">
-                    * Employer SSK २०% = रू {ssk20Pct.toLocaleString()} (थप कोष)
-                  </p>
                 </div>
 
                 <button
-                  type="button"
                   onClick={() => createPayrollMutation.mutate()}
-                  disabled={createPayrollMutation.isPending || !selectedTeacherId}
-                  className="w-full rounded-xl bg-amber-400 hover:bg-amber-300 py-3 text-xs font-bold text-[#1e3a5f] font-sans transition disabled:opacity-60 shadow-md"
+                  disabled={createPayrollMutation.isPending}
+                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white py-3 text-xs font-extrabold shadow-lg transition"
                 >
-                  {createPayrollMutation.isPending ? 'Saving...' : 'Save & Issue Payroll Slip'}
+                  {createPayrollMutation.isPending
+                    ? 'Saving Payroll...'
+                    : editingPayroll
+                    ? 'Update Payroll Record (निकासा अपडेट)'
+                    : 'Save & Issue Payroll (निकासा सेभ गर्नुहोस्)'}
                 </button>
               </div>
             </div>
@@ -712,113 +816,39 @@ export default function PayrollPage() {
         </div>
       )}
 
-      {/* ─── PRINTABLE PAYROLL SLIP MODAL ────────────────────────────────────── */}
+      {/* ── PRINT PAY SLIP MODAL ────────────────────────────────────────────── */}
       {selectedSlip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between no-print border-b border-gray-100 pb-2">
-              <span className="text-xs font-bold text-[#1e3a5f]">Teacher Pay Slip (तलब भर्पाइ)</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold text-[#1e3a5f]">Pay Slip Options</h3>
               <button onClick={() => setSelectedSlip(null)} className="text-gray-400 hover:text-gray-600">
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
-            {/* Slip Paper */}
-            <div className="p-6 border border-gray-300 rounded-xl space-y-4 text-xs font-serif bg-white">
-              <div className="text-center border-b border-gray-300 pb-3">
-                <h3 className="text-base font-extrabold text-gray-900 uppercase">NEPAL MODEL SECONDARY SCHOOL</h3>
-                <p className="text-xs text-gray-600 font-nepali">नेपाल आदर्श माध्यमिक विद्यालय, काठमाडौँ</p>
-                <div className="inline-block mt-2 bg-[#1e3a5f] text-white text-[11px] font-sans font-bold px-3 py-0.5 rounded">
-                  शिक्षक तलब तथा भत्ता निकासा विवरण (PAY SLIP)
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <p>Teacher: <b>{selectedSlip.teacher?.fullName}</b></p>
-                <p>Period: <b>{selectedSlip.monthFrom} देखि {selectedSlip.monthTo} सम्म</b></p>
-                <p>Taha / Shreni: <b>{selectedSlip.taha}</b></p>
-                <p>Type: <b>{selectedSlip.teacher?.type === 'RASTRIYA' ? 'स्थाई (Government)' : 'निजी स्रोत'}</b></p>
-              </div>
-
-              <table className="payroll-table">
-                <thead>
-                  <tr>
-                    <th>शीर्षक</th>
-                    <th>विवरण</th>
-                    <th style={{ textAlign: 'right' }}>रकम (रू)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>मूल तलब + ग्रेड</td>
-                    <td>रू {selectedSlip.moolTalab} + ({selectedSlip.gradeNo} × {selectedSlip.gradeAmount})</td>
-                    <td style={{ textAlign: 'right' }}>{selectedSlip.gradeSahitTalab?.toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <td>जम्मा भत्ता</td>
-                    <td>महङ्गी, प्र.अ. तथा अन्य भत्ता</td>
-                    <td style={{ textAlign: 'right' }}>{selectedSlip.jammaBhata?.toLocaleString()}</td>
-                  </tr>
-                  <tr className="total-row">
-                    <td>त्रैमासिक तलब (३ महिना)</td>
-                    <td>मासिक जम्मा × ३</td>
-                    <td style={{ textAlign: 'right' }}>{selectedSlip.traimasikTalan?.toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <td>कर्मचारी संचय कोष (१०%)</td>
-                    <td>कर्मचारी कट्टी</td>
-                    <td style={{ textAlign: 'right', color: 'red' }}>- {selectedSlip.karmachari10Pct?.toLocaleString()}</td>
-                  </tr>
-                  {selectedSlip.bimaKati > 0 && (
-                    <tr>
-                      <td>बीमा कट्टी</td>
-                      <td>बीमा प्रिमियम</td>
-                      <td style={{ textAlign: 'right', color: 'red' }}>- {selectedSlip.bimaKati?.toLocaleString()}</td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td>सामाजिक सुरक्षा कर (१%)</td>
-                    <td>नेपाल सरकार कर</td>
-                    <td style={{ textAlign: 'right', color: 'red' }}>- {selectedSlip.samajikSurakshaKar1Pct?.toLocaleString()}</td>
-                  </tr>
-                  <tr className="total-row" style={{ fontSize: '13px', background: '#e6f4ea' }}>
-                    <td><b>खुद भुक्तानी पाउने रकम</b></td>
-                    <td><b>KHUD PAAUNU PARNE</b></td>
-                    <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#0d652d' }}>
-                      रू {selectedSlip.khudPaaunuParne?.toLocaleString()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="grid grid-cols-3 pt-8 text-center text-[11px] text-gray-700">
-                <div>
-                  <div className="border-t border-gray-400 mx-4 pt-1">तयार गर्ने (Accountant)</div>
-                </div>
-                <div>
-                  <div className="border-t border-gray-400 mx-4 pt-1">पाउने शिक्षक (Teacher)</div>
-                </div>
-                <div>
-                  <div className="border-t border-gray-400 mx-4 pt-1">प्रधानाध्यापक (Principal)</div>
-                </div>
-              </div>
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
+              <CheckCircle2 size={32} className="mx-auto text-emerald-600 mb-2" />
+              <p className="text-sm font-bold text-emerald-900">
+                Payroll Slip Ready for {selectedSlip.teacher?.fullName || 'Teacher'}
+              </p>
+              <p className="text-xs text-emerald-700 mt-1 font-mono">
+                Net Pay: Rs. {(selectedSlip.khudPaaunuParne || 0).toLocaleString()}
+              </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 no-print">
+            <div className="flex gap-2 justify-end">
               <button
-                type="button"
                 onClick={() => setSelectedSlip(null)}
-                className="rounded-xl border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                className="px-4 py-2 rounded-xl text-xs font-bold border border-gray-300 text-gray-600"
               >
                 Close
               </button>
               <button
-                type="button"
                 onClick={triggerPayrollSlipPrint}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-1.5 text-xs font-bold text-white hover:bg-[#2a5280]"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1e3a5f] text-white hover:bg-[#2a5280]"
               >
-                <Printer size={14} />
-                <span>Print Slip (प्रिन्ट)</span>
+                Print Official Slip
               </button>
             </div>
           </div>

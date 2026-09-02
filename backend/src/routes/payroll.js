@@ -122,6 +122,45 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
   }
 });
 
+// PUT /api/payroll/:id — Edit existing payroll
+router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const calc = calculatePayroll(req.body);
+    const payroll = await prisma.payroll.update({
+      where: { id },
+      data: {
+        teacherId: req.body.teacherId ? parseInt(req.body.teacherId) : undefined,
+        academicYearId: req.body.academicYearId ? parseInt(req.body.academicYearId) : undefined,
+        monthFrom: req.body.monthFrom,
+        monthTo: req.body.monthTo,
+        taha: req.body.taha,
+        shreni: req.body.shreni,
+        moolTalab: req.body.moolTalab ? parseFloat(req.body.moolTalab) : undefined,
+        gradeNo: req.body.gradeNo !== undefined ? parseInt(req.body.gradeNo) : undefined,
+        gradeAmount: req.body.gradeAmount !== undefined ? parseFloat(req.body.gradeAmount) : undefined,
+        mahangiGhata: req.body.mahangiGhata !== undefined ? parseFloat(req.body.mahangiGhata) : undefined,
+        praABhata: req.body.praABhata !== undefined ? parseFloat(req.body.praABhata) : undefined,
+        sahayakPraABhata: req.body.sahayakPraABhata !== undefined ? parseFloat(req.body.sahayakPraABhata) : undefined,
+        prabiInchargeBhata: req.body.prabiInchargeBhata !== undefined ? parseFloat(req.body.prabiInchargeBhata) : undefined,
+        mabiInchargeBhata: req.body.mabiInchargeBhata !== undefined ? parseFloat(req.body.mabiInchargeBhata) : undefined,
+        otherBhata: req.body.otherBhata !== undefined ? parseFloat(req.body.otherBhata) : undefined,
+        otherBhataLabel: req.body.otherBhataLabel,
+        karmachariKoshSapati: req.body.karmachariKoshSapati !== undefined ? parseFloat(req.body.karmachariKoshSapati) : undefined,
+        bimaKati: req.body.bimaKati !== undefined ? parseFloat(req.body.bimaKati) : undefined,
+        peshkiKati: req.body.peshkiKati !== undefined ? parseFloat(req.body.peshkiKati) : undefined,
+        peshki: req.body.peshki !== undefined ? parseFloat(req.body.peshki) : undefined,
+        remarks: req.body.remarks,
+        ...calc,
+      },
+      include: { teacher: true, academicYear: true },
+    });
+    return res.json({ success: true, data: payroll, message: 'Payroll record updated successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // PATCH /api/payroll/:id/status
 router.patch('/:id/status', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
@@ -137,14 +176,17 @@ router.patch('/:id/status', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), asy
 });
 
 // DELETE /api/payroll/:id
-router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+const deletePayrollHandler = async (req, res) => {
   try {
     await prisma.payroll.delete({ where: { id: parseInt(req.params.id) } });
-    return res.json({ success: true, message: 'Deleted.' });
+    return res.json({ success: true, message: 'Payroll record deleted successfully.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
-});
+};
+
+router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deletePayrollHandler);
+router.post('/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deletePayrollHandler);
 
 // GET /api/payroll/salary-scales/list (active only)
 router.get('/salary-scales/list', authenticate, async (req, res) => {
