@@ -307,34 +307,26 @@ export default function LibraryPage() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update book'),
   });
 
-  // Delete Book Mutation
+  // Delete Book Mutation — POST only (Render proxy blocks DELETE)
   const deleteBookMutation = useMutation({
     mutationFn: async (id: number) => {
-      try {
-        const res = await api.post(`/library/${id}/delete`);
-        return res.data;
-      } catch {
-        const res = await api.delete(`/library/${id}`);
-        return res.data;
-      }
+      const res = await api.post(`/library/${id}/delete`);
+      if (!res.data?.success) throw new Error(res.data?.message || 'Delete failed');
+      return res.data;
     },
     onSuccess: () => {
       toast.success('Book deleted from catalog.');
       queryClient.invalidateQueries({ queryKey: ['books'] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete book'),
+    onError: (err: any) => toast.error(err.response?.data?.message || err.message || 'Failed to delete book'),
   });
 
-  // Delete Issue Mutation
+  // Delete Issue Mutation — POST only (Render proxy blocks DELETE)
   const deleteIssueMutation = useMutation({
     mutationFn: async (id: number) => {
-      try {
-        const res = await api.post(`/library/issues/${id}/delete`);
-        return res.data;
-      } catch {
-        const res = await api.delete(`/library/issues/${id}`);
-        return res.data;
-      }
+      const res = await api.post(`/library/issues/${id}/delete`);
+      if (!res.data?.success) throw new Error(res.data?.message || 'Delete failed');
+      return res.data;
     },
     onSuccess: () => {
       toast.success('Issue record deleted. Book copy restored.');
@@ -342,7 +334,7 @@ export default function LibraryPage() {
       queryClient.invalidateQueries({ queryKey: ['library-issues'] });
       queryClient.invalidateQueries({ queryKey: ['library-overdue'] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete issue record'),
+    onError: (err: any) => toast.error(err.response?.data?.message || err.message || 'Failed to delete issue record'),
   });
 
   const handleAddBook = (e: React.FormEvent<HTMLFormElement>) => {

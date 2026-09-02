@@ -180,16 +180,12 @@ export default function FeeCollectionPortal() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update fee record.'),
   });
 
-  // Direct POST Delete Fee Collection Mutation (100% Reliable, Proxy-Proof)
+  // Direct POST Delete Fee Collection Mutation (100% Reliable, Proxy-Proof — POST only)
   const deleteFeeCollectionMutation = useMutation({
     mutationFn: async (id: number) => {
-      try {
-        const res = await api.post('/income/fee-collections-delete-direct', { id });
-        return res.data;
-      } catch (err: any) {
-        const res = await api.delete(`/income/fee-collections/${id}`);
-        return res.data;
-      }
+      const res = await api.post('/income/fee-collections-delete-direct', { id });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Delete failed');
+      return res.data;
     },
     onSuccess: () => {
       toast.success('Fee collection record deleted successfully.');
@@ -197,7 +193,7 @@ export default function FeeCollectionPortal() {
       queryClient.invalidateQueries({ queryKey: ['fee-collections-list'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete fee record.'),
+    onError: (err: any) => toast.error(err.response?.data?.message || err.message || 'Failed to delete fee record.'),
   });
 
   // Create Fee Head Inline Mutation
