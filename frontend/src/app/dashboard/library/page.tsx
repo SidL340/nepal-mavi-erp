@@ -339,6 +339,23 @@ export default function LibraryPage() {
     onError: (err: any) => toast.error(err.response?.data?.message || err.message || 'Failed to delete issue record'),
   });
 
+  // Clear All Issues Mutation
+  const clearAllIssuesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/library/admin-clear-all-issues');
+      if (!res.data?.success) throw new Error(res.data?.message || 'Wipe failed');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'All library issues cleared!');
+      queryClient.clear();
+      queryClient.invalidateQueries({ queryKey: ['books'] });
+      queryClient.invalidateQueries({ queryKey: ['library-issues'] });
+      queryClient.invalidateQueries({ queryKey: ['library-overdue'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || err.message || 'Failed to clear issues'),
+  });
+
   const handleAddBook = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -617,8 +634,44 @@ export default function LibraryPage() {
 
       {/* ─── TAB 2: ISSUED BOOKS ──────────────────────────────────────────── */}
       {activeTab === 'issues' && (
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
-          <table className="w-full text-left text-xs text-gray-700">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs text-gray-500 font-medium">
+              Showing <b>{issues.length}</b> borrowed / returned book records
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  queryClient.clear();
+                  queryClient.invalidateQueries({ queryKey: ['library-issues'] });
+                  toast.success('Issues list refreshed!');
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700 shadow-2xs transition"
+              >
+                <RefreshCw size={13} />
+                <span>Refresh</span>
+              </button>
+
+              {isAdminOrLibrarian && issues.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to CLEAR ALL ${issues.length} issued records? This will delete all issue history and restore all book copy counts in the catalog.`)) {
+                      clearAllIssuesMutation.mutate();
+                    }
+                  }}
+                  disabled={clearAllIssuesMutation.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 text-xs font-bold text-rose-700 shadow-2xs transition disabled:opacity-50"
+                >
+                  <Trash2 size={13} />
+                  <span>{clearAllIssuesMutation.isPending ? 'Clearing...' : 'Clear All Issues (सबै खाली गर्नुहोस्)'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+            <table className="w-full text-left text-xs text-gray-700">
             <thead className="bg-[#1e3a5f] text-white">
               <tr>
                 <th className="p-3.5 font-bold uppercase">Book Title</th>
@@ -712,6 +765,7 @@ export default function LibraryPage() {
               )}
             </tbody>
           </table>
+        </div>
         </div>
       )}
 

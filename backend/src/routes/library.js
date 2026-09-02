@@ -62,6 +62,31 @@ router.post('/books-delete-direct', authenticate, authorize('SUPER_ADMIN', 'ADMI
   return deleteBookLogic(id, res);
 });
 
+// Admin wipe all issues
+router.post('/admin-clear-all-issues', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const deleted = await prisma.libraryIssue.deleteMany({});
+    const books = await prisma.book.findMany();
+    for (const b of books) {
+      await prisma.book.update({ where: { id: b.id }, data: { availableCopies: b.totalCopies } });
+    }
+    return res.json({ success: true, count: deleted.count, message: `Deleted ${deleted.count} library issues and reset all book copy counts.` });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Admin wipe all books
+router.post('/admin-clear-all-books', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.libraryIssue.deleteMany({});
+    const deleted = await prisma.book.deleteMany({});
+    return res.json({ success: true, count: deleted.count, message: `Deleted all books from catalog.` });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // URL-based delete fallbacks for issues
 router.post('/issues/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
   const id = parseInt(req.params.id);
