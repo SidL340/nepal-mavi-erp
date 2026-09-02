@@ -4,6 +4,42 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// ── FEE COLLECTIONS DELETE & EDIT (TOP PRIORITY) ───────────────────────────
+const deleteFeeCollectionHandler = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });
+    await prisma.feeCollection.delete({ where: { id } });
+    return res.json({ success: true, message: 'Fee collection deleted successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+router.delete('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
+router.post('/fee-collections/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
+
+router.put('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const { amount, paidDateAd, studentId, feeHeadId, academicYearId, ...rest } = req.body;
+    const updateData = { ...rest };
+    if (amount !== undefined) updateData.amount = parseFloat(amount);
+    if (paidDateAd) updateData.paidDateAd = new Date(paidDateAd);
+    if (studentId) updateData.studentId = parseInt(studentId);
+    if (feeHeadId) updateData.feeHeadId = parseInt(feeHeadId);
+    if (academicYearId) updateData.academicYearId = parseInt(academicYearId);
+
+    const collection = await prisma.feeCollection.update({
+      where: { id: parseInt(req.params.id) },
+      data: updateData,
+      include: { student: true, feeHead: true },
+    });
+    return res.json({ success: true, data: collection, message: 'Fee collection updated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── INCOME CATEGORIES ──────────────────────────────────────────────────────
 
 router.get('/categories', authenticate, async (req, res) => {
@@ -189,43 +225,6 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
     return res.status(500).json({ success: false, message: err.message });
   }
 });
-
-// ── EDIT & DELETE FEE COLLECTIONS ──────────────────────────────────────────
-router.put('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
-  try {
-    const { amount, paidDateAd, studentId, feeHeadId, academicYearId, ...rest } = req.body;
-    const updateData = { ...rest };
-    if (amount !== undefined) updateData.amount = parseFloat(amount);
-    if (paidDateAd) updateData.paidDateAd = new Date(paidDateAd);
-    if (studentId) updateData.studentId = parseInt(studentId);
-    if (feeHeadId) updateData.feeHeadId = parseInt(feeHeadId);
-    if (academicYearId) updateData.academicYearId = parseInt(academicYearId);
-
-    const collection = await prisma.feeCollection.update({
-      where: { id: parseInt(req.params.id) },
-      data: updateData,
-      include: { student: true, feeHead: true },
-    });
-    return res.json({ success: true, data: collection, message: 'Fee collection updated.' });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-const deleteFeeCollectionHandler = async (req, res) => {
-  try {
-    await prisma.feeCollection.delete({
-      where: { id: parseInt(req.params.id) }
-    });
-    return res.json({ success: true, message: 'Fee collection deleted.' });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-router.delete('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
-router.post('/fee-collections/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
-router.delete('/fee-collections-delete/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
 
 // ── CLASS-WISE FEE STRUCTURE ────────────────────────────────────────────────
 // GET /api/income/class-fee-structures/matrix/all — All classes fee matrix
