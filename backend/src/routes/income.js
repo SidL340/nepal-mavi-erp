@@ -190,6 +190,7 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
   }
 });
 
+// ── EDIT & DELETE FEE COLLECTIONS ──────────────────────────────────────────
 router.put('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const { amount, paidDateAd, studentId, feeHeadId, academicYearId, ...rest } = req.body;
