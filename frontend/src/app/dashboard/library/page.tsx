@@ -25,6 +25,7 @@ import {
   BookMarked,
   Check,
   DollarSign,
+  Edit2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/lib/auth-store';
@@ -85,6 +86,11 @@ export default function LibraryPage() {
   const [reissueCustomBs, setReissueCustomBs] = useState<string>('');
   const [returnFine, setReturnFine] = useState<number>(0);
   const [returnRemarks, setReturnRemarks] = useState<string>('Returned in good condition');
+
+  // Edit Book State
+  const [editingBook, setEditingBook] = useState<any>(null);
+  const [editBookData, setEditBookData] = useState<any>({});
+
 
   // Bulk Rows state
   const [bulkRows, setBulkRows] = useState<BulkBookRow[]>([
@@ -285,6 +291,58 @@ export default function LibraryPage() {
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to reissue book');
     },
+  });
+
+  // Edit Book Mutation
+  const editBookMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await api.put(`/library/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Book updated successfully!');
+      setEditingBook(null);
+      queryClient.invalidateQueries({ queryKey: ['books'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update book'),
+  });
+
+  // Delete Book Mutation
+  const deleteBookMutation = useMutation({
+    mutationFn: async (id: number) => {
+      try {
+        const res = await api.post(`/library/${id}/delete`);
+        return res.data;
+      } catch {
+        const res = await api.delete(`/library/${id}`);
+        return res.data;
+      }
+    },
+    onSuccess: () => {
+      toast.success('Book deleted from catalog.');
+      queryClient.invalidateQueries({ queryKey: ['books'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete book'),
+  });
+
+  // Delete Issue Mutation
+  const deleteIssueMutation = useMutation({
+    mutationFn: async (id: number) => {
+      try {
+        const res = await api.post(`/library/issues/${id}/delete`);
+        return res.data;
+      } catch {
+        const res = await api.delete(`/library/issues/${id}`);
+        return res.data;
+      }
+    },
+    onSuccess: () => {
+      toast.success('Issue record deleted. Book copy restored.');
+      queryClient.invalidateQueries({ queryKey: ['books'] });
+      queryClient.invalidateQueries({ queryKey: ['library-issues'] });
+      queryClient.invalidateQueries({ queryKey: ['library-overdue'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete issue record'),
   });
 
   const handleAddBook = (e: React.FormEvent<HTMLFormElement>) => {
@@ -506,18 +564,52 @@ export default function LibraryPage() {
                       </td>
                       <td className="p-3.5 text-right">
                         {isAdminOrLibrarian && (
-                          <button
-                            disabled={book.availableCopies <= 0}
-                            onClick={() => {
-                              setSelectedBook(book);
-                              setIssuedDateBs(todayBS());
-                              setDueDateBs(calculateDueBs(15));
-                              setIsIssueModalOpen(true);
-                            }}
-                            className="rounded-lg bg-[#1e3a5f] px-3 py-1 text-xs font-bold text-white hover:bg-[#2a5280] disabled:opacity-40 shadow-2xs"
-                          >
-                            Issue Book (निकासा)
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              disabled={book.availableCopies <= 0}
+                              onClick={() => {
+                                setSelectedBook(book);
+                                setIssuedDateBs(todayBS());
+                                setDueDateBs(calculateDueBs(15));
+                                setIsIssueModalOpen(true);
+                              }}
+                              className="rounded-lg bg-[#1e3a5f] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#2a5280] disabled:opacity-40 shadow-2xs"
+                            >
+                              Issue
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingBook(book);
+                                setEditBookData({
+                                  title: book.title,
+                                  titleNepali: book.titleNepali || '',
+                                  author: book.author || '',
+                                  publisher: book.publisher || '',
+                                  isbn: book.isbn || '',
+                                  category: book.category || '',
+                                  totalCopies: book.totalCopies,
+                                  shelfLocation: book.shelfLocation || '',
+                                  purchasedDateBs: book.purchasedDateBs || '',
+                                  sourceOfFund: book.sourceOfFund || '',
+                                });
+                              }}
+                              className="rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 p-1.5 transition"
+                              title="Edit Book"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete "${book.title}" from catalog? This cannot be undone.`)) {
+                                  deleteBookMutation.mutate(book.id);
+                                }
+                              }}
+                              className="rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 p-1.5 transition"
+                              title="Delete Book"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -570,36 +662,53 @@ export default function LibraryPage() {
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
-                      {!issue.isReturned && isAdminOrLibrarian && (
+                      {isAdminOrLibrarian && (
                         <div className="flex items-center justify-end gap-2">
-                          {/* Reissue / Renew Button */}
-                          <button
-                            onClick={() => {
-                              setSelectedIssue(issue);
-                              setReissueDays(15);
-                              setReissueCustomBs(calculateDueBs(15));
-                              setIsReissueModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs"
-                            title="Reissue / Extend Due Date"
-                          >
-                            <CalendarClock size={12} />
-                            <span>Reissue (नवीकरण)</span>
-                          </button>
+                          {!issue.isReturned && (
+                            <>
+                              {/* Reissue / Renew Button */}
+                              <button
+                                onClick={() => {
+                                  setSelectedIssue(issue);
+                                  setReissueDays(15);
+                                  setReissueCustomBs(calculateDueBs(15));
+                                  setIsReissueModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs"
+                                title="Reissue / Extend Due Date"
+                              >
+                                <CalendarClock size={12} />
+                                <span>Reissue</span>
+                              </button>
 
-                          {/* Return Button */}
+                              {/* Return Button */}
+                              <button
+                                onClick={() => {
+                                  setSelectedIssue(issue);
+                                  setReturnFine(0);
+                                  setReturnRemarks('Returned in good condition');
+                                  setIsReturnModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
+                                title="Process Book Return"
+                              >
+                                <RotateCcw size={12} />
+                                <span>Return</span>
+                              </button>
+                            </>
+                          )}
+
+                          {/* Delete Issue Record */}
                           <button
                             onClick={() => {
-                              setSelectedIssue(issue);
-                              setReturnFine(0);
-                              setReturnRemarks('Returned in good condition');
-                              setIsReturnModalOpen(true);
+                              if (window.confirm(`Delete this issue record for "${issue.book?.title}"? Book copy will be restored to catalog.`)) {
+                                deleteIssueMutation.mutate(issue.id);
+                              }
                             }}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
-                            title="Process Book Return"
+                            className="rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 p-1.5 transition"
+                            title="Delete Issue Record"
                           >
-                            <RotateCcw size={12} />
-                            <span>Return (फिर्ता)</span>
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       )}
@@ -669,6 +778,19 @@ export default function LibraryPage() {
                               className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700 shadow-2xs"
                             >
                               Process Return
+                            </button>
+
+                            {/* Delete Issue Record */}
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete overdue record for "${issue.book?.title}" — ${issue.student?.fullName}? Book copy will be restored.`)) {
+                                  deleteIssueMutation.mutate(issue.id);
+                                }
+                              }}
+                              className="rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 p-1.5 transition"
+                              title="Delete this overdue record"
+                            >
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         )}
@@ -1222,6 +1344,133 @@ export default function LibraryPage() {
                   {bulkAddMutation.isPending ? 'Saving...' : `Save ${bulkRows.filter((b) => b.title.trim()).length} Books (सुरक्षित गर्नुहोस्)`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── EDIT BOOK MODAL ──────────────────────────────────────────────────── */}
+      {editingBook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Edit2 size={18} className="text-blue-600" />
+                <h2 className="text-base font-bold text-[#1e3a5f]">Edit Book Details</h2>
+              </div>
+              <button onClick={() => setEditingBook(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block font-bold text-gray-700 mb-1">Book Title (पुस्तकको शीर्षक) *</label>
+                  <input
+                    type="text"
+                    value={editBookData.title || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, title: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-bold"
+                    required
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block font-bold text-gray-700 mb-1">Nepali Title (नेपाली शीर्षक)</label>
+                  <input
+                    type="text"
+                    value={editBookData.titleNepali || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, titleNepali: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Author (लेखक)</label>
+                  <input
+                    type="text"
+                    value={editBookData.author || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, author: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Publisher (प्रकाशक)</label>
+                  <input
+                    type="text"
+                    value={editBookData.publisher || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, publisher: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">ISBN</label>
+                  <input
+                    type="text"
+                    value={editBookData.isbn || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, isbn: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Category (श्रेणी)</label>
+                  <select
+                    value={editBookData.category || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, category: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs bg-white"
+                  >
+                    {DEFAULT_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Total Copies (कुल प्रति)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={editBookData.totalCopies || 1}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, totalCopies: parseInt(e.target.value) || 1 }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Shelf / Rack Location</label>
+                  <input
+                    type="text"
+                    value={editBookData.shelfLocation || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, shelfLocation: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Source of Fund (स्रोत)</label>
+                  <select
+                    value={editBookData.sourceOfFund || ''}
+                    onChange={(e) => setEditBookData((p: any) => ({ ...p, sourceOfFund: e.target.value }))}
+                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs bg-white"
+                  >
+                    {DEFAULT_SOURCES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t pt-3">
+              <button onClick={() => setEditingBook(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-600">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!editBookData.title) { toast.error('Book title is required.'); return; }
+                  editBookMutation.mutate({ id: editingBook.id, data: editBookData });
+                }}
+                disabled={editBookMutation.isPending}
+                className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white disabled:opacity-60"
+              >
+                {editBookMutation.isPending ? 'Saving...' : '💾 Save Changes'}
+              </button>
             </div>
           </div>
         </div>

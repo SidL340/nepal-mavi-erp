@@ -83,8 +83,44 @@ router.post('/bulk', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'
 
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
   try {
-    const book = await prisma.book.update({ where: { id: parseInt(req.params.id) }, data: req.body });
+    const id = parseInt(req.params.id);
+    const updateData = { ...req.body };
+    if (updateData.totalCopies !== undefined) updateData.totalCopies = parseInt(updateData.totalCopies);
+    const book = await prisma.book.update({ where: { id }, data: updateData });
     return res.json({ success: true, data: book });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/library/:id — delete a book from catalog (only if no active issues)
+router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    // Check if book has active issues
+    const activeIssues = await prisma.libraryIssue.count({ where: { bookId: id, isReturned: false } });
+    if (activeIssues > 0) {
+      return res.status(400).json({ success: false, message: `Cannot delete: ${activeIssues} copy(ies) still borrowed by students. Please process returns first.` });
+    }
+    await prisma.libraryIssue.deleteMany({ where: { bookId: id } }); // Remove returned history
+    await prisma.book.delete({ where: { id } });
+    return res.json({ success: true, message: 'Book deleted from catalog.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/library/:id/delete — proxy-proof fallback
+router.post('/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const activeIssues = await prisma.libraryIssue.count({ where: { bookId: id, isReturned: false } });
+    if (activeIssues > 0) {
+      return res.status(400).json({ success: false, message: `Cannot delete: ${activeIssues} copy(ies) still borrowed. Process returns first.` });
+    }
+    await prisma.libraryIssue.deleteMany({ where: { bookId: id } });
+    await prisma.book.delete({ where: { id } });
+    return res.json({ success: true, message: 'Book deleted from catalog.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -239,6 +275,40 @@ router.patch('/issues/:id/reissue', authenticate, authorize('SUPER_ADMIN', 'ADMI
       data: updated,
       message: `Book "${issue.book?.title}" successfully reissued to ${issue.student?.fullName}! New Due Date: ${updated.dueDateBs}`,
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/library/issues/:id — delete an issue record (restore book copy)
+router.delete('/issues/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const issue = await prisma.libraryIssue.findUnique({ where: { id } });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found.' });
+
+    // Restore available copies if book was not yet returned
+    if (!issue.isReturned) {
+      await prisma.book.update({ where: { id: issue.bookId }, data: { availableCopies: { increment: 1 } } });
+    }
+    await prisma.libraryIssue.delete({ where: { id } });
+    return res.json({ success: true, message: 'Issue record deleted and book copy restored.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/library/issues/:id/delete — proxy-proof fallback
+router.post('/issues/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const issue = await prisma.libraryIssue.findUnique({ where: { id } });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found.' });
+    if (!issue.isReturned) {
+      await prisma.book.update({ where: { id: issue.bookId }, data: { availableCopies: { increment: 1 } } });
+    }
+    await prisma.libraryIssue.delete({ where: { id } });
+    return res.json({ success: true, message: 'Issue record deleted and book copy restored.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
