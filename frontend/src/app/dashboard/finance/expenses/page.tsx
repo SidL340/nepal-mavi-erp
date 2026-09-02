@@ -73,6 +73,7 @@ export default function ExpensesPage() {
   const [editBankAccountId, setEditBankAccountId] = useState('');
   const [editPaidFromAccount, setEditPaidFromAccount] = useState('');
   const [editChequeNo, setEditChequeNo] = useState('');
+  const [editChequePayeeName, setEditChequePayeeName] = useState('');
   const [editChequeDateBs, setEditChequeDateBs] = useState('');
   const [editBillNo, setEditBillNo] = useState('');
   const [editApprovedByOption, setEditApprovedByOption] = useState('Principal (प्रधानाध्यापक)');
@@ -277,6 +278,7 @@ export default function ExpensesPage() {
     setEditBankAccountId(entry.bankAccountId ? entry.bankAccountId.toString() : '');
     setEditPaidFromAccount(entry.paidFromAccount || 'School Operational Account');
     setEditChequeNo(entry.chequeNo || '');
+    setEditChequePayeeName(entry.chequePayeeName || '');
     setEditChequeDateBs(entry.chequeDateBs || todayBS());
     setEditBillNo(entry.billNo || '');
     if (['Principal (प्रधानाध्यापक)', 'SMC Chairperson (विद्यालय व्यवस्थापन समिति अध्यक्ष)', 'Accountant (लेखापाल)', 'Vice Principal (सहायक प्र.अ.)'].includes(entry.approvedBy)) {
@@ -302,6 +304,7 @@ export default function ExpensesPage() {
       amount: parseFloat(editAmount),
       expenseDateBs: editExpenseDateBs,
       paymentMedium: editPaymentMedium,
+      chequePayeeName: editChequePayeeName || null,
       billNo: editBillNo || null,
       description: editDescription || null,
       remarks: editRemarks || null,
@@ -734,6 +737,11 @@ export default function ExpensesPage() {
                       ) : (
                         <span className="font-bold text-gray-800">{entry.paidTo || '—'}</span>
                       )}
+                      {entry.chequePayeeName && (
+                        <span className="text-[10.5px] font-bold text-purple-900 block mt-0.5 font-sans">
+                          💳 Payee: {entry.chequePayeeName}
+                        </span>
+                      )}
                       {entry.description && (
                         <span className="text-[10px] text-gray-500 block truncate max-w-xs">{entry.description}</span>
                       )}
@@ -977,29 +985,45 @@ export default function ExpensesPage() {
 
               {/* Conditional Cheque Details */}
               {(paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
-                  <div>
-                    <label className="block font-extrabold text-purple-950 mb-1">
-                      Cheque / Trans Ref No. (चेक नम्बर) *
-                    </label>
-                    <input
-                      name="chequeNo"
-                      type="text"
-                      placeholder="e.g. CHQ-98765432"
-                      className="erp-input font-mono font-bold border-purple-300"
-                    />
+                <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block font-extrabold text-purple-950 mb-1">
+                        Cheque / Trans Ref No. (चेक नम्बर) *
+                      </label>
+                      <input
+                        name="chequeNo"
+                        type="text"
+                        placeholder="e.g. CHQ-98765432"
+                        className="erp-input font-mono font-bold border-purple-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-extrabold text-purple-950 mb-1">
+                        Cheque Date in BS (चेक मिति)
+                      </label>
+                      <input
+                        name="chequeDateBs"
+                        type="text"
+                        value={addChequeDateBs}
+                        onChange={(e) => setAddChequeDateBs(formatDateInput(e.target.value))}
+                        className="erp-input font-mono font-bold border-purple-300"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block font-extrabold text-purple-950 mb-1">
-                      Cheque Date in BS (चेक मिति)
+                      Cheque Issued To / Payee Name (चेक कसको नाममा जारी गरियो - Account Holder)
                     </label>
                     <input
-                      name="chequeDateBs"
+                      name="chequePayeeName"
                       type="text"
-                      value={addChequeDateBs}
-                      onChange={(e) => setAddChequeDateBs(formatDateInput(e.target.value))}
-                      className="erp-input font-mono font-bold border-purple-300"
+                      placeholder="Specify Account Holder Name if different from Shop/Firm Name (e.g. Ram Kumar Sharma)"
+                      className="erp-input font-bold border-purple-300"
                     />
+                    <span className="text-[10px] text-purple-700 font-medium block mt-0.5">
+                      💡 Use this if the shop/vendor name is different from the personal account owner receiving the cheque/transfer.
+                    </span>
                   </div>
                 </div>
               )}
@@ -1233,28 +1257,42 @@ export default function ExpensesPage() {
 
               {/* Conditional Cheque Details */}
               {(editPaymentMedium === 'CHEQUE' || editPaymentMedium === 'BANK_TRANSFER') && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
-                  <div>
-                    <label className="block font-extrabold text-purple-950 mb-1">
-                      Cheque / Trans Ref No. (चेक नम्बर)
-                    </label>
-                    <input
-                      type="text"
-                      value={editChequeNo}
-                      onChange={(e) => setEditChequeNo(e.target.value)}
-                      placeholder="e.g. CHQ-98765432"
-                      className="erp-input font-mono font-bold border-purple-300"
-                    />
+                <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block font-extrabold text-purple-950 mb-1">
+                        Cheque / Trans Ref No. (चेक नम्बर)
+                      </label>
+                      <input
+                        type="text"
+                        value={editChequeNo}
+                        onChange={(e) => setEditChequeNo(e.target.value)}
+                        placeholder="e.g. CHQ-98765432"
+                        className="erp-input font-mono font-bold border-purple-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-extrabold text-purple-950 mb-1">
+                        Cheque Date in BS (चेक मिति)
+                      </label>
+                      <input
+                        type="text"
+                        value={editChequeDateBs}
+                        onChange={(e) => setEditChequeDateBs(formatDateInput(e.target.value))}
+                        className="erp-input font-mono font-bold border-purple-300"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block font-extrabold text-purple-950 mb-1">
-                      Cheque Date in BS (चेक मिति)
+                      Cheque Issued To / Payee Name (चेक कसको नाममा जारी गरियो - Account Holder)
                     </label>
                     <input
                       type="text"
-                      value={editChequeDateBs}
-                      onChange={(e) => setEditChequeDateBs(formatDateInput(e.target.value))}
-                      className="erp-input font-mono font-bold border-purple-300"
+                      value={editChequePayeeName}
+                      onChange={(e) => setEditChequePayeeName(e.target.value)}
+                      placeholder="Account Owner Name if different from Shop/Firm Name"
+                      className="erp-input font-bold border-purple-300"
                     />
                   </div>
                 </div>

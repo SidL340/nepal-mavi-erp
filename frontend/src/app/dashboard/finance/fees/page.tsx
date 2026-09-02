@@ -24,6 +24,8 @@ import {
   FileText,
   Bell,
   Sparkles,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StudentLedgerModal from '@/components/StudentLedgerModal';
@@ -160,6 +162,42 @@ function FeeCollectionContent() {
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to collect fee.');
     },
+  });
+
+  // Edit & Delete Fee Collection State
+  const [editingCollection, setEditingCollection] = useState<any>(null);
+  const [editFeeHeadId, setEditFeeHeadId] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editPaidDateBs, setEditPaidDateBs] = useState('');
+  const [editPaymentMedium, setEditPaymentMedium] = useState('CASH');
+  const [editPaymentRef, setEditPaymentRef] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
+
+  const updateFeeCollectionMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: any }) => {
+      const res = await api.put(`/income/fee-collections/${id}`, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Fee receipt record updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['fee-collections-list'] });
+      queryClient.invalidateQueries({ queryKey: ['student-ledger'] });
+      setEditingCollection(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update fee record.')
+  });
+
+  const deleteFeeCollectionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/income/fee-collections/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Fee receipt record deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['fee-collections-list'] });
+      queryClient.invalidateQueries({ queryKey: ['student-ledger'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete fee record.')
   });
 
   // Inline Sirshak Creation Mutation
@@ -581,13 +619,46 @@ function FeeCollectionContent() {
                     <td className="p-3 text-right font-mono font-black text-emerald-700">Rs. {c.amount.toLocaleString()}</td>
                     <td className="p-3 font-mono text-[11px] uppercase">{c.paymentMedium || 'CASH'}</td>
                     <td className="p-3 text-right">
-                      <button
-                        onClick={() => setLatestReceipt(c)}
-                        className="inline-flex items-center gap-1 rounded bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-1 text-[11px] font-extrabold"
-                      >
-                        <Printer size={12} />
-                        <span>Print</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setLatestReceipt(c)}
+                          className="inline-flex items-center gap-1 rounded bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-1 text-[11px] font-extrabold shadow-2xs transition"
+                          title="Print Receipt"
+                        >
+                          <Printer size={12} />
+                          <span>Print</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setEditingCollection(c);
+                            setEditFeeHeadId(c.feeHeadId?.toString() || '');
+                            setEditAmount(c.amount?.toString() || '');
+                            setEditPaidDateBs(c.paidDateBs || todayBS());
+                            setEditPaymentMedium(c.paymentMedium || 'CASH');
+                            setEditPaymentRef(c.paymentRef || '');
+                            setEditRemarks(c.remarks || '');
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 text-[11px] font-bold shadow-2xs transition"
+                          title="Edit Fee Collection Entry"
+                        >
+                          <Edit2 size={12} />
+                          <span>Edit</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete fee receipt "${c.receiptNo}"?`)) {
+                              deleteFeeCollectionMutation.mutate(c.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 text-[11px] font-bold shadow-2xs transition"
+                          title="Delete Fee Collection Entry"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -836,7 +907,134 @@ function FeeCollectionContent() {
         </div>
       )}
 
-      {/* ─── 4. STUDENT LEDGER STATEMENT MODAL ─────────────────────────────── */}
+      {/* ─── 4. EDIT FEE COLLECTION MODAL ────────────────────────────────────── */}
+      {editingCollection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-[#1e3a5f] flex items-center gap-2">
+                <Edit2 size={18} className="text-amber-600" />
+                <span>Edit Fee Receipt (शुल्क रसिद सम्पादन - {editingCollection.receiptNo})</span>
+              </h3>
+              <button onClick={() => setEditingCollection(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateFeeCollectionMutation.mutate({
+                  id: editingCollection.id,
+                  payload: {
+                    feeHeadId: parseInt(editFeeHeadId),
+                    amount: parseFloat(editAmount),
+                    paidDateBs: editPaidDateBs,
+                    paymentMedium: editPaymentMedium,
+                    paymentRef: editPaymentRef || null,
+                    remarks: editRemarks || null,
+                  }
+                });
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Student</label>
+                <input
+                  type="text"
+                  disabled
+                  value={`${editingCollection.student?.fullName || 'Student'} (${editingCollection.student?.studentId || 'ID'})`}
+                  className="erp-input font-bold bg-slate-100 text-slate-700 cursor-not-allowed"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Fee Head (शुल्क शीर्षक) *</label>
+                  <select
+                    value={editFeeHeadId}
+                    onChange={(e) => setEditFeeHeadId(e.target.value)}
+                    className="erp-input font-bold"
+                    required
+                  >
+                    {feeHeadsData?.map((h: any) => (
+                      <option key={h.id} value={h.id}>{h.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Amount (रकम रू) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="erp-input font-mono font-bold text-emerald-800 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Paid Date (BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPaidDateBs}
+                    onChange={(e) => setEditPaidDateBs(e.target.value)}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Payment Medium</label>
+                  <select
+                    value={editPaymentMedium}
+                    onChange={(e) => setEditPaymentMedium(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="CASH">CASH (नगद)</option>
+                    <option value="BANK_TRANSFER">BANK TRANSFER (बैंक)</option>
+                    <option value="QR_CODE">QR CODE (फोनपे / ईसेवा)</option>
+                    <option value="CHEQUE">CHEQUE (चेक)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Payment Reference / Cheque No.</label>
+                <input
+                  type="text"
+                  value={editPaymentRef}
+                  onChange={(e) => setEditPaymentRef(e.target.value)}
+                  className="erp-input font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Remarks</label>
+                <textarea
+                  rows={2}
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  className="erp-input"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setEditingCollection(null)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" disabled={updateFeeCollectionMutation.isPending} className="px-5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow-xs">
+                  {updateFeeCollectionMutation.isPending ? 'Updating...' : 'Update Fee Record'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 5. STUDENT LEDGER STATEMENT MODAL ─────────────────────────────── */}
       {ledgerStudentId && (
         <StudentLedgerModal
           studentId={ledgerStudentId}

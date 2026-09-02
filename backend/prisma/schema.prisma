@@ -490,6 +490,7 @@ model ExpenseEntry {
   paymentMedium   String?     @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
   paymentRef      String?     // Cheque No / Trans ID / QR Ref
   chequeNo        String?
+  chequePayeeName String?     // Cheque Issued To / Payee Account Owner Name
   chequeDateBs    String?
   voucherNo       String?
   billNo          String?
