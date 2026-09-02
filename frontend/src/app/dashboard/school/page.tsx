@@ -244,7 +244,7 @@ export default function SchoolProfilePage() {
 
   const deleteYearMutation = useMutation({
     mutationFn: async (yearId: number) => {
-      const res = await api.post(`/classes/academic-years/${yearId}/delete`);
+      const res = await api.post('/classes/academic-years-delete-direct', { id: yearId });
       return res.data;
     },
     onSuccess: (res: any) => {

@@ -4,6 +4,35 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// ── DIRECT TOP-HOISTED DELETE FOR ACADEMIC YEARS ─────────────────────────
+router.post('/academic-years-delete-direct', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const yearId = parseInt(req.body.id);
+    const yr = await prisma.academicYear.findUnique({ where: { id: yearId } });
+    if (!yr) return res.status(404).json({ success: false, message: 'Academic Year not found.' });
+
+    // Check if linked data exists
+    const [expenseCount, incomeCount, feeCount, classCount] = await Promise.all([
+      prisma.expenseEntry.count({ where: { academicYearId: yearId } }),
+      prisma.incomeEntry.count({ where: { academicYearId: yearId } }),
+      prisma.feeCollection.count({ where: { academicYearId: yearId } }),
+      prisma.class.count({ where: { academicYearId: yearId } }),
+    ]);
+
+    if (expenseCount > 0 || incomeCount > 0 || feeCount > 0 || classCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete Academic Year "${yr.year}" because it has linked data (${expenseCount} expenses, ${incomeCount} income, ${feeCount} fees, ${classCount} classes).`
+      });
+    }
+
+    await prisma.academicYear.delete({ where: { id: yearId } });
+    return res.json({ success: true, message: `Academic Year "${yr.year}" deleted successfully.` });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 function getClassRank(name) {
   if (!name) return 999;
   const lower = name.toLowerCase().trim();
