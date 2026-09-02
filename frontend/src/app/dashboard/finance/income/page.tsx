@@ -23,6 +23,8 @@ import {
   Users,
   Eye,
   Layers,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -169,14 +171,54 @@ export default function IncomePage() {
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Income entry recorded successfully!');
-      setIsAddModalOpen(false);
+      toast.success('Income Entry recorded successfully!');
       queryClient.invalidateQueries({ queryKey: ['income-entries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      setIsAddModalOpen(false);
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to save income');
+      toast.error(err.response?.data?.message || 'Failed to record income entry.');
     },
+  });
+
+  // Edit & Delete Income State
+  const [editingIncome, setEditingIncome] = useState<any>(null);
+  const [editHeadId, setEditHeadId] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editReceivedDateBs, setEditReceivedDateBs] = useState('');
+  const [editSourceLevel, setEditSourceLevel] = useState('Central');
+  const [editSourceOrg, setEditSourceOrg] = useState('');
+  const [editPartyId, setEditPartyId] = useState('');
+  const [editDepositedInAccount, setEditDepositedInAccount] = useState('');
+  const [editBankAccountId, setEditBankAccountId] = useState('');
+  const [editReceivedBy, setEditReceivedBy] = useState('');
+  const [editPaymentMedium, setEditPaymentMedium] = useState('CASH');
+  const [editChequeNo, setEditChequeNo] = useState('');
+  const [editVoucherNo, setEditVoucherNo] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
+
+  const updateIncomeMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await api.put(`/income/entries/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Income entry updated successfully! (आम्दानी प्रविष्टि अद्यावधिक भयो)');
+      queryClient.invalidateQueries({ queryKey: ['income-entries'] });
+      setEditingIncome(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update income entry.')
+  });
+
+  const deleteIncomeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/income/entries/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Income entry deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['income-entries'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete income entry.')
   });
 
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -352,13 +394,14 @@ export default function IncomePage() {
               <th className="p-3.5">Source Org / Party</th>
               <th className="p-3.5">Payment Method & Account</th>
               <th className="p-3.5 text-right">Amount (रू)</th>
+              <th className="p-3.5 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
             {isLoading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-400">Loading income entries...</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-400">Loading income entries...</td></tr>
             ) : entries.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-400">No income entries found for selected filter.</td></tr>
+              <tr><td colSpan={7} className="p-8 text-center text-gray-400">No income entries found for selected filter.</td></tr>
             ) : (
               entries.map((item: any) => (
                 <tr key={item.id} className="hover:bg-slate-50 transition">
@@ -400,6 +443,44 @@ export default function IncomePage() {
                   </td>
                   <td className="p-3.5 text-right font-mono font-black text-emerald-700 text-sm whitespace-nowrap">
                     रू {item.amount?.toLocaleString()}
+                  </td>
+                  <td className="p-3.5 text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          setEditingIncome(item);
+                          setEditHeadId(item.headId?.toString() || '');
+                          setEditAmount(item.amount?.toString() || '');
+                          setEditReceivedDateBs(item.receivedDateBs || todayBS());
+                          setEditSourceLevel(item.sourceLevel || 'Central');
+                          setEditSourceOrg(item.sourceOrg || '');
+                          setEditPartyId(item.partyId?.toString() || '');
+                          setEditDepositedInAccount(item.depositedInAccount || 'School Main Account');
+                          setEditReceivedBy(item.receivedBy || '');
+                          setEditPaymentMedium(item.paymentMedium || 'CASH');
+                          setEditChequeNo(item.chequeNo || '');
+                          setEditVoucherNo(item.voucherNo || '');
+                          setEditRemarks(item.remarks || '');
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 text-[11px] font-bold shadow-2xs transition"
+                        title="Edit Income Entry"
+                      >
+                        <Edit2 size={12} />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this income entry?')) {
+                            deleteIncomeMutation.mutate(item.id);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 text-[11px] font-bold shadow-2xs transition"
+                        title="Delete Income Entry"
+                      >
+                        <Trash2 size={12} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -668,6 +749,197 @@ export default function IncomePage() {
                 <button type="button" onClick={() => setIsAddPartyModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
                 <button type="submit" disabled={createPartyMutation.isPending} className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-xs">
                   {createPartyMutation.isPending ? 'Saving...' : 'Save Party'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Income Entry Modal */}
+      {editingIncome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto text-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                <Edit2 size={18} className="text-emerald-600" />
+                <span>Edit Income Entry (आम्दानी सम्पादन)</span>
+              </h3>
+              <button onClick={() => setEditingIncome(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateIncomeMutation.mutate({
+                  id: editingIncome.id,
+                  data: {
+                    headId: parseInt(editHeadId),
+                    amount: parseFloat(editAmount),
+                    receivedDateBs: editReceivedDateBs,
+                    sourceLevel: editSourceLevel,
+                    sourceOrg: editSourceOrg || null,
+                    partyId: editPartyId ? parseInt(editPartyId) : null,
+                    depositedInAccount: editDepositedInAccount || 'School Main Account',
+                    bankAccountId: editBankAccountId ? parseInt(editBankAccountId) : null,
+                    receivedBy: editReceivedBy || null,
+                    paymentMedium: editPaymentMedium || 'CASH',
+                    chequeNo: editChequeNo || null,
+                    voucherNo: editVoucherNo || null,
+                    remarks: editRemarks || null,
+                  }
+                });
+              }}
+              className="space-y-3"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Source Level *</label>
+                  <select
+                    value={editSourceLevel}
+                    onChange={(e) => setEditSourceLevel(e.target.value)}
+                    className="erp-input font-bold"
+                    required
+                  >
+                    <option value="Central">Central Govt (सङ्घीय सरकार)</option>
+                    <option value="Provincial">Provincial Govt (प्रदेश सरकार)</option>
+                    <option value="Local">Local Govt (स्थानीय पालिका)</option>
+                    <option value="District">District / EDC (जिल्ला)</option>
+                    <option value="Other">School Own Source (आफ्नै स्रोत)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Income Head / Topic *</label>
+                  <select
+                    value={editHeadId}
+                    onChange={(e) => setEditHeadId(e.target.value)}
+                    className="erp-input font-bold"
+                    required
+                  >
+                    <option value="">-- Select Income Topic --</option>
+                    {headsData?.map((h: any) => (
+                      <option key={h.id} value={h.id}>
+                        {h.code ? `[${h.code}] ` : ''}{h.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Amount (रकम रू) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="erp-input font-mono font-bold text-emerald-800 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Received Date (BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editReceivedDateBs}
+                    onChange={(e) => setEditReceivedDateBs(e.target.value)}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Source Org / Party Name</label>
+                  <input
+                    type="text"
+                    value={editSourceOrg}
+                    onChange={(e) => setEditSourceOrg(e.target.value)}
+                    placeholder="e.g. Bishrampur Municipality / Donor Name"
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Registered Party Link</label>
+                  <select
+                    value={editPartyId}
+                    onChange={(e) => setEditPartyId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">-- Select Registered Party (Optional) --</option>
+                    {partiesData?.map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Payment Method</label>
+                  <select
+                    value={editPaymentMedium}
+                    onChange={(e) => setEditPaymentMedium(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="CASH">CASH (नगद)</option>
+                    <option value="BANK_TRANSFER">BANK TRANSFER (बैंक ट्रान्सफर)</option>
+                    <option value="CHEQUE">CHEQUE (चेक)</option>
+                    <option value="ONLINE">ONLINE / DIGITAL (डिजिटल)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Cheque No. (Optional)</label>
+                  <input
+                    type="text"
+                    value={editChequeNo}
+                    onChange={(e) => setEditChequeNo(e.target.value)}
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Deposited In Account</label>
+                  <input
+                    type="text"
+                    value={editDepositedInAccount}
+                    onChange={(e) => setEditDepositedInAccount(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Received By / Voucher No</label>
+                  <input
+                    type="text"
+                    value={editReceivedBy}
+                    onChange={(e) => setEditReceivedBy(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Remarks</label>
+                <textarea
+                  rows={2}
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  className="erp-input"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                <button type="button" onClick={() => setEditingIncome(null)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" disabled={updateIncomeMutation.isPending} className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-xs">
+                  {updateIncomeMutation.isPending ? 'Updating...' : 'Update Income Entry'}
                 </button>
               </div>
             </form>

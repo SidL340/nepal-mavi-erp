@@ -23,6 +23,8 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownLeft,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -119,6 +121,48 @@ export default function UnifiedFinanceHubPage() {
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to save party.');
     },
+  });
+
+  // Edit & Delete Party State & Mutations
+  const [editingParty, setEditingParty] = useState<any>(null);
+  const [editPartyName, setEditPartyName] = useState('');
+  const [editPartyNameNepali, setEditPartyNameNepali] = useState('');
+  const [editPartyType, setEditPartyType] = useState('VENDOR');
+  const [editCustomPartyType, setEditCustomPartyType] = useState('');
+  const [editPanNo, setEditPanNo] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editBankName, setEditBankName] = useState('');
+  const [editAccountNo, setEditAccountNo] = useState('');
+
+  const updatePartyMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: any }) => {
+      const res = await api.put(`/parties/${id}`, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Party details updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['parties-list-all'] });
+      queryClient.invalidateQueries({ queryKey: ['parties-list'] });
+      queryClient.invalidateQueries({ queryKey: ['parties-list-income'] });
+      setEditingParty(null);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update party.')
+  });
+
+  const deletePartyMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/parties/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Party deleted/deactivated successfully.');
+      queryClient.invalidateQueries({ queryKey: ['parties-list-all'] });
+      queryClient.invalidateQueries({ queryKey: ['parties-list'] });
+      queryClient.invalidateQueries({ queryKey: ['parties-list-income'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete party.')
   });
 
   const createBankMutation = useMutation({
@@ -482,13 +526,49 @@ export default function UnifiedFinanceHubPage() {
                         {party.vouchersCount ?? ((party._count?.expenseEntries || 0) + (party._count?.incomeEntries || 0))} vouchers
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => setInspectPartyId(party.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-bold text-[#1e3a5f] hover:bg-slate-50"
-                        >
-                          <Eye size={12} />
-                          <span>Party Ledger</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setInspectPartyId(party.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-bold text-[#1e3a5f] hover:bg-slate-50 shadow-2xs"
+                            title="View Party History & Ledger"
+                          >
+                            <Eye size={12} />
+                            <span>Ledger</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setEditingParty(party);
+                              setEditPartyName(party.name || '');
+                              setEditPartyNameNepali(party.nameNepali || '');
+                              setEditPartyType(party.partyType || 'VENDOR');
+                              setEditPanNo(party.panNo || '');
+                              setEditPhone(party.phone || '');
+                              setEditEmail(party.email || '');
+                              setEditAddress(party.address || '');
+                              setEditBankName(party.bankName || '');
+                              setEditAccountNo(party.accountNo || '');
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100 shadow-2xs"
+                            title="Edit Party Details"
+                          >
+                            <Edit2 size={12} />
+                            <span>Edit</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete party "${party.name}"?`)) {
+                                deletePartyMutation.mutate(party.id);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100 shadow-2xs"
+                            title="Delete Party"
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -758,6 +838,171 @@ export default function UnifiedFinanceHubPage() {
                 <button type="button" onClick={() => setIsBankModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
                 <button type="submit" disabled={createBankMutation.isPending} className="px-5 py-2 bg-blue-700 text-white font-bold rounded-xl shadow-xs">
                   {createBankMutation.isPending ? 'Saving...' : 'Save Bank Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── EDIT PARTY MODAL ──────────────────────────────────────────────── */}
+      {editingParty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-[#1e3a5f] flex items-center gap-2">
+                <Edit2 size={18} className="text-amber-600" />
+                <span>Edit Party / Recipient (पाउने पक्ष सम्पादन)</span>
+              </h3>
+              <button onClick={() => setEditingParty(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const finalPartyType = editPartyType === 'CUSTOM' ? editCustomPartyType : editPartyType;
+                updatePartyMutation.mutate({
+                  id: editingParty.id,
+                  payload: {
+                    name: editPartyName,
+                    nameNepali: editPartyNameNepali || null,
+                    partyType: finalPartyType || 'VENDOR',
+                    panNo: editPanNo || null,
+                    phone: editPhone || null,
+                    email: editEmail || null,
+                    address: editAddress || null,
+                    bankName: editBankName || null,
+                    accountNo: editAccountNo || null,
+                  }
+                });
+              }}
+              className="space-y-3"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Party / Vendor Name (English) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPartyName}
+                    onChange={(e) => setEditPartyName(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Party Name (नेपाली नाम)</label>
+                  <input
+                    type="text"
+                    value={editPartyNameNepali}
+                    onChange={(e) => setEditPartyNameNepali(e.target.value)}
+                    className="erp-input font-nepali"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Classification (प्रकार)</label>
+                  <select
+                    value={editPartyType}
+                    onChange={(e) => setEditPartyType(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="VENDOR">Supplier / Vendor (व्यापारी/सप्लायर)</option>
+                    <option value="WORKER">Worker / Construction (कामदार/मिस्त्री)</option>
+                    <option value="SHOPKEEPER">Shopkeeper / Groceries (पसले/किराना)</option>
+                    <option value="ELECTRICIAN">Electrician / Technician (प्राविधिक)</option>
+                    <option value="GOVT">Government / Municipality (सरकारी निकाय)</option>
+                    <option value="STAFF">Teacher / Staff (शिक्षक/कर्मचारी)</option>
+                    <option value="DONOR">Donor / Contributor (चन्दादाता)</option>
+                    <option value="CONTRACTOR">Contractor / Firm (ठेकेदार)</option>
+                    <option value="OTHER">Other / Misc (अन्य)</option>
+                    <option value="CUSTOM">+ Write Custom Classification</option>
+                  </select>
+                </div>
+                {editPartyType === 'CUSTOM' ? (
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Custom Classification *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editCustomPartyType}
+                      onChange={(e) => setEditCustomPartyType(e.target.value)}
+                      placeholder="e.g. Plumber, Driver..."
+                      className="erp-input font-bold"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">PAN / VAT No.</label>
+                    <input
+                      type="text"
+                      value={editPanNo}
+                      onChange={(e) => setEditPanNo(e.target.value)}
+                      className="erp-input font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Contact Phone</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="erp-input font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    value={editBankName}
+                    onChange={(e) => setEditBankName(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Account No.</label>
+                  <input
+                    type="text"
+                    value={editAccountNo}
+                    onChange={(e) => setEditAccountNo(e.target.value)}
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Address (ठेगाना)</label>
+                <input
+                  type="text"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  className="erp-input"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setEditingParty(null)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" disabled={updatePartyMutation.isPending} className="px-5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow-xs">
+                  {updatePartyMutation.isPending ? 'Updating...' : 'Update Party Details'}
                 </button>
               </div>
             </form>
