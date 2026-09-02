@@ -445,6 +445,7 @@ model FeeCollection {
   depositedInAccount String?
   paymentMedium   String?  @default("CASH") // CASH, BANK_TRANSFER, QR_CODE, CHEQUE
   paymentRef      String?  // Trans ID / Cheque No / QR Ref
+  chequePayeeName String?  // Cheque issued to — account holder name if different from shop
   remarks         String?
   createdAt       DateTime @default(now())
 }
@@ -652,6 +653,7 @@ model Notice {
   createdBy       Int?
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 // ─── CERTIFICATES ────────────────────────────────────────────────────────────

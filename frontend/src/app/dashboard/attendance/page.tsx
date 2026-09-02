@@ -13,6 +13,7 @@ import {
   UserX,
   FileText,
   AlertCircle,
+  AlertTriangle,
   Save,
   CheckCheck,
   Lock,
@@ -769,6 +770,32 @@ export default function AttendancePage() {
                 <Save size={14} />
                 <span>{saveAttendanceMutation.isPending ? 'Saving...' : 'Save Attendance (हाजिरी सेभ)'}</span>
               </button>
+
+              {/* Send Absent Alerts button — visible after attendance is saved */}
+              {selectedClass && dateBs && (
+                <a
+                  href={`/dashboard/notices?absentClass=${selectedClass}&absentDate=${dateBs}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    // Count currently marked absent
+                    const absentCount = Object.values(attendanceMap).filter(
+                      (v) => v.status === 'ABSENT' || v.status === 'BUNKED'
+                    ).length;
+                    if (absentCount === 0) {
+                      toast('No students are marked Absent or Bunked right now.', { icon: 'ℹ️' });
+                      return;
+                    }
+                    // Navigate to Notices page with context
+                    window.location.href = `/dashboard/notices`;
+                    toast(`${absentCount} absent student(s) found. Use "Send Absent Alert" on the Notices page.`, { icon: '📢', duration: 5000 });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 text-xs font-bold shadow-xs transition"
+                  title="Send absence notifications to guardians of absent students"
+                >
+                  <AlertTriangle size={14} />
+                  <span>📢 Send Absent Alerts</span>
+                </a>
+              )}
             </div>
           </div>
 
