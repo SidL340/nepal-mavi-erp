@@ -189,8 +189,16 @@ function FeeCollectionContent() {
 
   const deleteFeeCollectionMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.delete(`/income/fee-collections/${id}`);
-      return res.data;
+      try {
+        const res = await api.delete(`/income/fee-collections/${id}`);
+        return res.data;
+      } catch (err: any) {
+        if (err.response?.status === 404) {
+          const res = await api.post(`/income/fee-collections/${id}/delete`);
+          return res.data;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       toast.success('Fee receipt record deleted successfully.');

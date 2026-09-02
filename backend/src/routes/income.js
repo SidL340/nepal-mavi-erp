@@ -212,7 +212,7 @@ router.put('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN
   }
 });
 
-router.delete('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+const deleteFeeCollectionHandler = async (req, res) => {
   try {
     await prisma.feeCollection.delete({
       where: { id: parseInt(req.params.id) }
@@ -221,7 +221,11 @@ router.delete('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'AD
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
-});
+};
+
+router.delete('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
+router.post('/fee-collections/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
+router.delete('/fee-collections-delete/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
 
 // ── CLASS-WISE FEE STRUCTURE ────────────────────────────────────────────────
 // GET /api/income/class-fee-structures/matrix/all — All classes fee matrix
