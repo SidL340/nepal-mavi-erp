@@ -235,6 +235,20 @@ export default function SchoolProfilePage() {
     },
   });
 
+  const deleteYearMutation = useMutation({
+    mutationFn: async (yearId: number) => {
+      const res = await api.delete(`/classes/academic-years/${yearId}`);
+      return res.data;
+    },
+    onSuccess: (res: any) => {
+      toast.success(res.message || 'Academic Year deleted successfully.');
+      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete Academic Year.');
+    },
+  });
+
   // Save/Update Salary Scale Mutation
   const saveScaleMutation = useMutation({
     mutationFn: async ({ id, data }: { id?: number; data: any }) => {
@@ -662,14 +676,30 @@ export default function SchoolProfilePage() {
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
-                      {!y.isActive && (
-                        <button
-                          onClick={() => activateYearMutation.mutate(y.id)}
-                          className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700"
-                        >
-                          Set Active
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {!y.isActive && (
+                          <>
+                            <button
+                              onClick={() => activateYearMutation.mutate(y.id)}
+                              className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
+                            >
+                              Set Active
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete Academic Year "${y.year}"?`)) {
+                                  deleteYearMutation.mutate(y.id);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                              title="Delete Academic Year"
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
