@@ -4,6 +4,14 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Force no HTTP caching on any income/fee route
+router.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // ── FEE COLLECTIONS DELETE & EDIT (TOP PRIORITY) ───────────────────────────
 const deleteFeeCollectionHandler = async (req, res) => {
   try {
