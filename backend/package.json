@@ -5,10 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "build": "prisma generate",
+    "build": "node scripts/generate.js",
     "dev": "nodemon src/server.js",
-    "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
+    "postinstall": "node scripts/generate.js",
+    "db:generate": "node scripts/generate.js",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:studio": "prisma studio"
