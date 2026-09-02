@@ -46,7 +46,6 @@ router.put('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN
     if (paidDateAd) updateData.paidDateAd = new Date(paidDateAd);
     if (studentId) updateData.studentId = parseInt(studentId);
     if (feeHeadId) updateData.feeHeadId = parseInt(feeHeadId);
-    if (academicYearId) updateData.academicYearId = parseInt(academicYearId);
 
     const collection = await prisma.feeCollection.update({
       where: { id: parseInt(req.params.id) },
@@ -224,11 +223,10 @@ router.post('/fee-heads/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADM
 
 router.get('/fee-collections', authenticate, async (req, res) => {
   try {
-    const { studentId, feeHeadId, academicYearId, from, to, page = 1, limit = 50 } = req.query;
+    const { studentId, feeHeadId, from, to, page = 1, limit = 50 } = req.query;
     const where = {};
     if (studentId) where.studentId = parseInt(studentId);
     if (feeHeadId) where.feeHeadId = parseInt(feeHeadId);
-    if (academicYearId) where.academicYearId = parseInt(academicYearId);
     if (from || to) {
       where.paidDateBs = {};
       if (from) where.paidDateBs.gte = from;
@@ -256,7 +254,7 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
     // Generate receipt no
     const count = await prisma.feeCollection.count();
     const receiptNo = `RCP-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
-    const { paidDateAd, ...rest } = req.body;
+    const { paidDateAd, academicYearId, feeDueId, ...rest } = req.body;
     const collection = await prisma.feeCollection.create({
       data: {
         ...rest,
@@ -270,9 +268,9 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
     });
 
     // Mark corresponding fee due as paid if feeDueId passed
-    if (rest.feeDueId) {
+    if (feeDueId) {
       await prisma.studentFeeDue.update({
-        where: { id: parseInt(rest.feeDueId) },
+        where: { id: parseInt(feeDueId) },
         data: { isPaid: true, paidAmount: parseFloat(rest.amount) },
       }).catch(() => {});
     }
