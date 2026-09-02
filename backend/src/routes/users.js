@@ -86,6 +86,8 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
     ]);
 
     // Aggregate counts by role for fast tab badges
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
     const [
       totalTeachers,
       totalStudents,
@@ -93,6 +95,7 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
       totalAccountants,
       totalAdmins,
       pendingResetCount,
+      totalAllUsers,
     ] = await Promise.all([
       prisma.user.count({ where: { role: 'TEACHER' } }),
       prisma.user.count({ where: { role: 'STUDENT' } }),
@@ -100,6 +103,7 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
       prisma.user.count({ where: { role: 'ACCOUNTANT' } }),
       prisma.user.count({ where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } } }),
       prisma.passwordResetRequest.count({ where: { status: 'PENDING' } }),
+      prisma.user.count(),
     ]);
 
     return res.json({
@@ -110,7 +114,7 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
         page: parseInt(page),
         totalPages: Math.ceil(total / take),
         stats: {
-          totalUsers: total,
+          totalUsers: totalAllUsers,
           teachers: totalTeachers,
           students: totalStudents,
           librarians: totalLibrarians,

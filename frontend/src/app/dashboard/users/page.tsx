@@ -315,7 +315,7 @@ export default function UserManagementPage() {
   });
 
   // ── 1. Fetch Users List ──
-  const { data: usersResponse, isLoading: isUsersLoading } = useQuery({
+  const { data: usersResponse, isLoading: isUsersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['users-list', selectedRole, searchQuery, page],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -323,19 +323,25 @@ export default function UserManagementPage() {
       if (searchQuery.trim()) params.append('q', searchQuery.trim());
       params.append('page', String(page));
       params.append('limit', '40');
+      params.append('_t', String(Date.now())); // Cache buster
 
       const res = await api.get(`/users?${params.toString()}`);
       return res.data?.data;
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   // ── 2. Fetch Password Reset Requests ──
   const { data: resetRequests, isLoading: isRequestsLoading } = useQuery({
     queryKey: ['password-reset-requests'],
     queryFn: async () => {
-      const res = await api.get('/users/reset-requests/list');
+      const res = await api.get(`/users/reset-requests/list?_t=${Date.now()}`);
       return res.data?.data || [];
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const usersList = usersResponse?.users || [];
