@@ -4,6 +4,77 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Force no HTTP caching on any library route
+router.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
+// ── DIRECT DELETE HANDLERS (HOISTED TO TOP FOR 100% RELIABILITY) ───────────
+
+// Issue delete logic
+const deleteIssueLogic = async (id, res) => {
+  try {
+    const issue = await prisma.libraryIssue.findUnique({ where: { id } });
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue record not found.' });
+
+    // Restore available copies if book was not yet returned
+    if (!issue.isReturned) {
+      await prisma.book.update({ where: { id: issue.bookId }, data: { availableCopies: { increment: 1 } } });
+    }
+    await prisma.libraryIssue.delete({ where: { id } });
+    return res.json({ success: true, message: 'Issue record deleted and book copy restored.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Book delete logic
+const deleteBookLogic = async (id, res) => {
+  try {
+    const activeIssues = await prisma.libraryIssue.count({ where: { bookId: id, isReturned: false } });
+    if (activeIssues > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete: ${activeIssues} copy(ies) are currently borrowed. Please process returns first.`,
+      });
+    }
+    await prisma.libraryIssue.deleteMany({ where: { bookId: id } });
+    await prisma.book.delete({ where: { id } });
+    return res.json({ success: true, message: 'Book deleted from catalog.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Direct body-based delete (immune to proxy URL issues)
+router.post('/issues-delete-direct', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  const id = parseInt(req.body.id || req.body.issueId);
+  if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Valid Issue ID is required.' });
+  return deleteIssueLogic(id, res);
+});
+
+router.post('/books-delete-direct', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  const id = parseInt(req.body.id || req.body.bookId);
+  if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Valid Book ID is required.' });
+  return deleteBookLogic(id, res);
+});
+
+// URL-based delete fallbacks for issues
+router.post('/issues/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Valid Issue ID is required.' });
+  return deleteIssueLogic(id, res);
+});
+
+router.delete('/issues/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'), async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Valid Issue ID is required.' });
+  return deleteIssueLogic(id, res);
+});
+
 // ── BOOKS ─────────────────────────────────────────────────────────────────
 
 router.get('/', authenticate, async (req, res) => {

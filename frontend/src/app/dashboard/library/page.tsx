@@ -307,29 +307,31 @@ export default function LibraryPage() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update book'),
   });
 
-  // Delete Book Mutation — POST only (Render proxy blocks DELETE)
+  // Delete Book Mutation — Direct Body POST (100% proxy-proof)
   const deleteBookMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.post(`/library/${id}/delete`);
+      const res = await api.post('/library/books-delete-direct', { id });
       if (!res.data?.success) throw new Error(res.data?.message || 'Delete failed');
       return res.data;
     },
     onSuccess: () => {
       toast.success('Book deleted from catalog.');
+      queryClient.clear();
       queryClient.invalidateQueries({ queryKey: ['books'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || err.message || 'Failed to delete book'),
   });
 
-  // Delete Issue Mutation — POST only (Render proxy blocks DELETE)
+  // Delete Issue Mutation — Direct Body POST (100% proxy-proof)
   const deleteIssueMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.post(`/library/issues/${id}/delete`);
+      const res = await api.post('/library/issues-delete-direct', { id });
       if (!res.data?.success) throw new Error(res.data?.message || 'Delete failed');
       return res.data;
     },
     onSuccess: () => {
       toast.success('Issue record deleted. Book copy restored.');
+      queryClient.clear();
       queryClient.invalidateQueries({ queryKey: ['books'] });
       queryClient.invalidateQueries({ queryKey: ['library-issues'] });
       queryClient.invalidateQueries({ queryKey: ['library-overdue'] });
