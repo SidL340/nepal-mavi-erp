@@ -19,6 +19,17 @@ const deleteFeeCollectionHandler = async (req, res) => {
 router.delete('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
 router.post('/fee-collections/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), deleteFeeCollectionHandler);
 
+router.post('/fee-collections-delete-direct', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const id = parseInt(req.body.id || req.body.feeCollectionId);
+    if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid receipt ID.' });
+    await prisma.feeCollection.delete({ where: { id } });
+    return res.json({ success: true, message: 'Fee collection deleted successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.put('/fee-collections/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const { amount, paidDateAd, studentId, feeHeadId, academicYearId, ...rest } = req.body;

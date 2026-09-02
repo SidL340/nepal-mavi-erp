@@ -190,20 +190,19 @@ function FeeCollectionContent() {
   const deleteFeeCollectionMutation = useMutation({
     mutationFn: async (id: number) => {
       try {
-        const res = await api.delete(`/income/fee-collections/${id}`);
+        const res = await api.post('/income/fee-collections-delete-direct', { id });
         return res.data;
       } catch (err: any) {
-        if (err.response?.status === 404) {
-          const res = await api.post(`/income/fee-collections/${id}/delete`);
-          return res.data;
-        }
-        throw err;
+        const res = await api.delete(`/income/fee-collections/${id}`);
+        return res.data;
       }
     },
     onSuccess: () => {
       toast.success('Fee receipt record deleted successfully.');
+      queryClient.clear();
       queryClient.invalidateQueries({ queryKey: ['fee-collections-list'] });
       queryClient.invalidateQueries({ queryKey: ['student-ledger'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete fee record.')
   });
@@ -598,7 +597,20 @@ function FeeCollectionContent() {
           <h2 className="text-sm font-bold text-[#1e3a5f] uppercase tracking-wider">
             Recent Fee Receipts (हालैका रसिदहरू)
           </h2>
-          <span className="text-xs text-gray-500 font-mono">Total Receipts: {collectionsData?.total || 0}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                queryClient.clear();
+                queryClient.invalidateQueries();
+                toast.success('Cache cleared & data refreshed!');
+              }}
+              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition"
+              title="Purge local cache & reload fresh records"
+            >
+              🔄 Refresh & Clear Cache
+            </button>
+            <span className="text-xs text-gray-500 font-mono">Total Receipts: {collectionsData?.total || 0}</span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
