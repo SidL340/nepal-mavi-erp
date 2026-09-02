@@ -27,6 +27,45 @@ router.post('/profile', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (
   }
 });
 
+// POST /api/school/backup/generate - Manual backup trigger
+router.post('/backup/generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const { generateDatabaseBackup } = require('../lib/backupScheduler');
+    const result = await generateDatabaseBackup();
+    return res.json({ success: true, message: 'Database backup generated successfully.', data: result });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/school/backup/list - List all backup files
+router.get('/backup/list', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const { BACKUP_DIR } = require('../lib/backupScheduler');
+    if (!fs.existsSync(BACKUP_DIR)) return res.json({ success: true, data: [] });
+
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('nepal_school_erp_backup_') && f.endsWith('.json'))
+      .map(f => {
+        const stats = fs.statSync(path.join(BACKUP_DIR, f));
+        return {
+          filename: f,
+          sizeBytes: stats.size,
+          sizeMb: (stats.size / (1024 * 1024)).toFixed(2),
+          createdAt: stats.mtime
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.json({ success: true, data: files });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 // ── CERTIFICATES ──────────────────────────────────────────────────────────
 
 router.get('/certificates', authenticate, async (req, res) => {

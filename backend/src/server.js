@@ -99,6 +99,10 @@ app.listen(PORT, '0.0.0.0', async () => {
     });
 
     console.log('✅ Auto-seed verified: Super Admin ready (admin@nepalssb.edu.np / #Nepal32016)');
+
+    // Initialize Automatic Daily Backup Scheduler
+    const { initBackupScheduler } = require('./lib/backupScheduler');
+    initBackupScheduler();
   } catch (err) {
     console.error('⚠️ Auto-seed notice:', err.message);
   }
