@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
+    "prisma": "^6.4.1",
     "bcryptjs": "^3.0.2",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
@@ -35,7 +36,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9",
-    "prisma": "^6.4.1"
+    "nodemon": "^3.1.9"
   }
 }
