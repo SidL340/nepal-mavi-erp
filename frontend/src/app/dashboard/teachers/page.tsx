@@ -102,8 +102,11 @@ export default function TeachersPage() {
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Teacher deactivated successfully');
+      toast.success('Teacher deleted permanently.');
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      queryClient.invalidateQueries({ queryKey: ['teachers-all'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to deactivate teacher');

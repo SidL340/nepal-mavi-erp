@@ -127,14 +127,34 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-// DELETE /api/teachers/:id (soft)
+// DELETE /api/teachers/:id
 router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
-    await prisma.teacher.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
-    return res.json({ success: true, message: 'Teacher deactivated.' });
+    const teacherId = parseInt(req.params.id);
+    const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } });
+    if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found.' });
+
+    // Clean up class teacher assignment
+    await prisma.class.updateMany({
+      where: { classTeacherId: teacherId },
+      data: { classTeacherId: null },
+    });
+
+    // Delete teacher subject mappings
+    await prisma.teacherSubject.deleteMany({ where: { teacherId } });
+
+    // Delete teacher record
+    await prisma.teacher.delete({ where: { id: teacherId } });
+
+    // Delete user account if associated
+    if (teacher.userId) {
+      await prisma.user.delete({ where: { id: teacher.userId } }).catch(() => {});
+    }
+
+    return res.json({ success: true, message: 'Teacher record deleted permanently.' });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: false, message: 'Server error.' });
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
