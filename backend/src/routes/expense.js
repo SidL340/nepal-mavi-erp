@@ -41,6 +41,15 @@ router.delete('/categories/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN')
   }
 });
 
+router.post('/categories/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.expenseCategory.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
+    return res.json({ success: true, message: 'Expense Category deactivated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── EXPENSE HEADS ─────────────────────────────────────────────────────────
 
 router.get('/heads', authenticate, async (req, res) => {
@@ -71,6 +80,15 @@ router.put('/heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUN
 });
 
 router.delete('/heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.expenseHead.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
+    return res.json({ success: true, message: 'Expense Head deactivated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/heads/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     await prisma.expenseHead.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
     return res.json({ success: true, message: 'Expense Head deactivated.' });

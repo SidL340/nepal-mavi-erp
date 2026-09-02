@@ -182,7 +182,7 @@ export default function MasterHeadsPage() {
 
   const deleteFeeHeadMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.delete(`/income/fee-heads/${id}`);
+      const res = await api.post(`/income/fee-heads/${id}/delete`);
       return res.data;
     },
     onSuccess: () => {
@@ -215,7 +215,7 @@ export default function MasterHeadsPage() {
 
   const deleteIncomeHeadMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.delete(`/income/heads/${id}`);
+      const res = await api.post(`/income/heads/${id}/delete`);
       return res.data;
     },
     onSuccess: () => {
@@ -248,7 +248,7 @@ export default function MasterHeadsPage() {
 
   const deleteExpenseHeadMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.delete(`/expense/heads/${id}`);
+      const res = await api.post(`/expense/heads/${id}/delete`);
       return res.data;
     },
     onSuccess: () => {
@@ -285,8 +285,8 @@ export default function MasterHeadsPage() {
 
   const deleteCatMutation = useMutation({
     mutationFn: async ({ id, module }: { id: number; module: 'INCOME' | 'EXPENSE' }) => {
-      const endpoint = module === 'INCOME' ? `/income/categories/${id}` : `/expense/categories/${id}`;
-      const res = await api.delete(endpoint);
+      const endpoint = module === 'INCOME' ? `/income/categories/${id}/delete` : `/expense/categories/${id}/delete`;
+      const res = await api.post(endpoint);
       return res.data;
     },
     onSuccess: () => {

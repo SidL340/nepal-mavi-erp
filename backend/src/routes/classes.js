@@ -94,6 +94,17 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
         orderIndex: calcOrderIndex,
       },
     });
+
+    // Auto-link all active Fee Heads to this new class
+    const feeHeads = await prisma.feeHead.findMany({ where: { isActive: true } });
+    for (const fh of feeHeads) {
+      await prisma.classFeeStructure.upsert({
+        where: { classId_feeHeadId: { classId: cls.id, feeHeadId: fh.id } },
+        update: {},
+        create: { classId: cls.id, feeHeadId: fh.id, amount: fh.amount },
+      });
+    }
+
     return res.status(201).json({ success: true, data: cls });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

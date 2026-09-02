@@ -91,7 +91,16 @@ router.put('/categories/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'A
 router.delete('/categories/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     await prisma.incomeCategory.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
-    return res.json({ success: true, message: 'Category deactivated.' });
+    return res.json({ success: true, message: 'Income Category deleted/deactivated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/categories/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.incomeCategory.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
+    return res.json({ success: true, message: 'Income Category deleted/deactivated.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -135,6 +144,15 @@ router.delete('/heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), asy
   }
 });
 
+router.post('/heads/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.incomeHead.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
+    return res.json({ success: true, message: 'Income Head deleted/deactivated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── FEE HEADS ──────────────────────────────────────────────────────────────
 
 router.get('/fee-heads', authenticate, async (req, res) => {
@@ -151,7 +169,18 @@ router.post('/fee-heads', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOU
         incomeHeadId: req.body.incomeHeadId ? parseInt(req.body.incomeHeadId) : undefined,
       },
     });
-    return res.status(201).json({ success: true, data: fh, message: 'Fee Head created.' });
+
+    // Auto-link new Fee Head to all classes in ClassFeeStructure
+    const allClasses = await prisma.class.findMany();
+    for (const c of allClasses) {
+      await prisma.classFeeStructure.upsert({
+        where: { classId_feeHeadId: { classId: c.id, feeHeadId: fh.id } },
+        update: {},
+        create: { classId: c.id, feeHeadId: fh.id, amount: fh.amount },
+      });
+    }
+
+    return res.status(201).json({ success: true, data: fh, message: 'Fee Head created and linked to all classes.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -174,6 +203,15 @@ router.put('/fee-heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'AC
 });
 
 router.delete('/fee-heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.feeHead.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
+    return res.json({ success: true, message: 'Fee Head deleted/deactivated.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/fee-heads/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     await prisma.feeHead.update({ where: { id: parseInt(req.params.id) }, data: { isActive: false } });
     return res.json({ success: true, message: 'Fee Head deleted/deactivated.' });
