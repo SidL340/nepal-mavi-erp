@@ -37,6 +37,7 @@ export default function SchoolProfilePage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'profile' | 'years' | 'accounts' | 'scales' | 'backup'>('profile');
   const [isAddYearOpen, setIsAddYearOpen] = useState(false);
+  const [editingYear, setEditingYear] = useState<any>(null);
   const [isAddAccountOpen, setIsAddAccountOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -157,19 +158,25 @@ export default function SchoolProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  // Add Academic Year Mutation
-  const addYearMutation = useMutation({
-    mutationFn: async (formData: any) => {
-      const res = await api.post('/classes/academic-years', formData);
-      return res.data;
+  // Save/Update Academic Year Mutation
+  const saveYearMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      if (editingYear) {
+        const res = await api.put(`/classes/academic-years/${editingYear.id}`, payload);
+        return res.data;
+      } else {
+        const res = await api.post('/classes/academic-years', payload);
+        return res.data;
+      }
     },
-    onSuccess: () => {
-      toast.success('Academic Year added!');
+    onSuccess: (data: any) => {
+      toast.success(editingYear ? 'Academic Year updated!' : 'Academic Year added!');
       setIsAddYearOpen(false);
+      setEditingYear(null);
       queryClient.invalidateQueries({ queryKey: ['academic-years'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to add year');
+      toast.error(err.response?.data?.message || 'Failed to save Academic Year');
     },
   });
 
@@ -211,11 +218,11 @@ export default function SchoolProfilePage() {
   // Delete Bank Account Mutation
   const deleteAccountMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.delete(`/school/bank-accounts/${id}`);
+      const res = await api.post(`/school/bank-accounts/${id}/delete`);
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Bank Account deactivated');
+      toast.success('Bank Account deleted/deactivated');
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
     },
     onError: (err: any) => {
@@ -237,7 +244,7 @@ export default function SchoolProfilePage() {
 
   const deleteYearMutation = useMutation({
     mutationFn: async (yearId: number) => {
-      const res = await api.delete(`/classes/academic-years/${yearId}`);
+      const res = await api.post(`/classes/academic-years/${yearId}/delete`);
       return res.data;
     },
     onSuccess: (res: any) => {
@@ -678,27 +685,37 @@ export default function SchoolProfilePage() {
                     <td className="p-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {!y.isActive && (
-                          <>
-                            <button
-                              onClick={() => activateYearMutation.mutate(y.id)}
-                              className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
-                            >
-                              Set Active
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Are you sure you want to delete Academic Year "${y.year}"?`)) {
-                                  deleteYearMutation.mutate(y.id);
-                                }
-                              }}
-                              className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
-                              title="Delete Academic Year"
-                            >
-                              <Trash2 size={12} />
-                              <span>Delete</span>
-                            </button>
-                          </>
+                          <button
+                            onClick={() => activateYearMutation.mutate(y.id)}
+                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
+                            title="Set as Active Academic Year"
+                          >
+                            Set Active
+                          </button>
                         )}
+                        <button
+                          onClick={() => {
+                            setEditingYear(y);
+                            setIsAddYearOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1e3a5f] border border-blue-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                          title="Edit Academic Year"
+                        >
+                          <Edit2 size={12} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete Academic Year "${y.year}"?`)) {
+                              deleteYearMutation.mutate(y.id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                          title="Delete Academic Year"
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -957,43 +974,60 @@ export default function SchoolProfilePage() {
         </div>
       )}
 
-      {/* ─── ADD YEAR MODAL ──────────────────────────────────────────────── */}
+      {/* ─── ADD / EDIT YEAR MODAL ───────────────────────────────────────── */}
       {isAddYearOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="font-bold text-sm text-[#1e3a5f]">Add Academic Year</h3>
-              <button onClick={() => setIsAddYearOpen(false)}><X size={16} /></button>
+              <h3 className="font-bold text-sm text-[#1e3a5f]">
+                {editingYear ? 'Edit Academic Year (शैक्षिक सत्र सम्पादन)' : 'Add Academic Year (नयाँ शैक्षिक सत्र थप्नुहोस्)'}
+              </h3>
+              <button onClick={() => { setIsAddYearOpen(false); setEditingYear(null); }}><X size={16} /></button>
             </div>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 const fd = new FormData(e.currentTarget);
-                addYearMutation.mutate({
+                saveYearMutation.mutate({
                   year: fd.get('year'),
                   startDateBs: fd.get('startDateBs'),
                   endDateBs: fd.get('endDateBs'),
+                  isActive: fd.get('isActive') === 'on',
                 });
               }}
               className="space-y-3 text-xs"
             >
               <div>
                 <label className="block font-bold mb-1">Year Code (e.g. 2083-84)</label>
-                <input required name="year" type="text" placeholder="2083-84" className="erp-input font-bold" />
+                <input required name="year" type="text" defaultValue={editingYear?.year || ''} placeholder="2083-84" className="erp-input font-bold" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold mb-1">Start Date (BS)</label>
-                  <input required name="startDateBs" type="text" placeholder="2083-01-01" className="erp-input font-mono" />
+                  <input required name="startDateBs" type="text" defaultValue={editingYear?.startDateBs || ''} placeholder="2083-01-01" className="erp-input font-mono" />
                 </div>
                 <div>
                   <label className="block font-bold mb-1">End Date (BS)</label>
-                  <input required name="endDateBs" type="text" placeholder="2083-12-30" className="erp-input font-mono" />
+                  <input required name="endDateBs" type="text" defaultValue={editingYear?.endDateBs || ''} placeholder="2083-12-30" className="erp-input font-mono" />
                 </div>
               </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="yearActiveToggle"
+                  name="isActive"
+                  defaultChecked={editingYear ? editingYear.isActive : false}
+                  className="rounded text-[#1e3a5f] focus:ring-[#1e3a5f]"
+                />
+                <label htmlFor="yearActiveToggle" className="font-bold text-gray-700 cursor-pointer">
+                  Set as Active Academic Year (हालको सक्रिय शैक्षिक सत्र)
+                </label>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsAddYearOpen(false)} className="px-3 py-1.5 border rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-1.5 bg-[#1e3a5f] text-white font-bold rounded-lg">Save Year</button>
+                <button type="button" onClick={() => { setIsAddYearOpen(false); setEditingYear(null); }} className="px-3 py-1.5 border rounded-lg">Cancel</button>
+                <button type="submit" disabled={saveYearMutation.isPending} className="px-4 py-1.5 bg-[#1e3a5f] text-white font-bold rounded-lg hover:bg-blue-900 transition">
+                  {saveYearMutation.isPending ? 'Saving...' : editingYear ? 'Update Year' : 'Save Year'}
+                </button>
               </div>
             </form>
           </div>

@@ -575,7 +575,56 @@ router.patch('/academic-years/:id/activate', authenticate, authorize('SUPER_ADMI
   }
 });
 
+router.put('/academic-years/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const yearId = parseInt(req.params.id);
+    if (req.body.isActive) {
+      await prisma.academicYear.updateMany({ data: { isActive: false } });
+    }
+    const yr = await prisma.academicYear.update({
+      where: { id: yearId },
+      data: {
+        year: req.body.year,
+        startDateBs: req.body.startDateBs,
+        endDateBs: req.body.endDateBs,
+        isActive: req.body.isActive !== undefined ? req.body.isActive : undefined,
+      },
+    });
+    return res.json({ success: true, data: yr, message: 'Academic Year updated successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.delete('/academic-years/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const yearId = parseInt(req.params.id);
+    const yr = await prisma.academicYear.findUnique({ where: { id: yearId } });
+    if (!yr) return res.status(404).json({ success: false, message: 'Academic Year not found.' });
+
+    // Check if linked data exists
+    const [expenseCount, incomeCount, feeCount, classCount] = await Promise.all([
+      prisma.expenseEntry.count({ where: { academicYearId: yearId } }),
+      prisma.incomeEntry.count({ where: { academicYearId: yearId } }),
+      prisma.feeCollection.count({ where: { academicYearId: yearId } }),
+      prisma.class.count({ where: { academicYearId: yearId } }),
+    ]);
+
+    if (expenseCount > 0 || incomeCount > 0 || feeCount > 0 || classCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete Academic Year "${yr.year}" because it has linked transactions or classes. Delete or reassign those records first.`
+      });
+    }
+
+    await prisma.academicYear.delete({ where: { id: yearId } });
+    return res.json({ success: true, message: `Academic Year "${yr.year}" deleted successfully.` });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/academic-years/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     const yearId = parseInt(req.params.id);
     const yr = await prisma.academicYear.findUnique({ where: { id: yearId } });
