@@ -1132,7 +1132,7 @@ export default function JournalVoucherPage() {
                   <span className="inline-block bg-[#1e3a5f] text-white font-extrabold px-3.5 py-1 rounded text-xs tracking-wider uppercase">
                     GENERAL JOURNAL LEDGER BOOK
                   </span>
-                  <p className="font-mono text-[11px] text-gray-600">Year: {activeYear?.year || '2083-84'} • Date: {todayBS()}</p>
+                  <p className="font-mono text-[11px] text-gray-600">Year: {activeYear?.year || '2081-82'} • Date: {todayBS()}</p>
                 </div>
               </div>
 
@@ -1318,7 +1318,7 @@ export default function JournalVoucherPage() {
                 </div>
                 <div>
                   <span className="text-gray-500 font-sans font-bold block text-[9px] uppercase">Academic Year:</span>
-                  <strong className="text-gray-900">{activeYear?.year || '2083-84'}</strong>
+                  <strong className="text-gray-900">{activeYear?.year || '2081-82'}</strong>
                 </div>
                 <div>
                   <span className="text-gray-500 font-sans font-bold block text-[9px] uppercase">Payment Medium:</span>

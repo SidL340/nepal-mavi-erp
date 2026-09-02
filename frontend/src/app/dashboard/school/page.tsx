@@ -998,17 +998,17 @@ export default function SchoolProfilePage() {
               className="space-y-3 text-xs"
             >
               <div>
-                <label className="block font-bold mb-1">Year Code (e.g. 2083-84)</label>
-                <input required name="year" type="text" defaultValue={editingYear?.year || ''} placeholder="2083-84" className="erp-input font-bold" />
+                <label className="block font-bold mb-1">Year Code (e.g. 2081-82)</label>
+                <input required name="year" type="text" defaultValue={editingYear?.year || ''} placeholder="2081-82" className="erp-input font-bold" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-bold mb-1">Start Date (BS)</label>
-                  <input required name="startDateBs" type="text" defaultValue={editingYear?.startDateBs || ''} placeholder="2083-01-01" className="erp-input font-mono" />
+                  <input required name="startDateBs" type="text" defaultValue={editingYear?.startDateBs || ''} placeholder="2081-04-01" className="erp-input font-mono" />
                 </div>
                 <div>
                   <label className="block font-bold mb-1">End Date (BS)</label>
-                  <input required name="endDateBs" type="text" defaultValue={editingYear?.endDateBs || ''} placeholder="2083-12-30" className="erp-input font-mono" />
+                  <input required name="endDateBs" type="text" defaultValue={editingYear?.endDateBs || ''} placeholder="2082-03-31" className="erp-input font-mono" />
                 </div>
               </div>
               <div className="flex items-center gap-2 pt-1">
