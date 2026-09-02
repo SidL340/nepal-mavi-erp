@@ -58,17 +58,17 @@ export default function SchoolProfilePage() {
 
   // Controlled Profile Form State
   const [profileForm, setProfileForm] = useState({
-    name: 'Nepal Model Secondary School',
-    nameNepali: 'नेपाल आदर्श माध्यमिक विद्यालय',
-    emisCode: 'ABC123',
+    name: '',
+    nameNepali: '',
+    emisCode: '',
     level: 'Secondary (माध्यमिक)',
     type: 'Community (सामुदायिक)',
-    address: 'Kathmandu, Nepal',
-    district: 'Kathmandu',
-    province: 'Bagmati',
-    phone: '01-4000000',
-    email: 'info@nepalmodel.edu.np',
-    principalName: 'Prof. Dr. Principal',
+    address: '',
+    district: '',
+    province: '',
+    phone: '',
+    email: '',
+    principalName: '',
     logoUrl: '',
     sealUrl: '',
   });
@@ -77,17 +77,17 @@ export default function SchoolProfilePage() {
   useEffect(() => {
     if (schoolData && Object.keys(schoolData).length > 0) {
       setProfileForm({
-        name: schoolData.name || 'Nepal Model Secondary School',
-        nameNepali: schoolData.nameNepali || 'नेपाल आदर्श माध्यमिक विद्यालय',
-        emisCode: schoolData.emisCode || 'ABC123',
+        name: schoolData.name || '',
+        nameNepali: schoolData.nameNepali || '',
+        emisCode: schoolData.emisCode || '',
         level: schoolData.level || 'Secondary (माध्यमिक)',
         type: schoolData.type || 'Community (सामुदायिक)',
-        address: schoolData.address || 'Kathmandu, Nepal',
-        district: schoolData.district || 'Kathmandu',
-        province: schoolData.province || 'Bagmati',
-        phone: schoolData.phone || '01-4000000',
-        email: schoolData.email || 'info@nepalmodel.edu.np',
-        principalName: schoolData.principalName || 'Prof. Dr. Principal',
+        address: schoolData.address || '',
+        district: schoolData.district || '',
+        province: schoolData.province || '',
+        phone: schoolData.phone || '',
+        email: schoolData.email || '',
+        principalName: schoolData.principalName || '',
         logoUrl: schoolData.logoUrl || '',
         sealUrl: schoolData.sealUrl || '',
       });
