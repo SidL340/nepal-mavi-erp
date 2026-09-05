@@ -343,10 +343,7 @@ export default function ExamsPage() {
       );
     } else {
       setBreakdownParts([
-        { title: 'Theory (सैद्धान्तिक)', fullMark: 25, rawFullMark: 75, passMarkPct: 40 },
-        { title: 'Terminal / Unit Test (एकाइ परीक्षा)', fullMark: 5, rawFullMark: 5, passMarkPct: 40 },
-        { title: 'Practical / Project (प्रयोगात्मक)', fullMark: 10, rawFullMark: 10, passMarkPct: 40 },
-        { title: 'Attendance & Homework (नियमितता तथा गृहकार्य)', fullMark: 10, rawFullMark: 10, passMarkPct: 40 },
+        { title: 'Theory / Exam Marks (सैद्धान्तिक/परीक्षा अङ्क)', fullMark: 100, rawFullMark: 100, passMarkPct: 40 },
       ]);
     }
     setIsBreakdownModalOpen(true);
@@ -1333,55 +1330,144 @@ export default function ExamsPage() {
                 <p className="text-xs text-gray-400 font-nepali">माथिको "Set Mark Breakdown" बटन क्लिक गरी अङ्क विभाजन तय गर्नुहोस् ।</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-gray-700">
-                  <thead className="bg-[#1e3a5f] text-white">
-                    <tr>
-                      <th className="px-3.5 py-3.5 font-bold uppercase w-14 text-center">Roll</th>
-                      <th className="px-3.5 py-3.5 font-bold uppercase w-28 text-center text-amber-300">Symbol No.</th>
-                      <th className="px-4 py-3.5 font-bold uppercase">Student Name</th>
-                      <th className="px-3.5 py-3.5 font-bold uppercase text-gray-300">EMIS ID</th>
-                      {markSheetData.examSubject.markTitles.map((title: any) => (
-                        <th key={title.id} className="px-4 py-3.5 font-bold uppercase text-center">
-                          <div>{title.title}</div>
-                          <div className="font-mono text-[10px] text-amber-300 font-normal mt-0.5">
-                            {title.rawFullMark && title.rawFullMark !== title.fullMark
-                              ? `Full: ${title.fullMark} M (Raw: ${title.rawFullMark} M)`
-                              : `Full: ${title.fullMark} M`}
-                          </div>
+              <>
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs text-gray-700">
+                    <thead className="bg-[#1e3a5f] text-white">
+                      <tr>
+                        <th className="px-3.5 py-3.5 font-bold uppercase w-14 text-center">Roll</th>
+                        <th className="px-3.5 py-3.5 font-bold uppercase w-28 text-center text-amber-300">Symbol No.</th>
+                        <th className="px-4 py-3.5 font-bold uppercase">Student Name</th>
+                        <th className="px-3.5 py-3.5 font-bold uppercase text-gray-300">EMIS ID</th>
+                        {markSheetData.examSubject.markTitles.map((title: any) => (
+                          <th key={title.id} className="px-4 py-3.5 font-bold uppercase text-center">
+                            <div>{title.title}</div>
+                            <div className="font-mono text-[10px] text-amber-300 font-normal mt-0.5">
+                              {title.rawFullMark && title.rawFullMark !== title.fullMark
+                                ? `Full: ${title.fullMark} M (Raw: ${title.rawFullMark} M)`
+                                : `Full: ${title.fullMark} M`}
+                            </div>
+                          </th>
+                        ))}
+                        <th className="px-4 py-3.5 font-bold uppercase text-center bg-[#162c46]">
+                          Total ({markSheetData.examSubject.markTitles.reduce((s: number, t: any) => s + (t.fullMark || 0), 0)} M)
                         </th>
-                      ))}
-                      <th className="px-4 py-3.5 font-bold uppercase text-center bg-[#162c46]">
-                        Total ({markSheetData.examSubject.markTitles.reduce((s: number, t: any) => s + (t.fullMark || 0), 0)} M)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {markSheetData.students.map((student: any) => {
-                      let studentTotal = 0;
-                      let hasAnyScore = false;
-                      const studentSymbol = student.symbolNo || generateSymbolNo(activeYear?.year, currentClassObj?.name, student.rollNo);
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {markSheetData.students.map((student: any) => {
+                        let studentTotal = 0;
+                        let hasAnyScore = false;
+                        const studentSymbol = student.symbolNo || generateSymbolNo(activeYear?.year, currentClassObj?.name, student.rollNo);
 
-                      return (
-                        <tr key={student.id} className="hover:bg-slate-50">
-                          <td className="px-3.5 py-3 font-mono font-bold text-center">{student.rollNo || '—'}</td>
-                          <td className="px-3.5 py-3 font-mono font-extrabold text-blue-900 text-center bg-blue-50/60">
-                            {studentSymbol}
-                          </td>
-                          <td className="px-4 py-3 font-bold text-gray-900">{student.fullName}</td>
-                          <td className="px-3.5 py-3 font-mono text-gray-400">{student.studentId}</td>
+                        return (
+                          <tr key={student.id} className="hover:bg-slate-50">
+                            <td className="px-3.5 py-3 font-mono font-bold text-center">{student.rollNo || '—'}</td>
+                            <td className="px-3.5 py-3 font-mono font-extrabold text-blue-900 text-center bg-blue-50/60">
+                              {studentSymbol}
+                            </td>
+                            <td className="px-4 py-3 font-bold text-gray-900">{student.fullName}</td>
+                            <td className="px-3.5 py-3 font-mono text-gray-400">{student.studentId}</td>
 
+                            {markSheetData.examSubject.markTitles.map((title: any) => {
+                              const key = `${student.id}_${title.id}`;
+                              const current = marksState[key] || { marksObtained: '', isAbsent: false };
+                              if (current.marksObtained !== '' && !current.isAbsent) {
+                                studentTotal += parseFloat(current.marksObtained) || 0;
+                                hasAnyScore = true;
+                              }
+
+                              return (
+                                <td key={title.id} className="px-4 py-3 text-center">
+                                  <div className="inline-flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={title.rawFullMark || title.fullMark}
+                                      step="any"
+                                      disabled={!isSubjectTeacher || current.isAbsent}
+                                      placeholder={`0-${title.fullMark}`}
+                                      value={current.marksObtained}
+                                      onChange={(e) =>
+                                        handleMarkChange(student.id, title.id, 'marksObtained', e.target.value)
+                                      }
+                                      className="erp-input w-20 text-center font-mono font-bold disabled:bg-gray-100"
+                                    />
+                                    <label className="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        disabled={!isSubjectTeacher}
+                                        checked={current.isAbsent}
+                                        onChange={(e) =>
+                                          handleMarkChange(student.id, title.id, 'isAbsent', e.target.checked)
+                                        }
+                                        className="rounded text-rose-500"
+                                      />
+                                      <span>Abs</span>
+                                    </label>
+                                  </div>
+                                </td>
+                              );
+                            })}
+
+                            <td className="px-4 py-3 text-center font-mono font-extrabold text-sm text-[#1e3a5f] bg-slate-50/50">
+                              {hasAnyScore ? studentTotal.toFixed(1).replace(/\.0$/, '') : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Touch-Friendly Card View */}
+                <div className="block md:hidden p-3 space-y-3">
+                  {markSheetData.students.map((student: any) => {
+                    let studentTotal = 0;
+                    let hasAnyScore = false;
+                    const studentSymbol = student.symbolNo || generateSymbolNo(activeYear?.year, currentClassObj?.name, student.rollNo);
+
+                    return (
+                      <div key={student.id} className="rounded-xl border border-gray-200 bg-white p-3.5 shadow-2xs space-y-2.5">
+                        <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#1e3a5f] text-white font-mono font-black text-xs">
+                                {student.rollNo || '—'}
+                              </span>
+                              <span className="font-bold text-gray-900 text-sm">{student.fullName}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-mono mt-0.5 ml-7">
+                              Symbol: <strong className="text-blue-900">{studentSymbol}</strong> | ID: {student.studentId}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] uppercase font-bold text-gray-400 block">Total</span>
+                            <span className="font-mono font-black text-sm text-[#1e3a5f]">
+                              {markSheetData.examSubject.markTitles.reduce((acc: number, t: any) => {
+                                const current = marksState[`${student.id}_${t.id}`];
+                                return current && !current.isAbsent && current.marksObtained !== ''
+                                  ? acc + (parseFloat(current.marksObtained) || 0)
+                                  : acc;
+                              }, 0).toFixed(1).replace(/\.0$/, '')}
+                              <span className="text-[10px] font-normal text-gray-400">/{markSheetData.examSubject.markTitles.reduce((s: number, t: any) => s + (t.fullMark || 0), 0)}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-1">
                           {markSheetData.examSubject.markTitles.map((title: any) => {
                             const key = `${student.id}_${title.id}`;
                             const current = marksState[key] || { marksObtained: '', isAbsent: false };
-                            if (current.marksObtained !== '' && !current.isAbsent) {
-                              studentTotal += parseFloat(current.marksObtained) || 0;
-                              hasAnyScore = true;
-                            }
 
                             return (
-                              <td key={title.id} className="px-4 py-3 text-center">
-                                <div className="inline-flex items-center gap-2">
+                              <div key={title.id} className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-lg border border-gray-100">
+                                <div className="text-xs font-semibold text-gray-700 min-w-0 truncate">
+                                  <span>{title.title}</span>
+                                  <span className="text-[10px] text-gray-400 font-mono block">Max: {title.fullMark}M</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
                                   <input
                                     type="number"
                                     min={0}
@@ -1393,9 +1479,9 @@ export default function ExamsPage() {
                                     onChange={(e) =>
                                       handleMarkChange(student.id, title.id, 'marksObtained', e.target.value)
                                     }
-                                    className="erp-input w-20 text-center font-mono font-bold disabled:bg-gray-100"
+                                    className="erp-input w-20 h-9 text-center font-mono font-bold text-sm disabled:bg-gray-100"
                                   />
-                                  <label className="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer">
+                                  <label className="flex items-center gap-1 text-[11px] font-bold text-rose-700 cursor-pointer bg-rose-50 px-2 py-1.5 rounded-md border border-rose-200">
                                     <input
                                       type="checkbox"
                                       disabled={!isSubjectTeacher}
@@ -1403,24 +1489,20 @@ export default function ExamsPage() {
                                       onChange={(e) =>
                                         handleMarkChange(student.id, title.id, 'isAbsent', e.target.checked)
                                       }
-                                      className="rounded text-rose-500"
+                                      className="rounded text-rose-600"
                                     />
                                     <span>Abs</span>
                                   </label>
                                 </div>
-                              </td>
+                              </div>
                             );
                           })}
-
-                          <td className="px-4 py-3 text-center font-mono font-extrabold text-sm text-[#1e3a5f] bg-slate-50/50">
-                            {hasAnyScore ? studentTotal.toFixed(1).replace(/\.0$/, '') : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>

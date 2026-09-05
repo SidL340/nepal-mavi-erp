@@ -60,12 +60,17 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
 
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
+    const data = { ...req.body };
+    if (data.categoryId) data.categoryId = parseInt(data.categoryId);
+    if (data.quantity !== undefined) data.quantity = parseInt(data.quantity);
+    if (data.purchaseAmount !== undefined) data.purchaseAmount = data.purchaseAmount ? parseFloat(data.purchaseAmount) : null;
+
     const item = await prisma.inventoryItem.update({
       where: { id: parseInt(req.params.id) },
-      data: req.body,
+      data,
       include: { category: true },
     });
-    return res.json({ success: true, data: item });
+    return res.json({ success: true, data: item, message: 'Inventory item updated.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -74,7 +79,16 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, 
 router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     await prisma.inventoryItem.delete({ where: { id: parseInt(req.params.id) } });
-    return res.json({ success: true, message: 'Deleted.' });
+    return res.json({ success: true, message: 'Inventory item deleted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.inventoryItem.delete({ where: { id: parseInt(req.params.id) } });
+    return res.json({ success: true, message: 'Inventory item deleted.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

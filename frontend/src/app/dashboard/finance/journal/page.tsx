@@ -251,10 +251,19 @@ export default function JournalVoucherPage() {
 
   const allTopics = Array.from(registeredTopicsSet).filter(Boolean).sort();
 
-  // Sort Vouchers by Date Descending
-  allVouchers.sort((a, b) => (a.dateBs < b.dateBs ? 1 : -1));
+  // Sort & Filter States
+  const [sortField, setSortField] = useState<'dateBs' | 'voucherNo' | 'recipientName' | 'topic' | 'amount'>('dateBs');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Filter Vouchers
+  const handleSort = (field: 'dateBs' | 'voucherNo' | 'recipientName' | 'topic' | 'amount') => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
   const [selectedPartyFilter, setSelectedPartyFilter] = useState<string>('ALL');
 
   const { data: partiesData } = useQuery({
@@ -278,21 +287,38 @@ export default function JournalVoucherPage() {
         const pName = partyObj.name.toLowerCase();
         const vPart = (v.particulars || '').toLowerCase();
         const vRem = (v.remarks || '').toLowerCase();
-        if (!vPart.includes(pName) && !vRem.includes(pName)) return false;
+        const vRec = (v.recipientName || '').toLowerCase();
+        if (!vPart.includes(pName) && !vRem.includes(pName) && !vRec.includes(pName)) return false;
       }
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      return (
-        v.voucherNo.toLowerCase().includes(q) ||
-        v.particulars.toLowerCase().includes(q) ||
-        (v.topic && v.topic.toLowerCase().includes(q)) ||
-        v.debitAccount.toLowerCase().includes(q) ||
-        v.creditAccount.toLowerCase().includes(q) ||
-        (v.paymentRef && v.paymentRef.toLowerCase().includes(q))
-      );
+      const matchVouch = (v.voucherNo || '').toLowerCase().includes(q);
+      const matchTopic = (v.topic || '').toLowerCase().includes(q);
+      const matchPart = (v.particulars || '').toLowerCase().includes(q);
+      const matchRem = (v.remarks || '').toLowerCase().includes(q);
+      const matchRec = (v.recipientName || '').toLowerCase().includes(q);
+      const matchCheque = (v.chequeNo || '').toLowerCase().includes(q) || (v.paymentRef || '').toLowerCase().includes(q);
+      if (!matchVouch && !matchTopic && !matchPart && !matchRem && !matchRec && !matchCheque) return false;
     }
     return true;
+  });
+
+  // Apply dynamic column sorting
+  filteredVouchers.sort((a, b) => {
+    let comparison = 0;
+    if (sortField === 'dateBs') {
+      comparison = (a.dateBs || '').localeCompare(b.dateBs || '');
+    } else if (sortField === 'voucherNo') {
+      comparison = (a.voucherNo || '').localeCompare(b.voucherNo || '');
+    } else if (sortField === 'recipientName') {
+      comparison = (a.recipientName || '').localeCompare(b.recipientName || '');
+    } else if (sortField === 'topic') {
+      comparison = (a.topic || '').localeCompare(b.topic || '');
+    } else if (sortField === 'amount') {
+      comparison = (a.debitAmount || 0) - (b.debitAmount || 0);
+    }
+    return sortDirection === 'asc' ? comparison : -comparison;
   });
 
   // Separate Debit vs Credit Entries for Separate Table View
@@ -496,11 +522,13 @@ export default function JournalVoucherPage() {
               <div class="badge">NEPAL GOVT FORMAT JOURNAL VOUCHER (गोश्वारा भौचर)</div>
             </div>
 
-            <div class="meta-grid">
-              <div>Voucher No: <strong>${v.voucherNo || 'VOUCH-001'}</strong></div>
+            <div class="meta-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+              <div>Voucher No: <strong style="color: #1e3a5f;">${v.voucherNo || 'VOUCH-001'}</strong></div>
               <div>Date: <strong>${v.dateBs || todayBS()} BS</strong></div>
-              <div>Recipient / Party: <strong style="color: #1e3a5f;">${v.recipientName || 'N/A'}</strong></div>
-              <div>Method: <strong>${v.paymentMedium || 'CASH'}${v.chequeNo ? ` (Chk: ${v.chequeNo})` : ''}</strong></div>
+              <div>Party / Recipient: <strong style="color: #1e3a5f;">${v.recipientName || 'N/A'}</strong></div>
+              <div>Payment Mode: <strong style="text-transform: uppercase;">${v.paymentMedium || 'CASH'}</strong></div>
+              <div>Cheque / Ref No: <strong style="color: #b91c1c;">${v.chequeNo || v.paymentRef || 'N/A'}</strong></div>
+              <div>Accounting Topic: <strong>${v.topic || 'General'}</strong></div>
             </div>
 
             <table>
@@ -844,11 +872,36 @@ export default function JournalVoucherPage() {
             <table className="w-full text-left text-xs divide-y divide-gray-200">
               <thead className="bg-[#1e3a5f] text-white font-bold">
                 <tr>
-                  <th className="p-3">Date (BS)</th>
-                  <th className="p-3">Voucher No</th>
-                  <th className="p-3">Topic / Head (शीर्षक)</th>
-                  <th className="p-3">Particulars & Double-Entry Breakdown (विस्तृत विवरण)</th>
-                  <th className="p-3 text-right">Debit (Dr. रू)</th>
+                  <th onClick={() => handleSort('dateBs')} className="p-3 cursor-pointer select-none hover:bg-[#2a5280] transition">
+                    <div className="flex items-center gap-1">
+                      <span>Date (BS)</span>
+                      {sortField === 'dateBs' && <span className="text-amber-300 font-bold">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
+                  </th>
+                  <th onClick={() => handleSort('voucherNo')} className="p-3 cursor-pointer select-none hover:bg-[#2a5280] transition">
+                    <div className="flex items-center gap-1">
+                      <span>Voucher No</span>
+                      {sortField === 'voucherNo' && <span className="text-amber-300 font-bold">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
+                  </th>
+                  <th onClick={() => handleSort('topic')} className="p-3 cursor-pointer select-none hover:bg-[#2a5280] transition">
+                    <div className="flex items-center gap-1">
+                      <span>Topic / Head (शीर्षक)</span>
+                      {sortField === 'topic' && <span className="text-amber-300 font-bold">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
+                  </th>
+                  <th onClick={() => handleSort('recipientName')} className="p-3 cursor-pointer select-none hover:bg-[#2a5280] transition">
+                    <div className="flex items-center gap-1">
+                      <span>Particulars & Party / Cheque (विस्तृत विवरण)</span>
+                      {sortField === 'recipientName' && <span className="text-amber-300 font-bold">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
+                  </th>
+                  <th onClick={() => handleSort('amount')} className="p-3 text-right cursor-pointer select-none hover:bg-[#2a5280] transition">
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Debit (Dr. रू)</span>
+                      {sortField === 'amount' && <span className="text-amber-300 font-bold">{sortDirection === 'asc' ? '▲' : '▼'}</span>}
+                    </div>
+                  </th>
                   <th className="p-3 text-right">Credit (Cr. रू)</th>
                   <th className="p-3 text-center">Action</th>
                 </tr>
@@ -906,10 +959,19 @@ export default function JournalVoucherPage() {
                         </td>
                       </tr>
 
-                      {/* Row 3: Narration Line */}
-                      <tr className="bg-slate-50/60 text-[11px] text-gray-500 italic border-b border-gray-200">
-                        <td colSpan={3} className="p-2 pl-4">
-                          <span>(Narration: {v.remarks} | Mode: {v.paymentMedium})</span>
+                      {/* Row 3: Narration & Cheque Details Line */}
+                      <tr className="bg-slate-50/70 text-[11px] text-gray-600 border-b border-gray-200">
+                        <td colSpan={3} className="p-2.5 pl-4">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span><strong>Narration:</strong> {v.remarks || v.particulars}</span>
+                            <span><strong>Payment Mode:</strong> <span className="font-semibold uppercase">{v.paymentMedium || 'CASH'}</span></span>
+                            {v.recipientName && (
+                              <span><strong>Party / Recipient:</strong> <span className="text-[#1e3a5f] font-bold">{v.recipientName}</span></span>
+                            )}
+                            {(v.chequeNo || v.paymentRef) && (
+                              <span><strong>Cheque / Ref No:</strong> <span className="font-mono font-extrabold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">{v.chequeNo || v.paymentRef}</span></span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     </Fragment>

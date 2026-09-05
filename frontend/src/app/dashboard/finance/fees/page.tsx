@@ -148,7 +148,12 @@ function FeeCollectionPortalContent() {
       if (!selectedFeeHeadId) throw new Error('Please select a Fee Head (शुल्क शीर्षक).');
       if (!amount || parseFloat(amount) <= 0) throw new Error('Please enter a valid amount.');
 
-      const netAmount = Math.max(0, parseFloat(amount) - parseFloat(discountAmount || '0'));
+      const totalFeeNum = parseFloat(amount);
+      const discountNum = parseFloat(discountAmount || '0');
+      const netAmount = Math.max(0, totalFeeNum - discountNum);
+      const remainingDue = 0; // When collected, this transaction clears this net fee
+
+      const computedRemarks = `${remarks ? `${remarks} | ` : ''}[Total: Rs. ${totalFeeNum} | Disc: Rs. ${discountNum} | Due: Rs. ${remainingDue}]`;
 
       const payload = {
         studentId: selectedStudent.id,
@@ -160,7 +165,7 @@ function FeeCollectionPortalContent() {
         paymentMedium,
         paymentRef,
         chequePayeeName: paymentMedium === 'CHEQUE' ? chequePayeeName : undefined,
-        remarks,
+        remarks: computedRemarks,
       };
 
       const res = await api.post('/income/fee-collections', payload);
@@ -253,84 +258,125 @@ function FeeCollectionPortalContent() {
   });
 
   // Print Official Receipt Function
+  // Print Official Receipt Function
   const triggerPrintReceipt = (receipt: any) => {
     if (!receipt) return;
     const printWin = window.open('', '_blank');
     if (!printWin) return;
 
     const r = receipt;
-    const studentName = r.student?.fullName || 'Student';
+    const sNameNp = schoolProfile?.schoolNameNepali || schoolProfile?.schoolName || schoolProfile?.name || 'श्री नेपाल माध्यमिक विद्यालय';
+    const sNameEn = schoolProfile?.schoolName || schoolProfile?.name || 'Shree Nepal Secondary School';
+    const sAddress = schoolProfile?.address || 'विश्रामपुर, रौतहट';
+
+    const studentName = r.student?.fullName || r.studentName || 'Student';
     const studentId = r.student?.studentId || r.studentId || '—';
+    const classInfo = r.student?.classEnrollments?.[0]?.class?.name || selectedStudent?.classEnrollments?.[0]?.class?.name || '—';
+    const rollNo = r.student?.classEnrollments?.[0]?.rollNo || selectedStudent?.classEnrollments?.[0]?.rollNo || '—';
     const feeHeadName = r.feeHead?.name || 'Fee Collection';
-    const amountVal = r.amount ? parseFloat(r.amount).toLocaleString() : '0';
+    
+    // Parse amounts & remaining dues
+    const paidAmount = r.amount ? parseFloat(r.amount) : 0;
+    let totalFee = paidAmount;
+    let discount = 0;
+    let remainingDue = 0;
+
+    const matchTotal = (r.remarks || '').match(/Total:\s*(?:Rs\.|रू)?\s*([\d,]+)/i);
+    const matchDue = (r.remarks || '').match(/Due:\s*(?:Rs\.|रू)?\s*([\d,]+)/i);
+    const matchDisc = (r.remarks || '').match(/Disc:\s*(?:Rs\.|रू)?\s*([\d,]+)/i);
+
+    if (matchTotal) totalFee = parseFloat(matchTotal[1].replace(/,/g, '')) || paidAmount;
+    if (matchDisc) discount = parseFloat(matchDisc[1].replace(/,/g, '')) || 0;
+    if (matchDue) remainingDue = parseFloat(matchDue[1].replace(/,/g, '')) || 0;
+    else remainingDue = Math.max(0, totalFee - discount - paidAmount);
+
+    const isDuesCleared = remainingDue <= 0;
 
     printWin.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Fee Receipt - ${r.receiptNo || 'Receipt'}</title>
+          <title>Official Fee Receipt - ${r.receiptNo || 'Receipt'}</title>
           <style>
             @page { size: A5 landscape; margin: 8mm; }
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #1e3a5f; font-size: 11px; }
             .card { border: 2px solid #1e3a5f; padding: 16px; border-radius: 8px; position: relative; }
             .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
-            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; text-transform: uppercase; margin: 0; }
-            .school-sub { font-size: 9.5px; color: #475569; margin-top: 2px; }
-            .receipt-title { display: inline-block; background: #1e3a5f; color: #fff; padding: 3px 12px; font-weight: 900; font-size: 11px; border-radius: 4px; uppercase; margin-top: 4px; }
-            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 10.5px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; margin: 0; }
+            .school-sub { font-size: 10px; font-weight: bold; color: #475569; margin-top: 2px; }
+            .receipt-title { display: inline-block; background: #1e3a5f; color: #fff; padding: 3px 14px; font-weight: 900; font-size: 11px; border-radius: 4px; text-transform: uppercase; margin-top: 4px; }
+            .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px; background: #f8fafc; padding: 8px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 10.5px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
             th { background: #1e3a5f; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; }
             td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10.5px; }
-            .total-row { background: #ecfdf5; font-weight: 900; font-size: 12px; color: #047857; }
-            .footer { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
+            .due-status { display: inline-block; padding: 3px 8px; border-radius: 4px; font-weight: 900; font-size: 10.5px; }
+            .footer { margin-top: 25px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
             .sig { width: 140px; text-align: center; border-top: 1px solid #333; padding-top: 4px; }
           </style>
         </head>
         <body>
           <div class="card">
             <div class="header">
-              <h1 class="school-name">${schoolProfile?.name || 'SHREE NEPAL SECONDARY SCHOOL'}</h1>
-              <div class="school-sub">${schoolProfile?.address || 'Nepal'} ${schoolProfile?.emisCode ? `| EMIS Code: ${schoolProfile.emisCode}` : ''}</div>
-              <div class="receipt-title">FEE RECEIPT (भुक्तानी रसिद)</div>
+              <h1 class="school-name">${sNameNp}</h1>
+              <div class="school-sub">${sNameEn}, ${sAddress}</div>
+              <div class="receipt-title">OFFICIAL FEE RECEIPT (शुल्क भुक्तानी रसिद)</div>
             </div>
 
             <div class="grid">
-              <div><strong>RECEIPT NO:</strong> ${r.receiptNo || 'RCP-2026'}</div>
-              <div><strong>DATE BS:</strong> ${r.paidDateBs || todayBS()}</div>
+              <div><strong>RECEIPT NO:</strong> <span style="font-family: monospace; font-weight: bold;">${r.receiptNo || 'RCP-2026'}</span></div>
+              <div><strong>DATE (BS):</strong> <span style="font-family: monospace; font-weight: bold;">${r.paidDateBs || todayBS()}</span></div>
               <div><strong>STUDENT NAME:</strong> ${studentName}</div>
-              <div><strong>STUDENT ID / EMIS:</strong> ${studentId}</div>
-              <div><strong>PAYMENT METHOD:</strong> ${r.paymentMedium || 'CASH'}</div>
-              <div><strong>COLLECTED BY:</strong> ${r.collectedBy || 'Accountant'}</div>
+              <div><strong>CLASS & ROLL:</strong> ${classInfo} (Roll: ${rollNo})</div>
+              <div><strong>STUDENT ID / EMIS:</strong> <span style="font-family: monospace;">${studentId}</span></div>
+              <div><strong>PAYMENT METHOD:</strong> ${r.paymentMedium || 'CASH'} ${r.paymentRef ? `(Ref: ${r.paymentRef})` : ''}</div>
             </div>
 
             <table>
               <thead>
                 <tr>
-                  <th>S.N</th>
-                  <th>FEE HEAD / PARTICULAR (शुल्क शीर्षक)</th>
-                  <th style="text-align: right;">AMOUNT (रू)</th>
+                  <th style="width: 30px; text-align: center;">S.N</th>
+                  <th>FEE HEAD & PARTICULARS (शुल्क शीर्षक)</th>
+                  <th style="text-align: right; width: 110px;">TOTAL FEE</th>
+                  <th style="text-align: right; width: 110px;">PAID NOW (रू)</th>
+                  <th style="text-align: right; width: 130px;">REMAINING DUES</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>1</td>
-                  <td>${feeHeadName}</td>
-                  <td style="text-align: right; font-family: monospace;">Rs. ${amountVal}</td>
+                  <td style="text-align: center;">1</td>
+                  <td>
+                    <strong>${feeHeadName}</strong>
+                    ${discount > 0 ? `<div style="font-size: 9px; color: #666;">Scholarship / Discount: रू ${discount.toLocaleString()}</div>` : ''}
+                  </td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold;">रू ${totalFee.toLocaleString()}</td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #047857;">रू ${paidAmount.toLocaleString()}</td>
+                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: ${isDuesCleared ? '#047857' : '#b91c1c'};">
+                    ${isDuesCleared ? '0 (चुक्ता भएको)' : `रू ${remainingDue.toLocaleString()}`}
+                  </td>
                 </tr>
-                <tr class="total-row">
-                  <td colspan="2" style="text-align: right;">NET RECEIVED AMOUNT (जम्मा भुक्तानी):</td>
-                  <td style="text-align: right; font-family: monospace;">Rs. ${amountVal}</td>
+                <tr style="background: ${isDuesCleared ? '#ecfdf5' : '#fffbeb'}; border-top: 1.5px solid #1e3a5f;">
+                  <td colspan="3" style="text-align: right; font-weight: bold;">
+                    ${isDuesCleared ? 'DUES STATUS (शुल्क स्थिति):' : 'CURRENT SETTLEMENT STATUS:'}
+                  </td>
+                  <td style="text-align: right; font-family: monospace; font-weight: 900; color: #047857; font-size: 12px;">
+                    रू ${paidAmount.toLocaleString()}
+                  </td>
+                  <td style="text-align: right;">
+                    <span class="due-status" style="background: ${isDuesCleared ? '#a7f3d0' : '#fed7aa'}; color: ${isDuesCleared ? '#065f46' : '#9a3412'};">
+                      ${isDuesCleared ? '✓ DUES CLEARED (चुक्ता भएको)' : `⚡ रू ${remainingDue.toLocaleString()} DUE`}
+                    </span>
+                  </td>
                 </tr>
               </tbody>
             </table>
 
             <div style="font-size: 9.5px; color: #64748b; margin-top: 4px;">
-              * Note: ${r.remarks || 'Thank you for your payment. Keep this receipt safe for your records.'}
+              * Narration: ${r.remarks || 'Thank you for the timely fee payment. Keep this receipt safe for your records.'}
             </div>
 
             <div class="footer">
-              <div class="sig">Payer Signature</div>
+              <div class="sig">Payer / Guardian Signature</div>
               <div class="sig">Authorized Signature (लेखापाल)</div>
             </div>
           </div>

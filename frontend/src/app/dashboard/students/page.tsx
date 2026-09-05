@@ -421,7 +421,7 @@ export default function StudentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Assign Class</label>
                   <select name="classId" className="erp-input">
@@ -436,6 +436,10 @@ export default function StudentsPage() {
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Roll Number</label>
                   <input name="rollNo" type="number" placeholder="1" className="erp-input" />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Admission Date (भर्ना मिति BS)</label>
+                  <input name="admissionDateBs" type="text" placeholder="2081-01-10" className="erp-input font-mono" />
                 </div>
               </div>
 

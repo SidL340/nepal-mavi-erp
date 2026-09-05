@@ -849,58 +849,135 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* Students Attendance Table */}
+          {/* Students Attendance Section (Desktop Table + Mobile Cards) */}
           <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#1e3a5f] text-white font-bold">
-                <tr>
-                  <th className="p-3.5 w-16 text-center">Roll No</th>
-                  <th className="p-3.5">Student Name</th>
-                  <th className="p-3.5">EMIS / Student ID</th>
-                  <th className="p-3.5 text-center">Attendance Status</th>
-                  <th className="p-3.5">Remarks / Reason</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {isStudentsLoading ? (
-                  <tr><td colSpan={5} className="p-8 text-center text-gray-400">Loading class students...</td></tr>
-                ) : !classStudents || classStudents.length === 0 ? (
-                  <tr><td colSpan={5} className="p-8 text-center text-gray-400">No students enrolled in this class.</td></tr>
-                ) : (
-                  classStudents.map((st: any) => {
+            {isStudentsLoading ? (
+              <div className="p-12 text-center text-gray-400">Loading class students...</div>
+            ) : !classStudents || classStudents.length === 0 ? (
+              <div className="p-12 text-center text-gray-400">No students enrolled in this class.</div>
+            ) : (
+              <>
+                {/* Desktop View Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#1e3a5f] text-white font-bold">
+                      <tr>
+                        <th className="p-3.5 w-16 text-center">Roll No</th>
+                        <th className="p-3.5">Student Name</th>
+                        <th className="p-3.5">EMIS / Student ID</th>
+                        <th className="p-3.5 text-center">Attendance Status</th>
+                        <th className="p-3.5">Remarks / Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {classStudents.map((st: any) => {
+                        const currentVal = attendanceMap[st.id] || { status: 'PRESENT', remark: '', leaveType: '' };
+                        return (
+                          <tr key={st.id} className="hover:bg-slate-50">
+                            <td className="p-3.5 text-center font-mono font-bold text-gray-800">{st.rollNo || '—'}</td>
+                            <td className="p-3.5 font-bold text-gray-900">{st.fullName}</td>
+                            <td className="p-3.5 font-mono text-gray-500">{st.studentId}</td>
+                            <td className="p-3.5">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {[
+                                  { id: 'PRESENT', label: 'Present', color: 'bg-emerald-600 text-white border-emerald-600' },
+                                  { id: 'ABSENT', label: 'Absent', color: 'bg-rose-600 text-white border-rose-600' },
+                                  { id: 'LATE', label: 'Late', color: 'bg-amber-500 text-white border-amber-500' },
+                                  { id: 'LEAVE', label: 'Leave', color: 'bg-blue-600 text-white border-blue-600' },
+                                ].map((stBtn) => (
+                                  <button
+                                    key={stBtn.id}
+                                    type="button"
+                                    onClick={() => handleStatusChange(st.id, stBtn.id as any)}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                                      currentVal.status === stBtn.id
+                                        ? stBtn.color + ' shadow-2xs scale-105'
+                                        : 'bg-slate-50 text-gray-600 hover:bg-slate-100 border-gray-200'
+                                    }`}
+                                  >
+                                    {stBtn.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="p-3.5">
+                              <input
+                                type="text"
+                                placeholder="Reason / Note..."
+                                value={currentVal.remark}
+                                onChange={(e) =>
+                                  setAttendanceMap((prev) => ({
+                                    ...prev,
+                                    [st.id]: { ...prev[st.id], remark: e.target.value },
+                                  }))
+                                }
+                                className="erp-input text-xs py-1"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Touch-Friendly Card View */}
+                <div className="block md:hidden p-3 space-y-3">
+                  {classStudents.map((st: any) => {
                     const currentVal = attendanceMap[st.id] || { status: 'PRESENT', remark: '', leaveType: '' };
                     return (
-                      <tr key={st.id} className="hover:bg-slate-50">
-                        <td className="p-3.5 text-center font-mono font-bold text-gray-800">{st.rollNo || '—'}</td>
-                        <td className="p-3.5 font-bold text-gray-900">{st.fullName}</td>
-                        <td className="p-3.5 font-mono text-gray-500">{st.studentId}</td>
-                        <td className="p-3.5">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {[
-                              { id: 'PRESENT', label: 'Present', color: 'bg-emerald-600 text-white border-emerald-600' },
-                              { id: 'ABSENT', label: 'Absent', color: 'bg-rose-600 text-white border-rose-600' },
-                              { id: 'LATE', label: 'Late', color: 'bg-amber-500 text-white border-amber-500' },
-                              { id: 'LEAVE', label: 'Leave', color: 'bg-blue-600 text-white border-blue-600' },
-                            ].map((stBtn) => (
+                      <div key={st.id} className="rounded-xl border border-gray-200 bg-white p-3.5 shadow-2xs space-y-3">
+                        <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#1e3a5f] text-white font-mono font-black text-xs">
+                              {st.rollNo || '—'}
+                            </span>
+                            <div>
+                              <div className="font-bold text-gray-900 text-sm">{st.fullName}</div>
+                              <div className="text-[10px] text-gray-500 font-mono">ID: {st.studentId}</div>
+                            </div>
+                          </div>
+                          <div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                              currentVal.status === 'PRESENT' ? 'bg-emerald-100 text-emerald-800' :
+                              currentVal.status === 'ABSENT' ? 'bg-rose-100 text-rose-800' :
+                              currentVal.status === 'LATE' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {currentVal.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Large Touch Status Buttons */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { id: 'PRESENT', short: 'P', label: 'Present', activeColor: 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400', inactiveColor: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+                            { id: 'ABSENT', short: 'A', label: 'Absent', activeColor: 'bg-rose-600 text-white shadow-sm ring-2 ring-rose-400', inactiveColor: 'bg-rose-50 text-rose-800 border-rose-200' },
+                            { id: 'LATE', short: 'T', label: 'Late', activeColor: 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-400', inactiveColor: 'bg-amber-50 text-amber-800 border-amber-200' },
+                            { id: 'LEAVE', short: 'L', label: 'Leave', activeColor: 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-400', inactiveColor: 'bg-blue-50 text-blue-800 border-blue-200' },
+                          ].map((btn) => {
+                            const isActive = currentVal.status === btn.id;
+                            return (
                               <button
-                                key={stBtn.id}
+                                key={btn.id}
                                 type="button"
-                                onClick={() => handleStatusChange(st.id, stBtn.id as any)}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
-                                  currentVal.status === stBtn.id
-                                    ? stBtn.color + ' shadow-2xs scale-105'
-                                    : 'bg-slate-50 text-gray-600 hover:bg-slate-100 border-gray-200'
+                                onClick={() => handleStatusChange(st.id, btn.id as any)}
+                                className={`py-2 rounded-xl text-center font-bold border transition flex flex-col items-center justify-center ${
+                                  isActive ? btn.activeColor : `${btn.inactiveColor} hover:opacity-90`
                                 }`}
                               >
-                                {stBtn.label}
+                                <span className="text-base font-black leading-none">{btn.short}</span>
+                                <span className="text-[9px] mt-0.5 leading-tight">{btn.label}</span>
                               </button>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-3.5">
+                            );
+                          })}
+                        </div>
+
+                        {/* Reason / Remarks Input */}
+                        <div>
                           <input
                             type="text"
-                            placeholder="Reason / Note..."
+                            placeholder="Reason / Remarks (कैफियत)..."
                             value={currentVal.remark}
                             onChange={(e) =>
                               setAttendanceMap((prev) => ({
@@ -908,15 +985,15 @@ export default function AttendancePage() {
                                 [st.id]: { ...prev[st.id], remark: e.target.value },
                               }))
                             }
-                            className="erp-input text-xs py-1"
+                            className="erp-input text-xs py-1.5 w-full"
                           />
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
