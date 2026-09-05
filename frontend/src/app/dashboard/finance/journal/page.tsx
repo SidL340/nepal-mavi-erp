@@ -3,7 +3,7 @@
 import { useState, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS } from '@/lib/nepali-date';
+import { todayBS, getFiscalYearFromBS, resolveFinancialYear } from '@/lib/nepali-date';
 import {
   FileText,
   Printer,
@@ -36,6 +36,7 @@ export default function JournalVoucherPage() {
   const [topicFilter, setTopicFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [partyWiseSelectedId, setPartyWiseSelectedId] = useState<string>('ALL');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
 
   // Modals
   const [selectedVoucher, setSelectedVoucher] = useState<any>(null);
@@ -50,6 +51,21 @@ export default function JournalVoucherPage() {
     },
   });
 
+  // Fetch Financial Years (साउन–असार)
+  const { data: financialYearsData } = useQuery({
+    queryKey: ['financial-years-all'],
+    queryFn: async () => {
+      const res = await api.get('/financial-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
+  const effectiveFYId = selectedYearFilter === 'ALL'
+    ? ''
+    : selectedYearFilter === 'ACTIVE'
+    ? (activeFinancialYear?.id ? String(activeFinancialYear.id) : '')
+    : selectedYearFilter;
+
   // Fetch Academic Years
   const { data: yearsData } = useQuery({
     queryKey: ['academic-years'],
@@ -62,36 +78,36 @@ export default function JournalVoucherPage() {
 
   // Fetch Income Entries
   const { data: incomeData } = useQuery({
-    queryKey: ['income-entries-journal'],
+    queryKey: ['income-entries-journal', effectiveFYId],
     queryFn: async () => {
-      const res = await api.get('/income/entries?limit=100');
+      const res = await api.get(`/income/entries?limit=500${effectiveFYId ? `&financialYearId=${effectiveFYId}` : ''}`);
       return res.data?.data || [];
     },
   });
 
   // Fetch Expense Entries
   const { data: expenseData } = useQuery({
-    queryKey: ['expense-entries-journal'],
+    queryKey: ['expense-entries-journal', effectiveFYId],
     queryFn: async () => {
-      const res = await api.get('/expense/entries?limit=100');
+      const res = await api.get(`/expense/entries?limit=500${effectiveFYId ? `&financialYearId=${effectiveFYId}` : ''}`);
       return res.data?.data || [];
     },
   });
 
   // Fetch Fee Collections
   const { data: feeData } = useQuery({
-    queryKey: ['fee-collections-journal'],
+    queryKey: ['fee-collections-journal', effectiveFYId],
     queryFn: async () => {
-      const res = await api.get('/income/fee-collections?limit=100');
+      const res = await api.get(`/income/fee-collections?limit=500${effectiveFYId ? `&financialYearId=${effectiveFYId}` : ''}`);
       return res.data?.data || [];
     },
   });
 
   // Fetch Payrolls
   const { data: payrollData } = useQuery({
-    queryKey: ['payrolls-journal'],
+    queryKey: ['payrolls-journal', effectiveFYId],
     queryFn: async () => {
-      const res = await api.get('/payroll/list?limit=100');
+      const res = await api.get(`/payroll/list?limit=500${effectiveFYId ? `&financialYearId=${effectiveFYId}` : ''}`);
       return res.data?.data || [];
     },
   });
@@ -130,6 +146,7 @@ export default function JournalVoucherPage() {
   (incomeData || []).forEach((inc: any) => {
     const rName = inc.party?.name || inc.sourceOrg || inc.sourceLevel || 'Government Budget';
     const topicTitle = inc.head ? `${inc.head.code ? `[${inc.head.code}] ` : ''}${inc.head.name}` : 'Government Budget Income';
+    const fyYear = inc.financialYear?.year || getFiscalYearFromBS(inc.receivedDateBs);
     allVouchers.push({
       id: `INC-${inc.id}`,
       originalId: inc.id,
@@ -137,6 +154,7 @@ export default function JournalVoucherPage() {
       type: 'INCOME',
       typeLabel: 'आम्दानी गोश्वारा भौचर (Income JV)',
       topic: topicTitle,
+      financialYear: fyYear,
       recipientName: rName,
       partyId: inc.partyId || inc.party?.id,
       dateBs: inc.receivedDateBs,
@@ -158,6 +176,7 @@ export default function JournalVoucherPage() {
   (expenseData || []).forEach((exp: any) => {
     const rName = exp.party?.name || exp.paidTo || 'Vendor / Supplier';
     const topicTitle = exp.head ? `${exp.head.code ? `[${exp.head.code}] ` : ''}${exp.head.name}` : 'Operating Expense';
+    const fyYear = exp.financialYear?.year || getFiscalYearFromBS(exp.expenseDateBs);
     allVouchers.push({
       id: `EXP-${exp.id}`,
       originalId: exp.id,
@@ -165,6 +184,7 @@ export default function JournalVoucherPage() {
       type: 'EXPENSE',
       typeLabel: 'खर्च गोश्वारा भौचर (Expense JV)',
       topic: topicTitle,
+      financialYear: fyYear,
       recipientName: rName,
       partyId: exp.partyId || exp.party?.id,
       dateBs: exp.expenseDateBs,
@@ -185,6 +205,7 @@ export default function JournalVoucherPage() {
   // 3. Student Fee Receipts Vouchers
   (feeData || []).forEach((fee: any) => {
     const rName = fee.student ? `${fee.student.fullName} (${fee.student.studentId})` : 'Student';
+    const fyYear = fee.financialYear?.year || getFiscalYearFromBS(fee.paidDateBs);
     allVouchers.push({
       id: `FEE-${fee.id}`,
       originalId: fee.id,
@@ -192,6 +213,7 @@ export default function JournalVoucherPage() {
       type: 'FEE',
       typeLabel: 'विद्यार्थी शुल्क भौचर (Fee Collection JV)',
       topic: fee.feeHead?.name || 'Student Tuition & Fee',
+      financialYear: fyYear,
       recipientName: rName,
       dateBs: fee.paidDateBs,
       dateAd: fee.paidDateAd,
@@ -210,6 +232,7 @@ export default function JournalVoucherPage() {
   // 4. Payroll Vouchers
   (payrollData || []).forEach((pay: any) => {
     const rName = pay.teacher ? `${pay.teacher.fullName}` : 'Staff / Teacher';
+    const fyYear = pay.financialYear?.year || getFiscalYearFromBS(pay.monthFrom || todayBS());
     allVouchers.push({
       id: `PAY-${pay.id}`,
       originalId: pay.id,
@@ -217,6 +240,7 @@ export default function JournalVoucherPage() {
       type: 'PAYROLL',
       typeLabel: 'शिक्षक तलब गोश्वारा भौचर (Payroll JV)',
       topic: 'Teacher Salary & Allowances (तलब तथा भत्ता)',
+      financialYear: fyYear,
       recipientName: rName,
       dateBs: pay.monthFrom || todayBS(),
       dateAd: pay.createdAt,
@@ -534,10 +558,11 @@ export default function JournalVoucherPage() {
             <div class="meta-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
               <div>Voucher No: <strong style="color: #1e3a5f;">${v.voucherNo || 'VOUCH-001'}</strong></div>
               <div>Date: <strong>${v.dateBs || todayBS()} BS</strong></div>
+              <div>Fiscal Year: <strong style="color: #1e3a5f;">आ.व. ${v.financialYear || getFiscalYearFromBS(v.dateBs || todayBS())}</strong></div>
               <div>Party / Recipient: <strong style="color: #1e3a5f;">${v.recipientName || 'N/A'}</strong></div>
               <div>Payment Mode: <strong style="text-transform: uppercase;">${v.paymentMedium || 'CASH'}</strong></div>
               <div>Cheque / Ref No: <strong style="color: #b91c1c;">${v.chequeNo || v.paymentRef || 'N/A'}</strong></div>
-              <div>Accounting Topic: <strong>${v.topic || 'General'}</strong></div>
+              <div style="grid-column: span 3;">Accounting Topic: <strong>${v.topic || 'General'}</strong></div>
             </div>
 
             <table>
@@ -645,7 +670,9 @@ export default function JournalVoucherPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-blue-800">Total Debit Entries (प्राप्ति/आम्दानी)</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-800">
+              Total Debit Entries ({selectedYearFilter === 'ALL' ? 'सबै वर्ष' : `आ.व. ${financialYearsData?.find((f: any) => f.id.toString() === effectiveFYId)?.year || activeFinancialYear?.year || '२०८३/८४'}`})
+            </span>
             <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-700">
               <ArrowDownLeft size={16} />
             </div>
@@ -656,7 +683,9 @@ export default function JournalVoucherPage() {
 
         <div className="rounded-2xl border border-rose-100 bg-white p-5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-rose-800">Total Credit Entries (भुक्तानी/खर्च)</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-800">
+              Total Credit Entries ({selectedYearFilter === 'ALL' ? 'सबै वर्ष' : `आ.व. ${financialYearsData?.find((f: any) => f.id.toString() === effectiveFYId)?.year || activeFinancialYear?.year || '२०८३/८४'}`})
+            </span>
             <div className="h-8 w-8 rounded-full bg-rose-50 flex items-center justify-center text-rose-700">
               <ArrowUpRight size={16} />
             </div>
@@ -713,6 +742,21 @@ export default function JournalVoucherPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Fiscal Year Filter */}
+          <select
+            value={selectedYearFilter}
+            onChange={(e) => setSelectedYearFilter(e.target.value)}
+            className="rounded-xl border border-indigo-300 bg-indigo-50/80 px-3 py-1.5 text-xs focus:border-[#1e3a5f] focus:outline-hidden font-bold text-indigo-950 shadow-2xs"
+          >
+            <option value="ACTIVE">चालु आ.व. ({activeFinancialYear?.year || '2083/84'})</option>
+            <option value="ALL">सबै आर्थिक वर्षहरू (All Fiscal Years)</option>
+            {financialYearsData?.map((fy: any) => (
+              <option key={fy.id} value={fy.id.toString()}>
+                आ.व. {fy.year} {fy.isActive ? '(चालु)' : ''}
+              </option>
+            ))}
+          </select>
+
           {/* Topic / Head Filter Dropdown */}
           <select
             value={topicFilter}
@@ -794,7 +838,12 @@ export default function JournalVoucherPage() {
                   ) : (
                     debitEntries.map((v) => (
                       <tr key={v.id} className="hover:bg-blue-50/50">
-                        <td className="p-3 font-mono font-bold text-gray-800">{v.dateBs}</td>
+                        <td className="p-3 font-mono font-bold text-gray-800 whitespace-nowrap">
+                          <div>{v.dateBs}</div>
+                          <span className="inline-block text-[9.5px] font-sans font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 mt-0.5">
+                            आ.व. {v.financialYear}
+                          </span>
+                        </td>
                         <td className="p-3 font-mono font-bold text-[#1e3a5f]">{v.voucherNo}</td>
                         <td className="p-3">
                           <span className="font-bold text-gray-900 block">{v.particulars}</span>
@@ -865,7 +914,12 @@ export default function JournalVoucherPage() {
                   ) : (
                     creditEntries.map((v) => (
                       <tr key={v.id} className="hover:bg-rose-50/50">
-                        <td className="p-3 font-mono font-bold text-gray-800">{v.dateBs}</td>
+                        <td className="p-3 font-mono font-bold text-gray-800 whitespace-nowrap">
+                          <div>{v.dateBs}</div>
+                          <span className="inline-block text-[9.5px] font-sans font-bold text-rose-800 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 mt-0.5">
+                            आ.व. {v.financialYear}
+                          </span>
+                        </td>
                         <td className="p-3 font-mono font-bold text-rose-900">{v.voucherNo}</td>
                         <td className="p-3">
                           <span className="font-bold text-gray-900 block">{v.particulars}</span>
@@ -959,8 +1013,11 @@ export default function JournalVoucherPage() {
                     <Fragment key={v.id}>
                       {/* Row 1: Debit Line */}
                       <tr className="hover:bg-blue-50/40">
-                        <td rowSpan={3} className="p-3 font-mono font-bold text-gray-800 align-top border-r border-gray-100">
-                          {v.dateBs}
+                        <td rowSpan={3} className="p-3 font-mono font-bold text-gray-800 align-top border-r border-gray-100 whitespace-nowrap">
+                          <div>{v.dateBs}</div>
+                          <span className="inline-block text-[9.5px] font-sans font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 mt-0.5">
+                            आ.व. {v.financialYear}
+                          </span>
                         </td>
                         <td rowSpan={3} className="p-3 font-mono font-extrabold text-[#1e3a5f] align-top border-r border-gray-100">
                           {v.voucherNo}
@@ -1157,7 +1214,10 @@ export default function JournalVoucherPage() {
                     partyVouchersList.map((v) => (
                       <tr key={v.id} className="hover:bg-slate-50 transition">
                         <td className="py-3 px-4 font-mono font-bold text-gray-900 whitespace-nowrap">
-                          {v.dateBs}
+                          <div>{v.dateBs}</div>
+                          <span className="inline-block text-[9.5px] font-sans font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 mt-0.5">
+                            आ.व. {v.financialYear}
+                          </span>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-[#1e3a5f] whitespace-nowrap">
                           {v.voucherNo}
@@ -1190,7 +1250,7 @@ export default function JournalVoucherPage() {
                             className="inline-flex items-center gap-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2.5 py-1 text-xs font-extrabold shadow-2xs transition"
                           >
                             <Printer size={12} />
-                            <span>Print JV</span>
+                            <span>Voucher</span>
                           </button>
                         </td>
                       </tr>
@@ -1210,7 +1270,7 @@ export default function JournalVoucherPage() {
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 no-print">
               <span className="font-extrabold text-[#1e3a5f] text-sm flex items-center gap-2">
                 <Printer size={16} />
-                <span>Print Complete Journal Ledger Book (गोश्वारा भौचर तथा खाता पुस्तक)</span>
+                <span>Print Official General Journal Ledger Book (गोश्वारा भौचर खाता)</span>
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -1254,7 +1314,7 @@ export default function JournalVoucherPage() {
                   <span className="inline-block bg-[#1e3a5f] text-white font-extrabold px-3.5 py-1 rounded text-xs tracking-wider uppercase">
                     GENERAL JOURNAL LEDGER BOOK
                   </span>
-                  <p className="font-mono text-[11px] text-gray-600">Year: {activeYear?.year || '2081-82'} • Date: {todayBS()}</p>
+                  <p className="font-mono text-[11px] text-gray-600">Fiscal Year: आ.व. {financialYearsData?.find((f: any) => f.id.toString() === effectiveFYId)?.year || activeFinancialYear?.year || '2083/84'} • Date: {todayBS()}</p>
                 </div>
               </div>
 
@@ -1268,46 +1328,36 @@ export default function JournalVoucherPage() {
                     <tr className="bg-[#1e3a5f] text-white font-bold">
                       <th className="border border-gray-400 p-2 w-24">Date (BS)</th>
                       <th className="border border-gray-400 p-2 w-28">Voucher No</th>
-                      <th className="border border-gray-400 p-2 text-left w-36">Topic / Head</th>
-                      <th className="border border-gray-400 p-2 text-left">Particulars & Breakdown (विस्तृत विवरण)</th>
-                      <th className="border border-gray-400 p-2 w-28 text-right">Debit (Dr. Rs.)</th>
-                      <th className="border border-gray-400 p-2 w-28 text-right">Credit (Cr. Rs.)</th>
+                      <th className="border border-gray-400 p-2">Particulars & Accounting Details</th>
+                      <th className="border border-gray-400 p-2 w-24 text-right">Debit (Dr. रू)</th>
+                      <th className="border border-gray-400 p-2 w-24 text-right">Credit (Cr. रू)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredVouchers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="border border-gray-400 p-6 text-center text-gray-400">
+                        <td colSpan={5} className="border border-gray-400 p-6 text-center text-gray-400">
                           No journal entries found.
                         </td>
                       </tr>
                     ) : (
                       filteredVouchers.map((v) => (
-                        <Fragment key={v.id}>
+                        <Fragment key={`print-${v.id}`}>
                           {/* Row 1: Debit Line */}
                           <tr>
-                            <td rowSpan={3} className="border border-gray-400 p-2 font-mono text-center font-bold align-top">
-                              {v.dateBs}
+                            <td rowSpan={3} className="border border-gray-400 p-2 font-mono font-bold text-center align-top">
+                              <div>{v.dateBs}</div>
+                              <span className="inline-block text-[9px] font-sans font-bold text-indigo-800 mt-0.5">
+                                आ.व. {v.financialYear}
+                              </span>
                             </td>
-                            <td rowSpan={3} className="border border-gray-400 p-2 font-mono font-bold align-top text-[#1e3a5f]">
+                            <td rowSpan={3} className="border border-gray-400 p-2 font-mono font-bold text-[#1e3a5f] text-center align-top">
                               {v.voucherNo}
-                            </td>
-                            <td rowSpan={3} className="border border-gray-400 p-2 align-top font-bold text-gray-800">
-                              <div className="font-extrabold text-gray-900">{v.topic}</div>
-                              {v.recipientName && (
-                                <div className="mt-1 text-[10px] font-extrabold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-block">
-                                  👤 {v.recipientName}
-                                </div>
-                              )}
-                              {v.chequeNo && (
-                                <div className="mt-1 text-[9.5px] font-mono font-extrabold text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 block">
-                                  🔖 Cheque: {v.chequeNo}
-                                </div>
-                              )}
                             </td>
                             <td className="border-t border-l border-r border-gray-300 p-2 font-bold text-gray-900">
                               <span className="text-emerald-700 font-extrabold mr-1">Dr.</span>
                               <span>{v.debitAccount}</span>
+                              <span className="text-[10px] text-gray-500 font-normal ml-2">({v.topic})</span>
                             </td>
                             <td className="border-t border-l border-r border-gray-300 p-2 text-right font-mono font-bold text-emerald-800">
                               Rs. {v.debitAmount?.toLocaleString()}
@@ -1348,7 +1398,7 @@ export default function JournalVoucherPage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-[#1e3a5f] text-white font-extrabold text-xs">
-                      <td colSpan={4} className="border border-gray-400 p-2.5 text-right uppercase tracking-wider">
+                      <td colSpan={3} className="border border-gray-400 p-2.5 text-right uppercase tracking-wider">
                         Total Balancing Ledger Summary (सन्तुलित खाता भुक्तानी विवरण):
                       </td>
                       <td className="border border-gray-400 p-2.5 text-right font-mono text-emerald-300">
@@ -1458,8 +1508,8 @@ export default function JournalVoucherPage() {
                   <strong className="text-gray-900">{selectedVoucher.dateBs}</strong>
                 </div>
                 <div>
-                  <span className="text-gray-500 font-sans font-bold block text-[9px] uppercase">Academic Year:</span>
-                  <strong className="text-gray-900">{activeYear?.year || '2081-82'}</strong>
+                  <span className="text-gray-500 font-sans font-bold block text-[9px] uppercase">Fiscal Year (आ.व.):</span>
+                  <strong className="text-indigo-900 font-bold">आ.व. {selectedVoucher.financialYear || getFiscalYearFromBS(selectedVoucher.dateBs)}</strong>
                 </div>
                 <div>
                   <span className="text-gray-500 font-sans font-bold block text-[9px] uppercase">Payment Medium:</span>

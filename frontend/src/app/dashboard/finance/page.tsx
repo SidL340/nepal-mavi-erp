@@ -28,6 +28,7 @@ import {
   Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getFiscalYearFromBS } from '@/lib/nepali-date';
 
 import ExpensesPage from './expenses/page';
 import IncomePage from './income/page';
@@ -1166,7 +1167,7 @@ export default function UnifiedFinanceHubPage() {
                 <table className="w-full text-left font-sans">
                   <thead className="bg-[#1e3a5f] text-white text-[10px] uppercase font-bold">
                     <tr>
-                      <th className="py-2.5 px-3">Date (BS)</th>
+                      <th className="py-2.5 px-3">Date (BS) & FY</th>
                       <th className="py-2.5 px-3">Voucher No</th>
                       <th className="py-2.5 px-3">Expense/Income Head</th>
                       <th className="py-2.5 px-3">Method & Cheque</th>
@@ -1182,7 +1183,12 @@ export default function UnifiedFinanceHubPage() {
                       <>
                         {partyVouchersData.expenses?.map((e: any) => (
                           <tr key={`exp-${e.id}`} className="hover:bg-slate-50">
-                            <td className="py-2 px-3 font-mono font-bold">{e.expenseDateBs}</td>
+                            <td className="py-2 px-3">
+                              <div className="font-mono font-bold text-gray-900">{e.expenseDateBs}</div>
+                              <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-amber-50 text-[9px] font-bold text-amber-800 border border-amber-200">
+                                आ.व. {e.financialYear?.year || getFiscalYearFromBS(e.expenseDateBs)}
+                              </span>
+                            </td>
                             <td className="py-2 px-3 font-mono font-bold text-[#1e3a5f]">{e.voucherNo || `VOUCH-${e.id}`}</td>
                             <td className="py-2 px-3 font-bold">{e.head?.name}</td>
                             <td className="py-2 px-3 font-mono">
@@ -1196,7 +1202,12 @@ export default function UnifiedFinanceHubPage() {
 
                         {partyVouchersData.incomes?.map((i: any) => (
                           <tr key={`inc-${i.id}`} className="hover:bg-emerald-50/50">
-                            <td className="py-2 px-3 font-mono font-bold">{i.receivedDateBs}</td>
+                            <td className="py-2 px-3">
+                              <div className="font-mono font-bold text-gray-900">{i.receivedDateBs}</div>
+                              <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-emerald-50 text-[9px] font-bold text-emerald-800 border border-emerald-200">
+                                आ.व. {i.financialYear?.year || getFiscalYearFromBS(i.receivedDateBs)}
+                              </span>
+                            </td>
                             <td className="py-2 px-3 font-mono font-bold text-emerald-800">{i.voucherNo || `INC-${i.id}`}</td>
                             <td className="py-2 px-3 font-bold">{i.head?.name}</td>
                             <td className="py-2 px-3 font-mono">
