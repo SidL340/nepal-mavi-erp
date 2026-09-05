@@ -381,7 +381,11 @@ export default function JournalVoucherPage() {
         <tr>
           <td rowspan="3" style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; vertical-align: top; padding: 6px;">${v.dateBs}</td>
           <td rowspan="3" style="text-align: center; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; vertical-align: top; padding: 6px; color: #1e3a5f;">${v.voucherNo}</td>
-          <td rowspan="3" style="border: 1px solid #cbd5e1; font-weight: bold; vertical-align: top; padding: 6px; font-size: 9.5px;">${v.topic}</td>
+          <td rowspan="3" style="border: 1px solid #cbd5e1; font-weight: bold; vertical-align: top; padding: 6px; font-size: 9.5px;">
+            <div style="font-weight: 800; color: #0f172a; font-size: 10px;">${v.topic}</div>
+            ${v.recipientName ? `<div style="font-size: 9px; font-weight: 800; color: #4338ca; margin-top: 4px; background: #eef2ff; padding: 2px 6px; border-radius: 4px; display: inline-block; border: 1px solid #c7d2fe;">👤 <strong>Party:</strong> ${v.recipientName}</div>` : ''}
+            ${v.chequeNo ? `<div style="font-size: 8.5px; font-weight: 800; color: #7e22ce; margin-top: 3px; background: #faf5ff; padding: 2px 6px; border-radius: 4px; display: inline-block; border: 1px solid #e9d5ff;">🔖 <strong>Cheque No:</strong> ${v.chequeNo}</div>` : ''}
+          </td>
           <td style="border: 1px solid #cbd5e1; padding: 5px 6px; font-weight: bold;">
             <span style="color: #15803d; font-weight: 900; margin-right: 4px;">Dr.</span> ${v.debitAccount}
           </td>
@@ -396,8 +400,14 @@ export default function JournalVoucherPage() {
           <td style="text-align: right; border: 1px solid #cbd5e1; font-family: monospace; font-weight: bold; color: #b91c1c; padding: 5px 6px;">रू ${(v.creditAmount || 0).toLocaleString()}</td>
         </tr>
         <tr style="background-color: #f8fafc;">
-          <td colspan="3" style="border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 9px; font-style: italic; color: #64748b;">
-            (Narration: ${v.remarks || v.particulars} | Payment Mode: ${v.paymentMedium})
+          <td colspan="3" style="border: 1px solid #cbd5e1; padding: 5px 8px; font-size: 9.5px; color: #334155;">
+            <div style="margin-bottom: 3px;"><em>(Narration: ${v.remarks || v.particulars})</em></div>
+            <div style="font-size: 9px; font-weight: 700; color: #1e3a5f; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+              ${v.recipientName ? `<span style="color: #4338ca;">👤 <strong>Party / Recipient (पाउने पक्ष):</strong> <span style="background: #eef2ff; padding: 1px 6px; border-radius: 3px; border: 1px solid #c7d2fe;">${v.recipientName}</span></span>` : ''}
+              <span>💳 <strong>Payment Mode:</strong> <span style="text-transform: uppercase;">${v.paymentMedium || 'CASH'}</span></span>
+              ${v.chequeNo ? `<span style="color: #7e22ce; background: #faf5ff; padding: 1px 6px; border-radius: 3px; border: 1px solid #e9d5ff;">🔖 <strong>Cheque No (चेक नं.):</strong> ${v.chequeNo}</span>` : ''}
+              ${v.paymentRef && v.paymentRef !== 'N/A' && v.paymentRef !== v.chequeNo ? `<span>Ref: ${v.paymentRef}</span>` : ''}
+            </div>
           </td>
         </tr>
       `)
@@ -787,7 +797,24 @@ export default function JournalVoucherPage() {
                       <tr key={v.id} className="hover:bg-blue-50/50">
                         <td className="p-3 font-mono font-bold text-gray-800">{v.dateBs}</td>
                         <td className="p-3 font-mono font-bold text-[#1e3a5f]">{v.voucherNo}</td>
-                        <td className="p-3 font-semibold text-gray-900 max-w-[150px] truncate">{v.particulars}</td>
+                        <td className="p-3">
+                          <span className="font-bold text-gray-900 block">{v.particulars}</span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="text-[10px] text-[#1e3a5f] font-mono font-extrabold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                              {v.topic}
+                            </span>
+                            {v.recipientName && (
+                              <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                👤 {v.recipientName}
+                              </span>
+                            )}
+                            {v.chequeNo && (
+                              <span className="text-[9.5px] font-mono font-extrabold text-purple-800 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
+                                🔖 {v.chequeNo}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-3 font-mono text-[11px] text-gray-600">{v.debitAccount}</td>
                         <td className="p-3 text-right font-mono font-black text-emerald-700">
                           Rs. {v.debitAmount?.toLocaleString()}
@@ -841,7 +868,24 @@ export default function JournalVoucherPage() {
                       <tr key={v.id} className="hover:bg-rose-50/50">
                         <td className="p-3 font-mono font-bold text-gray-800">{v.dateBs}</td>
                         <td className="p-3 font-mono font-bold text-rose-900">{v.voucherNo}</td>
-                        <td className="p-3 font-semibold text-gray-900 max-w-[150px] truncate">{v.particulars}</td>
+                        <td className="p-3">
+                          <span className="font-bold text-gray-900 block">{v.particulars}</span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="text-[10px] text-[#1e3a5f] font-mono font-extrabold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                              {v.topic}
+                            </span>
+                            {v.recipientName && (
+                              <span className="text-[10px] font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                👤 {v.recipientName}
+                              </span>
+                            )}
+                            {v.chequeNo && (
+                              <span className="text-[9.5px] font-mono font-extrabold text-purple-800 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
+                                🔖 {v.chequeNo}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-3 font-mono text-[11px] text-gray-600">{v.creditAccount}</td>
                         <td className="p-3 text-right font-mono font-black text-rose-700">
                           Rs. {v.creditAmount?.toLocaleString()}
@@ -927,6 +971,16 @@ export default function JournalVoucherPage() {
                             {v.topic}
                           </span>
                           <span className="text-[10px] text-gray-400 block mt-1 font-bold">{v.type}</span>
+                          {v.recipientName && (
+                            <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-extrabold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              <span>👤 {v.recipientName}</span>
+                            </div>
+                          )}
+                          {v.chequeNo && (
+                            <div className="mt-1 flex items-center gap-1 text-[9.5px] font-mono font-extrabold text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                              <span>🔖 Cheque: {v.chequeNo}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="p-2.5 font-bold text-gray-900">
                           <span className="text-emerald-700 font-extrabold mr-1">Dr.</span>
@@ -1111,9 +1165,16 @@ export default function JournalVoucherPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-bold text-gray-900 block">{v.particulars}</span>
-                          <span className="text-[10px] text-[#1e3a5f] font-mono font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 inline-block mt-0.5">
-                            {v.topic}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span className="text-[10px] text-[#1e3a5f] font-mono font-extrabold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 inline-block">
+                              {v.topic}
+                            </span>
+                            {v.chequeNo && (
+                              <span className="text-[9.5px] font-mono font-extrabold text-purple-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 inline-block">
+                                🔖 Cheque: {v.chequeNo}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 font-bold text-rose-700">
                           {v.recipientName || '—'}
@@ -1233,7 +1294,17 @@ export default function JournalVoucherPage() {
                               {v.voucherNo}
                             </td>
                             <td rowSpan={3} className="border border-gray-400 p-2 align-top font-bold text-gray-800">
-                              {v.topic}
+                              <div className="font-extrabold text-gray-900">{v.topic}</div>
+                              {v.recipientName && (
+                                <div className="mt-1 text-[10px] font-extrabold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-block">
+                                  👤 {v.recipientName}
+                                </div>
+                              )}
+                              {v.chequeNo && (
+                                <div className="mt-1 text-[9.5px] font-mono font-extrabold text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 block">
+                                  🔖 Cheque: {v.chequeNo}
+                                </div>
+                              )}
                             </td>
                             <td className="border-t border-l border-r border-gray-300 p-2 font-bold text-gray-900">
                               <span className="text-emerald-700 font-extrabold mr-1">Dr.</span>
@@ -1258,9 +1329,18 @@ export default function JournalVoucherPage() {
                           </tr>
 
                           {/* Row 3: Narration Line */}
-                          <tr className="bg-slate-50 text-[10px] text-gray-600 italic border-b border-gray-400">
-                            <td colSpan={3} className="p-1.5 pl-3 border-l border-r border-b border-gray-400">
-                              (Narration: {v.remarks} | Payment Mode: {v.paymentMedium})
+                          <tr className="bg-slate-50 text-[10px] text-gray-700 border-b border-gray-400">
+                            <td colSpan={3} className="p-2 pl-3 border-l border-r border-b border-gray-400">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <span className="italic">Narration: {v.remarks || v.particulars}</span>
+                                <span><strong>Payment Mode:</strong> <span className="uppercase font-bold">{v.paymentMedium || 'CASH'}</span></span>
+                                {v.recipientName && (
+                                  <span><strong>Party / Recipient:</strong> <span className="font-bold text-indigo-900 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">{v.recipientName}</span></span>
+                                )}
+                                {v.chequeNo && (
+                                  <span><strong>Cheque No:</strong> <span className="font-mono font-extrabold text-purple-900 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">{v.chequeNo}</span></span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         </Fragment>
