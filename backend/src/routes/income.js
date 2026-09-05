@@ -275,6 +275,40 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
       }).catch(() => {});
     }
 
+    // Automatically dispatch individual notice notification to student portal
+    try {
+      const feeHead = await prisma.feeHead.findUnique({ where: { id: parseInt(rest.feeHeadId) } });
+      const headTitle = feeHead?.name || 'School Fee';
+      const payAmt = parseFloat(rest.amount);
+
+      const matchDue = (rest.remarks || '').match(/Due:\s*(?:Rs\.|रू)?\s*([\d,.]+)/i);
+      const remDue = matchDue ? parseFloat(matchDue[1].replace(/,/g, '')) : 0;
+
+      const noticeTitle = remDue > 0
+        ? `💰 शुल्क भुक्तानी रसिद प्राप्त भयो (रसिद नं: ${receiptNo})`
+        : `🎉 शुल्क पूर्ण चुक्ता भयो (रसिद नं: ${receiptNo})`;
+
+      const noticeBody = remDue > 0
+        ? `तपाईंको '${headTitle}' शीर्षकमा मिति ${rest.paidDateBs || 'हालै'} मा रू ${payAmt.toLocaleString()} शुल्क भुक्तानी प्राप्त भएको छ। बाँकी तिर्नुपर्ने बक्यौता रकम: रू ${remDue.toLocaleString()}। आधिकारिक रसिद नं: ${receiptNo}।`
+        : `तपाईंको '${headTitle}' शीर्षकमा मिति ${rest.paidDateBs || 'हालै'} मा रू ${payAmt.toLocaleString()} शुल्क प्राप्त भई सम्पूर्ण बक्यौता चुक्ता भएको छ। आधिकारिक रसिद नं: ${receiptNo}।`;
+
+      await prisma.notice.create({
+        data: {
+          title: noticeTitle,
+          body: noticeBody,
+          type: remDue > 0 ? 'FEE_REMINDER' : 'GENERAL',
+          targetRole: 'STUDENT',
+          targetStudentId: parseInt(rest.studentId),
+          postedDateBs: rest.paidDateBs || new Date().toISOString().slice(0, 10),
+          postedDateAd: new Date(),
+          isAuto: true,
+          isActive: true,
+        },
+      });
+    } catch (noticeErr) {
+      console.error('Failed to create automatic fee notice:', noticeErr);
+    }
+
     return res.status(201).json({ success: true, data: collection, receiptNo });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -503,9 +537,17 @@ router.get('/student-ledger/:studentId', authenticate, async (req, res) => {
     });
 
     collections.forEach((c) => {
-      // If no separate due record existed for this feeHead, count billing implicitly with receipt
       const hasSeparateDue = duesHeadSet.has(c.feeHeadId);
-      const implicitBilled = hasSeparateDue ? 0 : c.amount;
+      
+      const matchTotal = (c.remarks || '').match(/Total:\s*(?:Rs\.|रू)?\s*([\d,.]+)/i);
+      const matchDisc = (c.remarks || '').match(/Disc:\s*(?:Rs\.|रू)?\s*([\d,.]+)/i);
+      const matchDue = (c.remarks || '').match(/Due:\s*(?:Rs\.|रू)?\s*([\d,.]+)/i);
+
+      const totalFee = matchTotal ? parseFloat(matchTotal[1].replace(/,/g, '')) : c.amount;
+      const discount = matchDisc ? parseFloat(matchDisc[1].replace(/,/g, '')) : 0;
+      const remainingDue = matchDue ? parseFloat(matchDue[1].replace(/,/g, '')) : Math.max(0, totalFee - discount - c.amount);
+
+      const implicitBilled = hasSeparateDue ? 0 : Math.max(totalFee - discount, c.amount + remainingDue);
 
       ledgerEntries.push({
         id: `PAY-${c.id}`,
@@ -514,6 +556,7 @@ router.get('/student-ledger/:studentId', authenticate, async (req, res) => {
         particulars: `Receipt No: ${c.receiptNo} — ${c.feeHead?.name || 'Fee Payment'}`,
         billedAmount: implicitBilled,
         paidAmount: c.amount,
+        remainingDue,
         paymentMedium: c.paymentMedium || 'CASH',
         receiptNo: c.receiptNo,
         remarks: c.remarks || 'Fee Paid',
