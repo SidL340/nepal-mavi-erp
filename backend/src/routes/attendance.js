@@ -146,6 +146,20 @@ router.delete('/holiday', authenticate, async (req, res) => {
   }
 });
 
+// POST /api/attendance/holiday/delete — proxy-safe delete for Render
+router.post('/holiday/delete', authenticate, async (req, res) => {
+  try {
+    const { classId, dateBs } = req.body;
+    const where = { dateBs, status: 'HOLIDAY' };
+    if (classId && classId !== 'ALL') where.classId = parseInt(classId);
+
+    const result = await prisma.attendance.deleteMany({ where });
+    return res.json({ success: true, message: `Removed holiday status for ${result.count} records.`, count: result.count });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/attendance/monthly-matrix/:classId?monthBs=2083-05 — Monthly Register Matrix Grid
 router.get('/monthly-matrix/:classId', authenticate, async (req, res) => {
   try {

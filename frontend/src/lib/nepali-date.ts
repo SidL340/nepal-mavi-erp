@@ -75,3 +75,55 @@ export function formatDateInput(val: string): string {
   return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
 }
 
+// Get full month details including starting weekday (0=Sun, 6=Sat) and total days (29-32)
+export function getBSMonthDetails(year: number, month: number) {
+  const nepaliMonths = [
+    'बैशाख', 'जेठ', 'असार', 'साउन', 'भदौ', 'असोज',
+    'कार्तिक', 'मंसिर', 'पौष', 'माघ', 'फाल्गुन', 'चैत'
+  ];
+  const englishMonths = [
+    'Baisakh', 'Jestha', 'Ashadh', 'Shrawan', 'Bhadra', 'Ashwin',
+    'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'
+  ];
+
+  let startDayOfWeek = 0;
+  try {
+    const adFirstDayStr = bs.toGreg_text(year, month, 1);
+    if (adFirstDayStr) {
+      const adDate = new Date(`${adFirstDayStr}T12:00:00Z`);
+      startDayOfWeek = adDate.getUTCDay();
+    }
+  } catch (err) {
+    console.error('Error getting startDayOfWeek:', err);
+  }
+
+  let totalDays = 30;
+  for (let d = 29; d <= 32; d++) {
+    try {
+      const adStr = bs.toGreg_text(year, month, d);
+      if (adStr) {
+        const bsBack = bs.toBik_euro(adStr);
+        const [by, bm, bd] = bsBack.split('-').map(Number);
+        if (by === year && bm === month && bd === d) {
+          totalDays = d;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return {
+    year,
+    month,
+    monthLabelNepali: nepaliMonths[month - 1] || String(month),
+    monthLabelEnglish: englishMonths[month - 1] || String(month),
+    startDayOfWeek,
+    totalDays,
+  };
+}
+

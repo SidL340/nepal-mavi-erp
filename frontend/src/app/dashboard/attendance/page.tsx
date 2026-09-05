@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS, todayBSFormatted } from '@/lib/nepali-date';
+import { todayBS, todayBSFormatted, bsToAD } from '@/lib/nepali-date';
 import {
   CalendarCheck,
   Users,
@@ -94,6 +94,30 @@ export default function AttendancePage() {
   const classStudents = classStudentsRes?.data || [];
   const isTodayHoliday = classStudentsRes?.isHoliday || false;
   const holidayRemark = classStudentsRes?.holidayRemark || null;
+
+  // Fetch Events on the selected BS date
+  const { data: dateEventsData } = useQuery({
+    queryKey: ['date-events', dateBs],
+    queryFn: async () => {
+      if (!dateBs) return [];
+      const res = await api.get(`/events/today?dateBs=${dateBs}`);
+      return res.data?.data || [];
+    },
+    enabled: !!dateBs,
+  });
+
+  const dayOfWeek = (() => {
+    try {
+      const ad = bsToAD(dateBs);
+      return new Date(ad).getDay(); // 0=Sun, 6=Sat
+    } catch {
+      return -1;
+    }
+  })();
+  const isSaturday = dayOfWeek === 6;
+  const eventHoliday = dateEventsData?.find((e: any) => e.isHoliday);
+  const activeHolidayRemark = holidayRemark || eventHoliday?.titleNepali || eventHoliday?.title || (isSaturday ? 'Saturday Weekly Holiday (शनिबार साप्ताहिक विदा)' : null);
+  const isHolidayActive = isTodayHoliday || !!eventHoliday || isSaturday;
 
   // Fetch Monthly Report
   const { data: monthlyReportData, isLoading: isMonthlyLoading } = useQuery({
@@ -198,6 +222,7 @@ export default function AttendancePage() {
       queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-monthly-report'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-monthly-matrix'] });
+      queryClient.invalidateQueries({ queryKey: ['date-events'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to declare holiday.');
@@ -207,8 +232,9 @@ export default function AttendancePage() {
   // Remove Holiday Mutation
   const removeHolidayMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.delete('/attendance/holiday', {
-        data: { classId: selectedClass, dateBs },
+      const res = await api.post('/attendance/holiday/delete', {
+        classId: selectedClass,
+        dateBs,
       });
       return res.data;
     },
@@ -217,6 +243,7 @@ export default function AttendancePage() {
       queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-monthly-report'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-monthly-matrix'] });
+      queryClient.invalidateQueries({ queryKey: ['date-events'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to remove holiday.');
@@ -754,7 +781,7 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={handleMarkAllPresent}
-                disabled={isTodayHoliday}
+                disabled={isHolidayActive}
                 className="inline-flex items-center gap-1 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
               >
                 <CheckCheck size={14} />
@@ -763,7 +790,7 @@ export default function AttendancePage() {
 
               <button
                 type="button"
-                disabled={!isClassTeacher || isTodayHoliday || saveAttendanceMutation.isPending}
+                disabled={!isClassTeacher || isHolidayActive || saveAttendanceMutation.isPending}
                 onClick={() => saveAttendanceMutation.mutate()}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 text-xs font-bold shadow-xs disabled:opacity-50"
               >
@@ -799,22 +826,42 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* Holiday Banner if Today is marked as Holiday */}
-          {isTodayHoliday && (
+          {/* Holiday Banner if Today is marked as Holiday / Weekend / Patro Holiday */}
+          {isHolidayActive && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-500 text-white p-4 shadow-md font-bold text-xs">
               <div className="flex items-center gap-3">
                 <Sparkles size={20} className="animate-bounce shrink-0 text-amber-100" />
                 <div>
-                  <h4 className="font-extrabold text-sm uppercase tracking-wide">🎉 Public Holiday Declared on {dateBs}!</h4>
-                  <p className="text-[11px] text-amber-100 mt-0.5">Reason: {holidayRemark || 'School Holiday'}. Attendance is disabled for this day.</p>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wide">
+                    {isSaturday ? '🚩 शनिवार साप्ताहिक विदा (Saturday Weekly Holiday)' : `🎉 School Holiday: ${activeHolidayRemark || 'सार्वजनिक विदा'}`}
+                  </h4>
+                  <p className="text-[11px] text-amber-100 mt-0.5">
+                    {isSaturday
+                      ? `आज शनिबार भएकाले विद्यालयमा विदा रहेको छ (${dateBs})।`
+                      : `यस मितिमा (${dateBs}) विदा घोषणा गरिएको छ: ${activeHolidayRemark || 'सार्वजनिक विदा'}। हाजिरी विदा (HOLIDAY) को रूपमा दर्ता छ।`}
+                  </p>
                 </div>
               </div>
-              <button
-                onClick={() => removeHolidayMutation.mutate()}
-                className="px-3.5 py-1.5 bg-white text-amber-950 font-extrabold rounded-xl hover:bg-amber-50 transition shadow-xs text-xs self-start sm:self-auto"
-              >
-                Remove Holiday (विदा रद्द गर्नुहोस्)
-              </button>
+              {!isSaturday && (
+                <button
+                  onClick={() => removeHolidayMutation.mutate()}
+                  className="px-3.5 py-1.5 bg-white text-amber-950 font-extrabold rounded-xl hover:bg-amber-50 transition shadow-xs text-xs self-start sm:self-auto"
+                >
+                  Remove Holiday (विदा रद्द गर्नुहोस्)
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* School Event Banner if non-holiday event is active today */}
+          {dateEventsData && dateEventsData.length > 0 && !isHolidayActive && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900 font-bold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar size={16} className="text-indigo-600 shrink-0" />
+                <span>
+                  📅 <strong>School Event Today ({dateBs}):</strong> {dateEventsData.map((e: any) => e.titleNepali || e.title).join(', ')}
+                </span>
+              </div>
             </div>
           )}
 
