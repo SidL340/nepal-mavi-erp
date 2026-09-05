@@ -2,6 +2,8 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const { authenticate, authorize } = require('../middleware/auth');
 
+const { getFiscalYearFromBS } = require('./financialYears');
+
 const router = express.Router();
 
 // ── GET ALL PARTIES / RECIPIENTS ──────────────────────────────────────────────
@@ -57,6 +59,163 @@ router.get('/', authenticate, async (req, res) => {
     );
 
     return res.json({ success: true, data: updatedParties });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET COMPREHENSIVE ACCOUNTS PAYABLE & VENDOR DUES SUMMARY ─────────────────
+router.get('/payables-summary', authenticate, async (req, res) => {
+  try {
+    const { partyId, financialYearId, status } = req.query;
+
+    const where = {
+      billNo: { not: null },
+    };
+    if (partyId) where.partyId = parseInt(partyId);
+
+    const entries = await prisma.expenseEntry.findMany({
+      where,
+      include: {
+        party: true,
+        head: { include: { category: true } },
+        financialYear: true,
+      },
+      orderBy: { expenseDateBs: 'asc' },
+    });
+
+    const payableBillsMap = new Map();
+    for (const e of entries) {
+      if (!e.billNo || !e.billNo.trim()) continue;
+      const cleanBill = e.billNo.trim();
+      const pKey = `${e.partyId || 'direct'}_${cleanBill}`;
+
+      if (!payableBillsMap.has(pKey)) {
+        let parsedTotal = e.amount || 0;
+        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,]+)\]/i);
+        if (match) {
+          parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+        }
+
+        const billFy = e.financialYear?.year || getFiscalYearFromBS(e.expenseDateBs);
+
+        payableBillsMap.set(pKey, {
+          key: pKey,
+          billNo: cleanBill,
+          billDateBs: e.expenseDateBs,
+          billFinancialYear: billFy,
+          billFinancialYearId: e.financialYearId,
+          partyId: e.partyId,
+          party: e.party,
+          partyName: e.party?.name || e.paidTo || 'Vendor / Supplier',
+          panNo: e.party?.panNo || '',
+          phone: e.party?.phone || '',
+          headId: e.headId,
+          head: e.head,
+          headName: e.head?.name || 'Expense Head',
+          totalBillAmount: parsedTotal,
+          totalPaidAmount: 0,
+          description: e.description,
+          installments: [],
+        });
+      }
+
+      const bill = payableBillsMap.get(pKey);
+      bill.totalPaidAmount += (e.amount || 0);
+      if (bill.totalPaidAmount > bill.totalBillAmount) {
+        bill.totalBillAmount = bill.totalPaidAmount;
+      }
+      bill.installments.push({
+        id: e.id,
+        voucherNo: e.voucherNo,
+        amount: e.amount,
+        expenseDateBs: e.expenseDateBs,
+        financialYear: e.financialYear?.year || getFiscalYearFromBS(e.expenseDateBs),
+        financialYearId: e.financialYearId,
+        paymentMedium: e.paymentMedium,
+        chequeNo: e.chequeNo,
+        chequePayeeName: e.chequePayeeName,
+        paidFromAccount: e.paidFromAccount,
+        description: e.description,
+        remarks: e.remarks,
+      });
+    }
+
+    let bills = Array.from(payableBillsMap.values()).map(b => {
+      const remainingDue = Math.max(0, b.totalBillAmount - b.totalPaidAmount);
+      let billStatus = 'FULLY_PAID';
+      if (remainingDue > 0 && b.totalPaidAmount > 0) billStatus = 'PARTIAL';
+      else if (b.totalPaidAmount === 0 || remainingDue === b.totalBillAmount) billStatus = 'UNPAID';
+      return {
+        ...b,
+        remainingDue,
+        status: billStatus,
+      };
+    });
+
+    if (financialYearId) {
+      const fyIdNum = parseInt(financialYearId);
+      bills = bills.filter(b => 
+        b.billFinancialYearId === fyIdNum || 
+        b.installments.some(inst => inst.financialYearId === fyIdNum)
+      );
+    }
+
+    if (status && status !== 'ALL') {
+      bills = bills.filter(b => b.status === status);
+    }
+
+    // Party-Wise Aggregation
+    const partyAggMap = new Map();
+    for (const b of bills) {
+      const pId = b.partyId || 0;
+      if (!partyAggMap.has(pId)) {
+        partyAggMap.set(pId, {
+          partyId: b.partyId,
+          party: b.party,
+          partyName: b.partyName,
+          panNo: b.panNo,
+          phone: b.phone,
+          totalBillsCount: 0,
+          totalBillsAmount: 0,
+          totalPaidAmount: 0,
+          totalOutstandingDue: 0,
+          pendingBillsCount: 0,
+          bills: [],
+        });
+      }
+
+      const pGroup = partyAggMap.get(pId);
+      pGroup.totalBillsCount += 1;
+      pGroup.totalBillsAmount += b.totalBillAmount;
+      pGroup.totalPaidAmount += b.totalPaidAmount;
+      pGroup.totalOutstandingDue += b.remainingDue;
+      if (b.remainingDue > 0) pGroup.pendingBillsCount += 1;
+      pGroup.bills.push(b);
+    }
+
+    const partySummary = Array.from(partyAggMap.values());
+    const totalPayables = bills.reduce((s, b) => s + b.totalBillAmount, 0);
+    const totalPaid = bills.reduce((s, b) => s + b.totalPaidAmount, 0);
+    const totalOutstandingDue = bills.reduce((s, b) => s + b.remainingDue, 0);
+    const pendingBillsCount = bills.filter(b => b.remainingDue > 0).length;
+    const partiesWithDuesCount = partySummary.filter(p => p.totalOutstandingDue > 0).length;
+
+    return res.json({
+      success: true,
+      data: {
+        summary: {
+          totalBillsCount: bills.length,
+          totalPayables,
+          totalPaid,
+          totalOutstandingDue,
+          pendingBillsCount,
+          partiesWithDuesCount,
+        },
+        bills,
+        partySummary,
+      }
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

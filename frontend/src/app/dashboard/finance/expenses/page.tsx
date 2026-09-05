@@ -91,7 +91,7 @@ export default function ExpensesPage() {
   const [selectedPayableBill, setSelectedPayableBill] = useState<any>(null);
 
   // New Bill Form State
-  const [billAcademicYearId, setBillAcademicYearId] = useState('');
+  const [billFinancialYearId, setBillFinancialYearId] = useState('');
   const [billPartyId, setBillPartyId] = useState('');
   const [billHeadId, setBillHeadId] = useState('');
   const [billNo, setBillNo] = useState('');
@@ -104,6 +104,7 @@ export default function ExpensesPage() {
   const [billDescription, setBillDescription] = useState('');
 
   // Installment Payment Form State
+  const [instFinancialYearId, setInstFinancialYearId] = useState('');
   const [instAmount, setInstAmount] = useState('');
   const [instDateBs, setInstDateBs] = useState(todayBS());
   const [instPaymentMedium, setInstPaymentMedium] = useState('CHEQUE');
@@ -151,6 +152,8 @@ export default function ExpensesPage() {
   });
   const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
   const autoResolvedFY = resolveFinancialYear(addExpenseDateBs, financialYearsData || []);
+  const autoResolvedBillFY = resolveFinancialYear(billDateBs, financialYearsData || []);
+  const autoResolvedInstFY = resolveFinancialYear(instDateBs, financialYearsData || []);
 
   // Resolve current filtered financial year ID
   const effectiveFYId = selectedYearFilter === 'ALL'
@@ -158,6 +161,18 @@ export default function ExpensesPage() {
     : selectedYearFilter === 'ACTIVE'
     ? (activeFinancialYear?.id ? String(activeFinancialYear.id) : '')
     : selectedYearFilter;
+
+  // Dedicated Payables Summary Query (across all Fiscal Years & Parties)
+  const { data: payablesData, isLoading: isPayablesLoading } = useQuery({
+    queryKey: ['payables-summary', selectedYearFilter, selectedPartyFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (effectiveFYId) params.append('financialYearId', effectiveFYId);
+      if (selectedPartyFilter && selectedPartyFilter !== 'ALL') params.append('partyId', selectedPartyFilter);
+      const res = await api.get(`/parties/payables-summary?${params.toString()}`);
+      return res.data?.data;
+    },
+  });
 
   const { data: categoriesData } = useQuery({
     queryKey: ['expense-categories'],
@@ -260,7 +275,7 @@ export default function ExpensesPage() {
       const res = await api.post('/expense/entries', {
         ...formData,
         academicYearId: activeYear?.id || 1,
-        financialYearId: expenseFormYearId ? parseInt(expenseFormYearId) : (autoResolvedFY?.id || activeFinancialYear?.id),
+        financialYearId: formData.financialYearId || (expenseFormYearId ? parseInt(expenseFormYearId) : (autoResolvedFY?.id || activeFinancialYear?.id)),
         expenseDateAd: new Date().toISOString().slice(0, 10),
       });
       return res.data;
@@ -270,6 +285,7 @@ export default function ExpensesPage() {
       setIsAddModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to record expense');
@@ -323,6 +339,7 @@ export default function ExpensesPage() {
       setEditingExpense(null);
       queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to update expense');
@@ -338,6 +355,7 @@ export default function ExpensesPage() {
       toast.success('Expense entry deleted');
       queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to delete expense');
@@ -737,6 +755,253 @@ export default function ExpensesPage() {
     printWin.document.close();
   };
 
+  // ── 3.5 PRINT CONSOLIDATED PAYABLES & VENDOR DUES STATEMENT (सम्पूर्ण दायित्व प्रतिवेदन) ──
+  const triggerConsolidatedPayablesPrint = (dataPayload: any) => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const sNameNp = schoolProfile?.schoolNameNepali || schoolProfile?.schoolName || 'श्री नेपाल माध्यमिक विद्यालय';
+    const sNameEn = schoolProfile?.schoolName || 'Shree Nepal Secondary School';
+    const sAddress = schoolProfile?.address || 'विश्रामपुर, रौतहट';
+    const sPan = schoolProfile?.panNo ? `PAN: ${schoolProfile.panNo}` : '';
+    const sEmis = schoolProfile?.emisCode ? `EMIS: ${schoolProfile.emisCode}` : '';
+
+    const summary = dataPayload?.summary || {
+      totalPayables: totalPayableAmount,
+      totalPaid: totalSettledAmount,
+      totalOutstandingDue: totalOutstandingDue,
+      totalBillsCount: displayedBills.length,
+      pendingBillsCount: displayedBills.filter((b: any) => b.remainingDue > 0).length,
+    };
+    const billsList = dataPayload?.bills || displayedBills || [];
+    const partySummaryList = dataPayload?.partySummary || [];
+
+    const activeFyName = effectiveFYId
+      ? (financialYearsData?.find((f: any) => String(f.id) === String(effectiveFYId))?.year || 'आ.व. छनौट')
+      : 'सबै आर्थिक वर्षहरू (All Fiscal Years)';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>सम्पूर्ण पार्टी तिर्न बाँकी दायित्व प्रतिवेदन - ${sNameNp}</title>
+          <style>
+            @page { size: A4 landscape; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 10px; }
+            .container { padding: 10px; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
+            .school-name { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
+            .badge { font-size: 11px; font-weight: 900; background: #fdf2f8; color: #9d174d; display: inline-block; padding: 3px 12px; border-radius: 4px; border: 1px solid #fbcfe8; margin-top: 3px; text-transform: uppercase; }
+            .meta-bar { display: flex; justify-content: space-between; font-size: 10px; font-weight: bold; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; margin-bottom: 10px; }
+            .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+            .kpi-card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; text-align: center; }
+            .kpi-title { font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; }
+            .kpi-val { font-size: 14px; font-weight: 900; margin-top: 3px; font-family: monospace; }
+            .sec-title { font-size: 10.5px; font-weight: 900; color: #1e3a5f; text-transform: uppercase; margin: 12px 0 5px 0; display: flex; align-items: center; justify-content: space-between; border-left: 3px solid #1e3a5f; padding-left: 6px; }
+            table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; }
+            th { background: #1e3a5f; color: #fff; padding: 5px 6px; text-align: left; font-size: 8.5px; border: 1px solid #1e3a5f; text-transform: uppercase; }
+            td { padding: 4px 6px; border: 1px solid #cbd5e1; vertical-align: top; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .inst-badge { display: inline-block; background: #f3e8ff; color: #6b21a8; font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 3px; margin: 1px; }
+            .fy-badge { display: inline-block; background: #dbeafe; color: #1e40af; font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 3px; }
+            .footer-sig { margin-top: 35px; display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; page-break-inside: avoid; }
+            .sig-box { width: 180px; text-align: center; border-top: 1px solid #333; padding-top: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="school-name">${sNameNp}</div>
+              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">${sNameEn}, ${sAddress} ${sPan ? ` | ${sPan}` : ''} ${sEmis ? ` | ${sEmis}` : ''}</div>
+              <div class="badge">सम्पूर्ण पार्टी तिर्न बाँकी दायित्व प्रतिवेदन (CONSOLIDATED ACCOUNTS PAYABLE & VENDOR DUES STATEMENT)</div>
+            </div>
+
+            <div class="meta-bar">
+              <div>आर्थिक वर्ष दायरा: <strong>${activeFyName}</strong></div>
+              <div>प्रतिवेदन मिति: <strong>${todayBS()} BS</strong></div>
+              <div>दर्ता बिल संख्या: <strong>${summary.totalBillsCount || billsList.length}</strong></div>
+              <div>बक्यौता बाँकी संख्या: <strong style="color: #b91c1c;">${summary.pendingBillsCount || 0}</strong></div>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="kpi-card" style="border-top: 3px solid #1e3a5f;">
+                <div class="kpi-title">कुल दर्ता बिल दायित्व (Total Billed)</div>
+                <div class="kpi-val" style="color: #1e3a5f;">रू ${(summary.totalPayables || 0).toLocaleString()}</div>
+              </div>
+              <div class="kpi-card" style="border-top: 3px solid #16a34a;">
+                <div class="kpi-title">हालसम्म भुक्तान/चुक्ता (Total Settled)</div>
+                <div class="kpi-val" style="color: #16a34a;">रू ${(summary.totalPaid || 0).toLocaleString()}</div>
+              </div>
+              <div class="kpi-card" style="border-top: 3px solid #dc2626;">
+                <div class="kpi-title">खुद तिर्न बाँकी बक्यौता (Outstanding Dues)</div>
+                <div class="kpi-val" style="color: #dc2626;">रू ${(summary.totalOutstandingDue || 0).toLocaleString()}</div>
+              </div>
+              <div class="kpi-card" style="border-top: 3px solid #9333ea;">
+                <div class="kpi-title">चुक्ता दर (Settlement Rate)</div>
+                <div class="kpi-val" style="color: #9333ea;">
+                  ${summary.totalPayables ? Math.round(((summary.totalPaid || 0) / summary.totalPayables) * 100) : 100}%
+                </div>
+              </div>
+            </div>
+
+            <!-- PART 1: Party-Wise Summary -->
+            <div class="sec-title">
+              <span>खण्ड १: पार्टीगत दायित्व सारांश (Party-wise Liability Summary)</span>
+              <span style="font-size: 8.5px; color: #64748b; font-weight: normal;">(प्रत्येक विक्रेता/आपूर्तिकर्ताको कुल हिसाब)</span>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 25px;" class="text-center">क्र.सं.</th>
+                  <th>पार्टी / विक्रेताको नाम (Party Name)</th>
+                  <th style="width: 80px;">PAN/VAT</th>
+                  <th style="width: 80px;">सम्पर्क फोन</th>
+                  <th style="width: 60px;" class="text-center">बिल संख्या</th>
+                  <th style="width: 95px;" class="text-right">कुल बिल रकम (रू)</th>
+                  <th style="width: 95px;" class="text-right">हालसम्म भुक्तान (रू)</th>
+                  <th style="width: 100px;" class="text-right">तिर्न बाँकी बक्यौता (रू)</th>
+                  <th style="width: 90px;" class="text-center">स्थिति</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${partySummaryList.length === 0 ? `
+                  <tr>
+                    <td colspan="9" class="text-center" style="padding: 12px; color: #94a3b8;">कुनै पार्टी विवरण उपलब्ध छैन।</td>
+                  </tr>
+                ` : partySummaryList.map((p: any, idx: number) => `
+                  <tr>
+                    <td class="text-center font-mono">${idx + 1}</td>
+                    <td><strong>${p.partyName}</strong> ${p.party?.nameNepali ? `(${p.party.nameNepali})` : ''}</td>
+                    <td class="font-mono">${p.panNo || '—'}</td>
+                    <td class="font-mono">${p.phone || '—'}</td>
+                    <td class="text-center font-mono font-bold">${p.totalBillsCount}</td>
+                    <td class="text-right font-mono font-bold">रू ${(p.totalBillsAmount || 0).toLocaleString()}</td>
+                    <td class="text-right font-mono font-bold" style="color: #16a34a;">रू ${(p.totalPaidAmount || 0).toLocaleString()}</td>
+                    <td class="text-right font-mono font-black" style="color: ${p.totalOutstandingDue > 0 ? '#dc2626' : '#16a34a'};">
+                      रू ${(p.totalOutstandingDue || 0).toLocaleString()}
+                    </td>
+                    <td class="text-center">
+                      <span style="font-weight: bold; font-size: 8px; color: ${p.totalOutstandingDue > 0 ? '#b45309' : '#15803d'};">
+                        ${p.totalOutstandingDue > 0 ? `⏳ बाँकी (${p.pendingBillsCount} बिल)` : '✓ पूर्ण चुक्ता'}
+                      </span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot>
+                <tr style="background: #f1f5f9; font-weight: 900;">
+                  <td colspan="5" class="text-right uppercase">जम्मा कुल दायित्व (Total Liability):</td>
+                  <td class="text-right font-mono font-black">रू ${(summary.totalPayables || 0).toLocaleString()}</td>
+                  <td class="text-right font-mono font-black" style="color: #16a34a;">रू ${(summary.totalPaid || 0).toLocaleString()}</td>
+                  <td class="text-right font-mono font-black" style="color: #dc2626;">रू ${(summary.totalOutstandingDue || 0).toLocaleString()}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <!-- PART 2: Detailed Bills Breakdown -->
+            <div class="sec-title">
+              <span>खण्ड २: विस्तृत बिल तथा बहु-वर्षीय किस्ता भुक्तानी अभिलेख (Detailed Bills & Multi-Year Installments)</span>
+              <span style="font-size: 8.5px; color: #64748b; font-weight: normal;">(उत्पत्तिको आ.व. र विभिन्न आ.व.मा भएका किस्ता भुक्तानीहरू)</span>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 25px;" class="text-center">#</th>
+                  <th style="width: 85px;">बिल नं. र मिति</th>
+                  <th style="width: 65px;">दर्ता आ.व.</th>
+                  <th style="width: 110px;">पार्टी / विक्रेता</th>
+                  <th style="width: 90px;">खर्च शीर्षक</th>
+                  <th style="width: 85px;" class="text-right">कुल बिल (रू)</th>
+                  <th>किस्ता भुक्तानी विवरण (मिति, भौचर, भुक्तानी आ.व., माध्यम, रकम)</th>
+                  <th style="width: 85px;" class="text-right">भुक्तान (रू)</th>
+                  <th style="width: 85px;" class="text-right">बाँकी (रू)</th>
+                  <th style="width: 60px;" class="text-center">स्थिति</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${billsList.length === 0 ? `
+                  <tr>
+                    <td colspan="10" class="text-center" style="padding: 12px; color: #94a3b8;">कुनै बिल दर्ता भएको छैन।</td>
+                  </tr>
+                ` : billsList.map((bill: any, idx: number) => `
+                  <tr>
+                    <td class="text-center font-mono">${idx + 1}</td>
+                    <td>
+                      <strong class="font-mono" style="color: #1e3a5f;">${bill.billNo}</strong>
+                      <div style="font-size: 8px; color: #64748b; font-family: monospace;">${bill.billDateBs}</div>
+                    </td>
+                    <td>
+                      <span class="fy-badge">आ.व. ${bill.billFinancialYear || '—'}</span>
+                    </td>
+                    <td>
+                      <strong>${bill.partyName}</strong>
+                      ${bill.panNo ? `<div style="font-size: 8px; color: #64748b;">PAN: ${bill.panNo}</div>` : ''}
+                    </td>
+                    <td>${bill.headName}</td>
+                    <td class="text-right font-mono font-bold">रू ${(bill.totalBillAmount || 0).toLocaleString()}</td>
+                    <td>
+                      ${bill.installments?.length === 0 ? '<span style="color: #94a3b8;">कुनै किस्ता भुक्तान भएको छैन</span>' : (
+                        bill.installments.map((inst: any, iIdx: number) => `
+                          <div style="font-size: 8px; margin-bottom: 2px;">
+                            <strong>किस्ता ${iIdx + 1}:</strong> ${inst.expenseDateBs} (${inst.voucherNo || `V-${inst.id}`})
+                            <span class="inst-badge">भुक्तानी: आ.व. ${inst.financialYear || '—'}</span>
+                            <span style="color: #475569;">[${inst.paymentMedium}${inst.chequeNo ? ` Chk:${inst.chequeNo}` : ''}]</span>
+                            <strong style="color: #16a34a; font-family: monospace;">रू ${(inst.amount || 0).toLocaleString()}</strong>
+                          </div>
+                        `).join('')
+                      )}
+                    </td>
+                    <td class="text-right font-mono font-bold" style="color: #16a34a;">
+                      रू ${(bill.totalPaidAmount || 0).toLocaleString()}
+                    </td>
+                    <td class="text-right font-mono font-black" style="color: ${bill.remainingDue > 0 ? '#dc2626' : '#16a34a'};">
+                      रू ${(bill.remainingDue || 0).toLocaleString()}
+                    </td>
+                    <td class="text-center">
+                      <span style="font-size: 8px; font-weight: bold; color: ${
+                        bill.status === 'FULLY_PAID' ? '#15803d' : bill.status === 'PARTIAL' ? '#b45309' : '#dc2626'
+                      };">
+                        ${bill.status === 'FULLY_PAID' ? '✓ चुक्ता' : bill.status === 'PARTIAL' ? '⚡ आंशिक' : '⏳ बाँकी'}
+                      </span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+
+            <div class="footer-sig">
+              <div class="sig-box">
+                <div>तयार गर्ने (लेखापाल)</div>
+                <div style="margin-top: 25px; font-size: 8.5px; color: #64748b;">हस्ताक्षर र मिति</div>
+              </div>
+              <div class="sig-box">
+                <div>जाँच गर्ने (लेखा समिति / आन्तरिक परीक्षक)</div>
+                <div style="margin-top: 25px; font-size: 8.5px; color: #64748b;">हस्ताक्षर र मिति</div>
+              </div>
+              <div class="sig-box">
+                <div>स्वीकृत गर्ने (प्रधानाध्यापक / अध्यक्ष)</div>
+                <div style="margin-top: 25px; font-size: 8.5px; color: #64748b;">हस्ताक्षर र मिति</div>
+              </div>
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   // ── 4. ACCOUNTS PAYABLE BILLS AGGREGATION ──────────────────────────────────
   const entries = entriesData?.data || [];
   const totalAmount = entriesData?.totalAmount || 0;
@@ -756,6 +1021,8 @@ export default function ExpensesPage() {
           key,
           billNo: e.billNo,
           billDateBs: e.expenseDateBs,
+          billFinancialYear: e.financialYear?.year || getFiscalYearFromBS(e.expenseDateBs),
+          billFinancialYearId: e.financialYearId,
           partyId: e.partyId,
           party: e.party,
           partyName: e.party?.name || e.paidTo || 'Vendor / Supplier',
@@ -775,11 +1042,14 @@ export default function ExpensesPage() {
       if (bill.totalPaidAmount > bill.totalBillAmount) {
         bill.totalBillAmount = bill.totalPaidAmount;
       }
-      bill.installments.push(e);
+      bill.installments.push({
+        ...e,
+        financialYear: e.financialYear?.year || getFiscalYearFromBS(e.expenseDateBs),
+      });
     }
   });
 
-  const payableBills = Array.from(payableBillsMap.values()).map((b: any) => {
+  const localPayableBills = Array.from(payableBillsMap.values()).map((b: any) => {
     const remainingDue = Math.max(0, b.totalBillAmount - b.totalPaidAmount);
     let status: 'FULLY_PAID' | 'PARTIAL' | 'UNPAID' = 'FULLY_PAID';
     if (remainingDue > 0 && b.totalPaidAmount > 0) status = 'PARTIAL';
@@ -791,9 +1061,11 @@ export default function ExpensesPage() {
     };
   });
 
-  const totalPayableAmount = payableBills.reduce((s, b) => s + b.totalBillAmount, 0);
-  const totalSettledAmount = payableBills.reduce((s, b) => s + b.totalPaidAmount, 0);
-  const totalOutstandingDue = payableBills.reduce((s, b) => s + b.remainingDue, 0);
+  // Prefer backend-aggregated payables data when available, with fallback
+  const displayedBills: any[] = payablesData?.bills || localPayableBills;
+  const totalPayableAmount = payablesData?.summary?.totalPayables ?? localPayableBills.reduce((s: number, b: any) => s + b.totalBillAmount, 0);
+  const totalSettledAmount = payablesData?.summary?.totalPaid ?? localPayableBills.reduce((s: number, b: any) => s + b.totalPaidAmount, 0);
+  const totalOutstandingDue = payablesData?.summary?.totalOutstandingDue ?? localPayableBills.reduce((s: number, b: any) => s + b.remainingDue, 0);
 
   const handleRecordBillSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -806,8 +1078,12 @@ export default function ExpensesPage() {
     const initialPaidNum = parseFloat(billInitialPaid || '0');
     const totalBillNum = parseFloat(billTotalAmount);
 
+    const resolvedFYId = billFinancialYearId
+      ? parseInt(billFinancialYearId)
+      : (autoResolvedBillFY?.id || activeFinancialYear?.id || 1);
+
     const payload: any = {
-      academicYearId: billAcademicYearId ? parseInt(billAcademicYearId) : (activeYear?.id || 1),
+      financialYearId: resolvedFYId,
       headId: billHeadId ? parseInt(billHeadId) : (headsData?.[0]?.id || 1),
       amount: initialPaidNum,
       expenseDateBs: billDateBs || todayBS(),
@@ -845,6 +1121,7 @@ export default function ExpensesPage() {
       onSuccess: () => {
         toast.success('Vendor Bill & Payable registered!');
         setIsRecordBillModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
         setBillNo('');
         setBillTotalAmount('');
         setBillInitialPaid('');
@@ -867,8 +1144,12 @@ export default function ExpensesPage() {
       return;
     }
 
+    const resolvedFYId = instFinancialYearId
+      ? parseInt(instFinancialYearId)
+      : (autoResolvedInstFY?.id || activeFinancialYear?.id || 1);
+
     const payload: any = {
-      academicYearId: selectedPayableBill.academicYearId || (activeYear?.id || 1),
+      financialYearId: resolvedFYId,
       headId: selectedPayableBill.headId || (headsData?.[0]?.id || 1),
       amount: instNum,
       expenseDateBs: instDateBs || todayBS(),
@@ -906,6 +1187,7 @@ export default function ExpensesPage() {
       onSuccess: () => {
         toast.success(`Installment of Rs. ${instNum.toLocaleString()} paid!`);
         setIsPayInstallmentModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
         setSelectedPayableBill(null);
         setInstAmount('');
         setInstChequeNo('');
@@ -963,6 +1245,7 @@ export default function ExpensesPage() {
       setEditingPayableBill(null);
       queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to update bill details.');
     }
@@ -986,6 +1269,7 @@ export default function ExpensesPage() {
       toast.success(`Bill "${bill.billNo}" deleted successfully!`);
       queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to delete bill.');
     } finally {
@@ -1061,7 +1345,7 @@ export default function ExpensesPage() {
           <CreditCard size={15} />
           <span>Accounts Payable & Bill Installments (भुक्तानी गर्न बाँकी हिसाब तथा किस्ता)</span>
           <span className="rounded-full bg-purple-700 text-white px-2 py-0.5 text-[10px] font-mono">
-            {payableBills.length}
+            {displayedBills.length}
           </span>
         </button>
       </div>
@@ -1352,27 +1636,27 @@ export default function ExpensesPage() {
           {/* Payable Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="rounded-2xl border border-purple-100 bg-white p-5 shadow-2xs">
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Registered Bills (कुल बिल)</span>
-              <p className="text-2xl font-extrabold text-[#1e3a5f] mt-2">रू {totalPayableAmount.toLocaleString()}</p>
-              <p className="text-[11px] text-gray-400 mt-1">विक्रेता तथा आपूर्तिकर्ताका बिल रकम</p>
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Registered Bills (कुल बिल दायित्व)</span>
+              <p className="text-2xl font-extrabold text-[#1e3a5f] mt-2 font-mono">रू {totalPayableAmount.toLocaleString()}</p>
+              <p className="text-[11px] text-gray-400 mt-1">विक्रेता तथा आपूर्तिकर्ताका दर्ता भएका बिल रकम</p>
             </div>
 
             <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-2xs">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Settled / Paid (भुक्तान रकम)</span>
-              <p className="text-2xl font-extrabold text-emerald-700 mt-2">रू {totalSettledAmount.toLocaleString()}</p>
-              <p className="text-[11px] text-gray-400 mt-1">किस्ता तथा एकमुष्ट चुक्ता भएको</p>
+              <p className="text-2xl font-extrabold text-emerald-700 mt-2 font-mono">रू {totalSettledAmount.toLocaleString()}</p>
+              <p className="text-[11px] text-gray-400 mt-1">विभिन्न आ.व.मा किस्ता चुक्ता भएको रकम</p>
             </div>
 
             <div className="rounded-2xl border border-rose-100 bg-white p-5 shadow-2xs">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Balance Due (भुक्तानी गर्न बाँकी)</span>
-              <p className="text-2xl font-extrabold text-rose-700 mt-2">रू {totalOutstandingDue.toLocaleString()}</p>
-              <p className="text-[11px] text-gray-400 mt-1">बाँकी तिर्नुपर्ने बक्यौता दायित्व</p>
+              <p className="text-2xl font-extrabold text-rose-700 mt-2 font-mono">रू {totalOutstandingDue.toLocaleString()}</p>
+              <p className="text-[11px] text-gray-400 mt-1">बाँकी तिर्नुपर्ने कुल बक्यौता दायित्व</p>
             </div>
 
             <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-2xs">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Settled Bills Ratio</span>
               <p className="text-2xl font-extrabold text-purple-800 mt-2">
-                {payableBills.filter((b: any) => b.status === 'FULLY_PAID').length} / {payableBills.length}
+                {displayedBills.filter((b: any) => b.status === 'FULLY_PAID').length} / {displayedBills.length}
               </p>
               <p className="text-[11px] text-gray-400 mt-1">पूर्ण रूपमा चुक्ता भएका बिलहरू</p>
             </div>
@@ -1384,58 +1668,74 @@ export default function ExpensesPage() {
               <div>
                 <h3 className="text-sm font-extrabold uppercase tracking-wider flex items-center gap-2">
                   <CreditCard size={16} className="text-amber-400" />
-                  <span>Accounts Payable Register & Installment Settlements (भुक्तानी गर्न बाँकी हिसाब लेजर)</span>
+                  <span>Accounts Payable Register & Multi-Year Settlements (भुक्तानी गर्न बाँकी हिसाब लेजर)</span>
                 </h3>
                 <p className="text-[11px] text-purple-200 mt-0.5">
-                  विक्रेताहरूको बिल अनुसार किस्ता भुक्तानी ट्र्याक गर्नुहोस् र पूर्ण चुक्ता भएपछि एकमुष्ट गोश्वारा भौचर निकाल्नुहोस्।
+                  विभिन्न आर्थिक वर्षका बिलहरू दर्ता गर्नुहोस्, बहु-वर्षीय किस्ता ट्र्याक गर्नुहोस् र सम्पूर्ण दायित्व प्रतिवेदन निकाल्नुहोस्।
                 </p>
               </div>
 
-              <button
-                onClick={() => setIsRecordBillModalOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-extrabold px-3.5 py-1.5 text-xs shadow-sm transition"
-              >
-                <Plus size={14} />
-                <span>+ Register New Bill (नयाँ बिल दर्ता)</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => triggerConsolidatedPayablesPrint(payablesData)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-white text-purple-950 hover:bg-purple-50 font-extrabold px-3.5 py-1.5 text-xs shadow-sm transition border border-purple-300"
+                  title="Print Consolidated Payables & Dues Statement across all parties"
+                >
+                  <Printer size={14} className="text-purple-700" />
+                  <span>🖨️ तिर्न बाँकी दायित्व प्रतिवेदन (Print Payables Report)</span>
+                </button>
+                <button
+                  onClick={() => setIsRecordBillModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-extrabold px-3.5 py-1.5 text-xs shadow-sm transition"
+                >
+                  <Plus size={14} />
+                  <span>+ Register New Bill (नयाँ बिल दर्ता)</span>
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-sans">
                 <thead className="bg-slate-100 text-gray-700 uppercase text-[10.5px] tracking-wider font-extrabold border-b border-gray-200">
                   <tr>
-                    <th className="py-3 px-4">Bill No & Date</th>
+                    <th className="py-3 px-4">Bill No & Origin FY</th>
                     <th className="py-3 px-4">Vendor / Party</th>
                     <th className="py-3 px-4">Expense Topic</th>
                     <th className="py-3 px-4 text-right">Total Bill (रू)</th>
-                    <th className="py-3 px-4 text-right">Paid (रू)</th>
+                    <th className="py-3 px-4 text-right">Paid & Multi-FY History</th>
                     <th className="py-3 px-4 text-right">Balance Due (रू)</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-center">Actions & Summary JV</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-700 font-medium">
-                  {payableBills.length === 0 ? (
+                  {displayedBills.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-gray-400 font-nepali">
                         कुनै बिल/भुक्तानी बाँकी हिसाब दर्ता भएको छैन। ("+ Register New Bill" थिचेर दर्ता गर्नुहोस्।)
                       </td>
                     </tr>
                   ) : (
-                    payableBills.map((bill: any) => (
-                      <tr key={bill.key} className="hover:bg-purple-50/40 transition">
+                    displayedBills.map((bill: any) => (
+                      <tr key={bill.key || `${bill.partyId}_${bill.billNo}`} className="hover:bg-purple-50/40 transition">
                         <td className="py-3 px-4">
-                          <span className="font-mono font-extrabold text-[#1e3a5f] block">
+                          <span className="font-mono font-extrabold text-[#1e3a5f] block text-sm">
                             {bill.billNo}
                           </span>
-                          <span className="text-[10.5px] font-mono text-gray-500 font-bold">
+                          <span className="text-[10.5px] font-mono text-gray-500 font-bold block">
                             Date: {bill.billDateBs}
+                          </span>
+                          <span className="inline-block rounded bg-blue-100 text-blue-900 font-bold px-1.5 py-0.5 text-[9.5px] mt-0.5 border border-blue-200">
+                            दर्ता: आ.व. {bill.billFinancialYear || '—'}
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="font-bold text-gray-900 block">{bill.partyName}</span>
+                          <span className="font-bold text-gray-900 block text-sm">{bill.partyName}</span>
                           {bill.panNo && (
-                            <span className="text-[10px] text-gray-500 font-mono">PAN: {bill.panNo}</span>
+                            <span className="text-[10px] text-gray-500 font-mono block">PAN: {bill.panNo}</span>
+                          )}
+                          {bill.phone && (
+                            <span className="text-[10px] text-gray-500 font-mono block">Ph: {bill.phone}</span>
                           )}
                         </td>
                         <td className="py-3 px-4">
@@ -1444,17 +1744,27 @@ export default function ExpensesPage() {
                             <span className="text-[10px] text-gray-500 block truncate max-w-xs">{bill.description}</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono font-black text-gray-900">
-                          रू {bill.totalBillAmount.toLocaleString()}
+                        <td className="py-3 px-4 text-right font-mono font-black text-gray-900 text-sm">
+                          रू {(bill.totalBillAmount || 0).toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-black text-emerald-700">
-                          रू {bill.totalPaidAmount.toLocaleString()}
-                          <span className="text-[10px] text-gray-400 block font-sans">
-                            ({bill.installments.length} installment{bill.installments.length > 1 ? 's' : ''})
-                          </span>
+                          <span className="text-sm">रू {(bill.totalPaidAmount || 0).toLocaleString()}</span>
+                          <div className="text-[10px] text-gray-500 font-sans mt-1 space-y-1">
+                            {bill.installments?.map((inst: any, iIdx: number) => (
+                              <div key={inst.id || iIdx} className="flex items-center justify-end gap-1 text-[9.5px] bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                <span>किस्ता {iIdx + 1}:</span>
+                                <span className="bg-purple-100 text-purple-900 font-bold px-1 rounded text-[9px]">
+                                  आ.व. {inst.financialYear || '—'}
+                                </span>
+                                <span className="font-mono font-bold text-emerald-700">
+                                  रू {(inst.amount || 0).toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </td>
-                        <td className="py-3 px-4 text-right font-mono font-black text-rose-700">
-                          रू {bill.remainingDue.toLocaleString()}
+                        <td className="py-3 px-4 text-right font-mono font-black text-rose-700 text-sm whitespace-nowrap">
+                          रू {(bill.remainingDue || 0).toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span className={`inline-block rounded-md px-2.5 py-1 text-[10.5px] font-black uppercase ${
@@ -1475,6 +1785,7 @@ export default function ExpensesPage() {
                                   setSelectedPayableBill(bill);
                                   setInstAmount(bill.remainingDue.toString());
                                   setInstDateBs(todayBS());
+                                  setInstFinancialYearId('');
                                   setIsPayInstallmentModalOpen(true);
                                 }}
                                 className="inline-flex items-center gap-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white px-2.5 py-1 text-[11px] font-bold shadow-2xs transition"
@@ -1555,60 +1866,70 @@ export default function ExpensesPage() {
             </div>
 
             <form onSubmit={handleRecordBillSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-purple-50/50 p-3 rounded-xl border border-purple-100">
-                <div>
-                  <label className="block font-extrabold text-purple-950 mb-1">
-                    आर्थिक वर्ष (Fiscal Year) *
-                  </label>
-                  <select
-                    value={billAcademicYearId || activeYear?.id || ''}
-                    onChange={(e) => setBillAcademicYearId(e.target.value)}
-                    className="erp-input font-bold text-[#1e3a5f]"
-                    required
-                  >
-                    {yearsData?.map((y: any) => (
-                      <option key={y.id} value={y.id}>
-                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-extrabold text-gray-800 mb-1">
-                    Vendor / Party (पाउने व्यक्ति/संस्था) *
-                  </label>
-                  <select
-                    value={billPartyId}
-                    onChange={(e) => setBillPartyId(e.target.value)}
-                    required
-                    className="erp-input font-bold"
-                  >
-                    <option value="">-- Select Party / Vendor --</option>
-                    {partiesData?.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-extrabold text-purple-950">
+                        आर्थिक वर्ष (Fiscal Year) *
+                      </label>
+                    </div>
+                    <select
+                      value={billFinancialYearId || autoResolvedBillFY?.id || activeFinancialYear?.id || ''}
+                      onChange={(e) => setBillFinancialYearId(e.target.value)}
+                      className="erp-input font-bold text-[#1e3a5f]"
+                      required
+                    >
+                      {financialYearsData?.map((y: any) => (
+                        <option key={y.id} value={y.id}>
+                          आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {autoResolvedBillFY && (
+                      <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md inline-block mt-1">
+                        स्वतः पहिचान: {autoResolvedBillFY.year}
+                      </span>
+                    )}
+                  </div>
 
-                <div>
-                  <label className="block font-extrabold text-gray-800 mb-1">
-                    Expense Head / Topic (खर्च शीर्षक) *
-                  </label>
-                  <select
-                    value={billHeadId}
-                    onChange={(e) => setBillHeadId(e.target.value)}
-                    required
-                    className="erp-input font-bold"
-                  >
-                    <option value="">-- Select Expense Topic --</option>
-                    {headsData?.map((h: any) => (
-                      <option key={h.id} value={h.id}>
-                        {h.code ? `[${h.code}] ` : ''}{h.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="block font-extrabold text-gray-800 mb-1">
+                      Vendor / Party (पाउने व्यक्ति/संस्था) *
+                    </label>
+                    <select
+                      value={billPartyId}
+                      onChange={(e) => setBillPartyId(e.target.value)}
+                      required
+                      className="erp-input font-bold"
+                    >
+                      <option value="">-- Select Party / Vendor --</option>
+                      {partiesData?.map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-extrabold text-gray-800 mb-1">
+                      Expense Head / Topic (खर्च शीर्षक) *
+                    </label>
+                    <select
+                      value={billHeadId}
+                      onChange={(e) => setBillHeadId(e.target.value)}
+                      required
+                      className="erp-input font-bold"
+                    >
+                      <option value="">-- Select Expense Topic --</option>
+                      {headsData?.map((h: any) => (
+                        <option key={h.id} value={h.id}>
+                          {h.code ? `[${h.code}] ` : ''}{h.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -1624,8 +1945,7 @@ export default function ExpensesPage() {
                     value={billNo}
                     onChange={(e) => setBillNo(e.target.value)}
                     className="erp-input font-mono font-bold"
-                  >
-                  </input>
+                  />
                 </div>
 
                 <div>
@@ -1784,19 +2104,56 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-3 gap-2 bg-purple-50 p-3 rounded-xl border border-purple-200 text-center">
               <div>
                 <span className="text-[10px] font-bold text-gray-500 uppercase">Total Bill</span>
-                <p className="text-sm font-extrabold text-gray-900 font-mono">रू {selectedPayableBill.totalBillAmount.toLocaleString()}</p>
+                <p className="text-sm font-extrabold text-gray-900 font-mono">रू {(selectedPayableBill.totalBillAmount || 0).toLocaleString()}</p>
               </div>
               <div>
                 <span className="text-[10px] font-bold text-gray-500 uppercase">Paid So Far</span>
-                <p className="text-sm font-extrabold text-emerald-700 font-mono">रू {selectedPayableBill.totalPaidAmount.toLocaleString()}</p>
+                <p className="text-sm font-extrabold text-emerald-700 font-mono">रू {(selectedPayableBill.totalPaidAmount || 0).toLocaleString()}</p>
               </div>
               <div>
                 <span className="text-[10px] font-bold text-gray-500 uppercase">Remaining Due</span>
-                <p className="text-sm font-extrabold text-rose-700 font-mono">रू {selectedPayableBill.remainingDue.toLocaleString()}</p>
+                <p className="text-sm font-extrabold text-rose-700 font-mono">रू {(selectedPayableBill.remainingDue || 0).toLocaleString()}</p>
               </div>
             </div>
 
             <form onSubmit={handlePayInstallmentSubmit} className="space-y-3.5 text-xs">
+              {/* Originating Bill Fiscal Year & Payment Fiscal Year */}
+              <div className="bg-purple-50/70 p-3 rounded-xl border border-purple-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-purple-950">
+                    बिल दर्ता भएको आ.व. (Originating FY):
+                  </span>
+                  <span className="text-[10px] font-black bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md border border-blue-200">
+                    आ.व. {selectedPayableBill.billFinancialYear || '—'}
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-extrabold text-[#1e3a5f]">
+                      भुक्तानी हुने आर्थिक वर्ष (Payment Fiscal Year) *
+                    </label>
+                    {autoResolvedInstFY && (
+                      <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        स्वतः पहिचान: {autoResolvedInstFY.year}
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={instFinancialYearId || autoResolvedInstFY?.id || activeFinancialYear?.id || ''}
+                    onChange={(e) => setInstFinancialYearId(e.target.value)}
+                    className="erp-input font-bold text-[#1e3a5f]"
+                    required
+                  >
+                    {financialYearsData?.map((y: any) => (
+                      <option key={y.id} value={y.id}>
+                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-extrabold text-gray-800 mb-1">
@@ -1908,24 +2265,6 @@ export default function ExpensesPage() {
                   onChange={(e) => setInstVoucherNo(e.target.value)}
                   className="erp-input font-mono font-bold"
                 />
-              </div>
-
-              <div>
-                <label className="block font-extrabold text-gray-800 mb-1">
-                  School Bank Account (बैंक खाता)
-                </label>
-                <select
-                  value={instBankAccountId}
-                  onChange={(e) => setInstBankAccountId(e.target.value)}
-                  className="erp-input font-bold"
-                >
-                  <option value="">-- Select Bank Account --</option>
-                  {bankAccountsData?.map((b: any) => (
-                    <option key={b.id} value={b.id}>
-                      {b.bankName} - {b.accountNo}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div>
