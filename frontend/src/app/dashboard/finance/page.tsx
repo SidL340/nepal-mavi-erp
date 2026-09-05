@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -28,7 +28,7 @@ import {
   Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getFiscalYearFromBS } from '@/lib/nepali-date';
+import { getFiscalYearFromBS, todayBS } from '@/lib/nepali-date';
 
 import ExpensesPage from './expenses/page';
 import IncomePage from './income/page';
@@ -71,6 +71,7 @@ export default function UnifiedFinanceHubPage() {
   const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
   const [isAnnualReportOpen, setIsAnnualReportOpen] = useState(false);
   const [selectedReportFYId, setSelectedReportFYId] = useState<string>('');
+  const [reportSectionTab, setReportSectionTab] = useState<'overview' | 'income' | 'fees' | 'expenses' | 'payroll' | 'parties' | 'banks'>('overview');
 
   // ── 1. QUERIES ──────────────────────────────────────────────────────────────
   const { data: yearsData } = useQuery({
@@ -1239,34 +1240,38 @@ export default function UnifiedFinanceHubPage() {
 
       {/* ─── 9. ANNUAL FINANCIAL REPORT MODAL (वार्षिक आर्थिक प्रतिवेदन) ─────── */}
       {isAnnualReportOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
-          <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-5 text-xs">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-xs">
+          <div className="relative w-full max-w-5xl max-h-[94vh] flex flex-col rounded-2xl bg-white shadow-2xl text-xs overflow-hidden">
+            {/* Modal Top Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-slate-900 px-5 py-3.5 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   <FileText size={20} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-gray-900">
-                    वार्षिक आय-व्यय प्रतिवेदन (Annual Financial Statement)
+                  <h3 className="font-black text-sm md:text-base text-white tracking-tight flex items-center gap-2">
+                    <span>वार्षिक आय-व्यय तथा आर्थिक स्थिति प्रतिवेदन</span>
+                    <span className="hidden sm:inline text-xs font-normal text-slate-400">| Annual Financial Statement</span>
                   </h3>
-                  <p className="text-[11px] text-gray-500 font-nepali">
-                    आर्थिक वर्ष: <span className="font-bold text-emerald-700">{annualReportData?.financialYear?.year || '२०८३/८४'}</span> ({annualReportData?.financialYear?.startDateBs} देखि {annualReportData?.financialYear?.endDateBs} सम्म)
+                  <p className="text-[11px] text-slate-300 font-nepali">
+                    आर्थिक वर्ष: <span className="font-bold text-amber-400">आ.व. {annualReportData?.financialYear?.year || '२०८३/८४'}</span> {annualReportData?.financialYear?.startDateBs ? `(${annualReportData.financialYear.startDateBs} देखि ${annualReportData.financialYear.endDateBs} सम्म)` : ''}
                   </p>
                 </div>
               </div>
+
               <div className="flex items-center gap-2">
                 <select
                   value={targetReportFyId}
                   onChange={(e) => setSelectedReportFYId(e.target.value)}
-                  className="rounded-xl border border-gray-300 bg-slate-50 px-3 py-1.5 text-xs font-bold text-gray-800"
+                  className="rounded-xl border border-slate-700 bg-slate-800 text-white px-3 py-1.5 text-xs font-bold focus:outline-hidden focus:ring-1 focus:ring-emerald-400"
                 >
                   {financialYearsData?.map((fy: any) => (
-                    <option key={fy.id} value={fy.id.toString()}>
-                      आ.व. {fy.year} {fy.isActive ? '(सक्रिय)' : ''}
+                    <option key={fy.id} value={fy.id.toString()} className="bg-slate-900 text-white">
+                      आ.व. {fy.year} {fy.isActive ? '(चालु आ.व.)' : ''}
                     </option>
                   ))}
                 </select>
+
                 <button
                   onClick={() => {
                     const printWin = window.open('', '_blank');
@@ -1277,108 +1282,363 @@ export default function UnifiedFinanceHubPage() {
                     const sNameNp = schoolProfile?.schoolNameNepali || schoolProfile?.schoolName || 'श्री नेपाल माध्यमिक विद्यालय';
                     const sNameEn = schoolProfile?.schoolName || 'Shree Nepal Secondary School';
                     const sAddress = schoolProfile?.address || 'विश्रामपुर, रौतहट';
+                    const sDistrict = schoolProfile?.district || 'रौतहट';
+                    const sProvince = schoolProfile?.province || 'मधेश प्रदेश';
+                    const sPan = schoolProfile?.panNo || '३००१२३४५६';
+                    const sEmis = schoolProfile?.emisCode || '३२०५०१००१';
+                    const sLogo = schoolProfile?.logoUrl || '';
                     const rep = annualReportData;
                     if (!rep) return;
+
+                    const fyStr = rep.financialYear?.year || '२०८३/८४';
+                    const startBs = rep.financialYear?.startDateBs || '';
+                    const endBs = rep.financialYear?.endDateBs || '';
+                    const todayDate = todayBS();
 
                     printWin.document.write(`
                       <!DOCTYPE html>
                       <html>
                         <head>
-                          <title>वार्षिक आय-व्यय प्रतिवेदन - आ.व. ${rep.financialYear?.year}</title>
+                          <meta charset="utf-8" />
+                          <title>वार्षिक आय-व्यय प्रतिवेदन - आ.व. ${fyStr}</title>
                           <style>
-                            @page { size: A4 portrait; margin: 12mm; }
+                            @page { size: A4 portrait; margin: 10mm 12mm 12mm 12mm; }
                             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
-                            .card { border: 2px solid #1e3a5f; padding: 22px; border-radius: 8px; }
-                            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 14px; }
-                            .school-name { font-size: 19px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
-                            .badge { font-size: 12px; font-weight: 900; background: #ecfdf5; color: #065f46; display: inline-block; padding: 4px 14px; border-radius: 4px; border: 1px solid #a7f3d0; margin-top: 6px; }
-                            .meta-grid { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 16px; background: #f8fafc; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0; }
-                            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 16px; }
-                            th { background: #1e3a5f; color: #fff; padding: 8px; text-align: left; font-size: 10px; border: 1px solid #1e3a5f; }
-                            td { padding: 7px 8px; border: 1px solid #cbd5e1; }
-                            .footer-sig { margin-top: 55px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
-                            .sig-box { width: 170px; text-align: center; border-top: 1px solid #333; padding-top: 4px; }
+                            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 10.5px; line-height: 1.4; }
+                            .report-box { border: 2px solid #1e3a5f; padding: 18px 20px; border-radius: 8px; }
+                            .header-table { width: 100%; border-bottom: 2px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 12px; }
+                            .school-name-np { font-size: 18px; font-weight: 900; color: #1e3a5f; margin: 0; line-height: 1.2; text-align: center; }
+                            .school-name-en { font-size: 11px; font-weight: 700; color: #475569; text-align: center; margin-top: 2px; }
+                            .school-meta { font-size: 10px; color: #334155; text-align: center; margin-top: 2px; font-weight: 600; }
+                            .report-title-badge { display: block; margin: 8px auto 0 auto; text-align: center; background: #1e3a5f; color: #fff; font-size: 12px; font-weight: 800; padding: 4px 16px; border-radius: 4px; width: fit-content; }
+                            .meta-bar { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; margin-bottom: 14px; background: #f1f5f9; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; }
+                            .sec-heading { font-size: 11.5px; font-weight: 900; padding: 4px 8px; border-radius: 4px; margin-top: 14px; margin-bottom: 6px; display: flex; justify-content: space-between; }
+                            .sec-income { background: #ecfdf5; color: #065f46; border-left: 4px solid #059669; }
+                            .sec-expense { background: #fef2f2; color: #991b1b; border-left: 4px solid #dc2626; }
+                            .sec-summary { background: #eff6ff; color: #1e40af; border-left: 4px solid #2563eb; }
+                            .sec-misc { background: #f8fafc; color: #334155; border-left: 4px solid #64748b; }
+                            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; page-break-inside: auto; }
+                            tr { page-break-inside: avoid; page-break-after: auto; }
+                            th { background: #1e3a5f; color: #fff; padding: 5px 6px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; font-weight: 700; }
+                            td { padding: 4.5px 6px; border: 1px solid #cbd5e1; vertical-align: middle; }
+                            .num { text-align: right; font-family: "Courier New", Courier, monospace; font-weight: 700; }
+                            .subtotal-row { background: #f8fafc; font-weight: 800; }
+                            .grand-total-income { background: #dcfce7; font-weight: 900; color: #065f46; font-size: 11px; }
+                            .grand-total-expense { background: #fee2e2; font-weight: 900; color: #991b1b; font-size: 11px; }
+                            .kpi-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+                            .kpi-card { border: 1px solid #cbd5e1; padding: 8px 10px; border-radius: 6px; text-align: center; }
+                            .footer-signatures { margin-top: 40px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; page-break-inside: avoid; }
+                            .sig-box { width: 170px; text-align: center; border-top: 1px solid #0f172a; padding-top: 4px; }
                           </style>
                         </head>
                         <body>
-                          <div class="card">
-                            <div class="header">
-                              <div class="school-name">${sNameNp}</div>
-                              <div style="font-size: 11px; font-weight: bold; color: #4b5563;">${sNameEn}, ${sAddress}</div>
-                              <div class="badge">वार्षिक आय-व्यय तथा आर्थिक विवरण (ANNUAL FINANCIAL STATEMENT)</div>
+                          <div class="report-box">
+                            <div class="header-table">
+                              <div class="school-name-np">${sNameNp}</div>
+                              <div class="school-name-en">${sNameEn}</div>
+                              <div class="school-meta">
+                                ${sAddress}, ${sDistrict}, ${sProvince} • EMIS Code: <strong>${sEmis}</strong> • PAN No: <strong>${sPan}</strong>
+                              </div>
+                              <div class="report-title-badge">वार्षिक आय-व्यय तथा आर्थिक स्थिति विवरण (ANNUAL FINANCIAL STATEMENT)</div>
                             </div>
 
-                            <div class="meta-grid">
-                              <div>आर्थिक वर्ष (Fiscal Year): <strong>${rep.financialYear?.year}</strong></div>
-                              <div>सुरु मिति: <strong>${rep.financialYear?.startDateBs}</strong> | अन्तिम मिति: <strong>${rep.financialYear?.endDateBs}</strong></div>
+                            <div class="meta-bar">
+                              <div>आर्थिक वर्ष (Fiscal Year): <strong>आ.व. ${fyStr}</strong></div>
+                              <div>अवधि: <strong>${startBs} देखि ${endBs} सम्म</strong></div>
+                              <div>प्रतिवेदन मिति: <strong>${todayDate} BS</strong></div>
                             </div>
 
-                            <div style="font-size: 12px; font-weight: 900; color: #065f46; margin-bottom: 6px;">१. आम्दानी तथा अनुदान विवरण (INCOME & GRANTS)</div>
+                            <!-- TOP KPI SUMMARY -->
+                            <div class="kpi-grid">
+                              <div class="kpi-card" style="background: #f0fdf4; border-color: #86efac;">
+                                <div style="font-size: 9px; font-weight: 800; color: #166534; text-transform: uppercase;">कुल आम्दानी (Total Inflows)</div>
+                                <div style="font-size: 14px; font-weight: 900; color: #14532d; font-family: monospace; margin-top: 2px;">रू ${(rep.totals?.totalIncome || 0).toLocaleString()}</div>
+                              </div>
+                              <div class="kpi-card" style="background: #fef2f2; border-color: #fca5a5;">
+                                <div style="font-size: 9px; font-weight: 800; color: #991b1b; text-transform: uppercase;">कुल खर्च (Total Expenditures)</div>
+                                <div style="font-size: 14px; font-weight: 900; color: #7f1d1d; font-family: monospace; margin-top: 2px;">रू ${(rep.totals?.totalExpenses || 0).toLocaleString()}</div>
+                              </div>
+                              <div class="kpi-card" style="background: ${(rep.totals?.netSurplus || 0) >= 0 ? '#eff6ff' : '#fffbeb'}; border-color: ${(rep.totals?.netSurplus || 0) >= 0 ? '#93c5fd' : '#fde68a'};">
+                                <div style="font-size: 9px; font-weight: 800; color: #1e3a5f; text-transform: uppercase;">वार्षिक खुद बचत / घाटा (Net Balance)</div>
+                                <div style="font-size: 14px; font-weight: 900; font-family: monospace; color: ${(rep.totals?.netSurplus || 0) >= 0 ? '#1d4ed8' : '#b45309'}; margin-top: 2px;">
+                                  ${(rep.totals?.netSurplus || 0) >= 0 ? '+' : '-'} रू ${Math.abs(rep.totals?.netSurplus || 0).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+
+                            <!-- SECTION 1: INCOME & GRANTS -->
+                            <div class="sec-heading sec-income">
+                              <span>१. आम्दानी तथा सरकारी अनुदान विवरण (Statement of Incomes & Grants)</span>
+                              <span>उप-जम्मा: रू ${(rep.totals?.totalGeneralIncome || 0).toLocaleString()}</span>
+                            </div>
                             <table>
                               <thead>
                                 <tr>
-                                  <th style="width: 40px; text-align: center;">क्र.सं.</th>
-                                  <th>आम्दानीको स्रोत / शीर्षक (Income Head & Source)</th>
-                                  <th style="width: 140px; text-align: right;">रकम (रू)</th>
+                                  <th style="width: 32px; text-align: center;">क्र.सं.</th>
+                                  <th>आम्दानीको शीर्षक (Income Head)</th>
+                                  <th>स्रोत / वर्ग (Category / Source Level)</th>
+                                  <th style="width: 70px; text-align: center;">भौचर संख्या</th>
+                                  <th style="width: 120px; text-align: right;">रकम (रू)</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr>
-                                  <td style="text-align: center;">१</td>
-                                  <td><strong>सरकारी अनुदान तथा बजेट (Government Grants & Budget)</strong></td>
-                                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #065f46;">रू ${(rep.totals?.totalIncome - (rep.totals?.totalFeeCollections || 0)).toLocaleString()}</td>
-                                </tr>
-                                <tr>
-                                  <td style="text-align: center;">२</td>
-                                  <td><strong>विद्यार्थी शुल्क संकलन (Student Fee Collections)</strong></td>
-                                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #065f46;">रू ${(rep.totals?.totalFeeCollections || 0).toLocaleString()}</td>
-                                </tr>
-                                <tr style="background: #f0fdf4; font-weight: 900;">
-                                  <td colspan="2" style="text-align: right;">कुल जम्मा आम्दानी (TOTAL INCOME):</td>
-                                  <td style="text-align: right; font-family: monospace; font-size: 12px; color: #065f46;">रू ${(rep.totals?.totalIncome || 0).toLocaleString()}</td>
+                                ${(rep.incomeByCategory || []).map((cat: any, cIdx: number) => `
+                                  <tr class="subtotal-row">
+                                    <td style="text-align: center;">${cIdx + 1}</td>
+                                    <td colspan="2"><strong>${cat.nameNepali || cat.name}</strong> (${cat.name})</td>
+                                    <td style="text-align: center;">${cat.count}</td>
+                                    <td class="num" style="color: #065f46;">रू ${(cat.total || 0).toLocaleString()}</td>
+                                  </tr>
+                                  ${(cat.heads || []).map((h: any, hIdx: number) => `
+                                    <tr>
+                                      <td></td>
+                                      <td style="padding-left: 18px;">• ${h.nameNepali || h.name}</td>
+                                      <td style="color: #64748b; font-size: 9px;">${h.name}</td>
+                                      <td style="text-align: center; color: #64748b;">${h.count}</td>
+                                      <td class="num">रू ${(h.amount || 0).toLocaleString()}</td>
+                                    </tr>
+                                  `).join('')}
+                                `).join('')}
+                                ${(rep.incomeByCategory || []).length === 0 ? `
+                                  <tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 8px;">यस आर्थिक वर्षमा कुनै सरकारी अनुदान वा आम्दानी प्रविष्टि छैन।</td></tr>
+                                ` : ''}
+                                <tr class="subtotal-row">
+                                  <td colspan="4" style="text-align: right;">सरकारी अनुदान तथा अन्य आम्दानी जम्मा (A):</td>
+                                  <td class="num" style="color: #065f46;">रू ${(rep.totals?.totalGeneralIncome || 0).toLocaleString()}</td>
                                 </tr>
                               </tbody>
                             </table>
 
-                            <div style="font-size: 12px; font-weight: 900; color: #991b1b; margin-bottom: 6px; margin-top: 18px;">२. खर्च तथा तलब भुक्तानी विवरण (EXPENDITURES & PAYROLL)</div>
+                            <!-- SECTION 2: STUDENT FEE COLLECTIONS -->
+                            <div class="sec-heading sec-income" style="margin-top: 10px;">
+                              <span>२. विद्यार्थी शुल्क संकलन विवरण (Student Fee Collections by Head)</span>
+                              <span>उप-जम्मा: रू ${(rep.totals?.totalFeeCollections || 0).toLocaleString()}</span>
+                            </div>
                             <table>
                               <thead>
                                 <tr>
-                                  <th style="width: 40px; text-align: center;">क्र.सं.</th>
-                                  <th>खर्चको शीर्षक / विवरण (Expense Head / Category)</th>
-                                  <th style="width: 140px; text-align: right;">रकम (रू)</th>
+                                  <th style="width: 32px; text-align: center;">क्र.सं.</th>
+                                  <th>शुल्कको शीर्षक (Fee Head)</th>
+                                  <th style="width: 100px; text-align: center;">रसिद संख्या (Receipts)</th>
+                                  <th style="width: 120px; text-align: right;">संकलित रकम (रू)</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr>
-                                  <td style="text-align: center;">१</td>
-                                  <td><strong>शिक्षक तथा कर्मचारी तलब भुक्तानी (Staff Payroll Disbursement)</strong></td>
-                                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #991b1b;">रू ${(rep.totals?.totalPayroll || 0).toLocaleString()}</td>
+                                ${(rep.feeByHead || []).map((f: any, fIdx: number) => `
+                                  <tr>
+                                    <td style="text-align: center;">${fIdx + 1}</td>
+                                    <td><strong>${f.nameNepali || f.name}</strong> ${f.nameNepali ? `(${f.name})` : ''}</td>
+                                    <td style="text-align: center;">${f.count} रसिद</td>
+                                    <td class="num">रू ${(f.amount || 0).toLocaleString()}</td>
+                                  </tr>
+                                `).join('')}
+                                ${(rep.feeByHead || []).length === 0 ? `
+                                  <tr><td colspan="4" style="text-align: center; color: #94a3b8; padding: 8px;">यस आर्थिक वर्षमा विद्यार्थी शुल्क संकलन रेकर्ड छैन।</td></tr>
+                                ` : ''}
+                                <tr class="subtotal-row">
+                                  <td colspan="3" style="text-align: right;">विद्यार्थी शुल्क संकलन जम्मा (B):</td>
+                                  <td class="num" style="color: #065f46;">रू ${(rep.totals?.totalFeeCollections || 0).toLocaleString()}</td>
                                 </tr>
-                                <tr>
-                                  <td style="text-align: center;">२</td>
-                                  <td><strong>शैक्षिक, प्रशासनिक तथा मर्मत खर्च (Operational & Educational Expenses)</strong></td>
-                                  <td style="text-align: right; font-family: monospace; font-weight: bold; color: #991b1b;">रू ${(rep.totals?.totalExpenses - (rep.totals?.totalPayroll || 0)).toLocaleString()}</td>
-                                </tr>
-                                <tr style="background: #fef2f2; font-weight: 900;">
-                                  <td colspan="2" style="text-align: right;">कुल जम्मा खर्च (TOTAL EXPENDITURES):</td>
-                                  <td style="text-align: right; font-family: monospace; font-size: 12px; color: #991b1b;">रू ${(rep.totals?.totalExpenses || 0).toLocaleString()}</td>
+                                <tr class="grand-total-income">
+                                  <td colspan="3" style="text-align: right; font-size: 10.5px;">कुल जम्मा आम्दानी (TOTAL CONSOLIDATED REVENUE) [A + B]:</td>
+                                  <td class="num" style="font-size: 11px;">रू ${(rep.totals?.totalIncome || 0).toLocaleString()}</td>
                                 </tr>
                               </tbody>
                             </table>
 
-                            <div style="background: #f8fafc; border: 2px solid #1e3a5f; padding: 12px 16px; border-radius: 6px; margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
-                              <span style="font-size: 13px; font-weight: 900; color: #1e3a5f;">वार्षिक खुद बचत / घाटा (NET ANNUAL SURPLUS / DEFICIT):</span>
-                              <span style="font-size: 15px; font-weight: 900; font-family: monospace; color: ${(rep.totals?.netSurplus || 0) >= 0 ? '#065f46' : '#991b1b'};">
-                                रू ${(rep.totals?.netSurplus || 0).toLocaleString()}
-                              </span>
+                            <!-- SECTION 3: OPERATIONAL & CAPITAL EXPENSES -->
+                            <div class="sec-heading sec-expense" style="margin-top: 14px;">
+                              <span>३. शैक्षिक, प्रशासनिक तथा मर्मत खर्च विवरण (Operating & Capital Expenses)</span>
+                              <span>उप-जम्मा: रू ${(rep.totals?.totalGeneralExpenses || 0).toLocaleString()}</span>
+                            </div>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th style="width: 32px; text-align: center;">क्र.सं.</th>
+                                  <th>खर्चको शीर्षक (Expense Head)</th>
+                                  <th>खर्च वर्ग / लेखा कोड (Category / Code)</th>
+                                  <th style="width: 70px; text-align: center;">भौचर संख्या</th>
+                                  <th style="width: 120px; text-align: right;">खर्च रकम (रू)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${(rep.expenseByCategory || []).map((cat: any, cIdx: number) => `
+                                  <tr class="subtotal-row">
+                                    <td style="text-align: center;">${cIdx + 1}</td>
+                                    <td colspan="2"><strong>${cat.nameNepali || cat.name}</strong> (${cat.name})</td>
+                                    <td style="text-align: center;">${cat.count}</td>
+                                    <td class="num" style="color: #991b1b;">रू ${(cat.total || 0).toLocaleString()}</td>
+                                  </tr>
+                                  ${(cat.heads || []).map((h: any) => `
+                                    <tr>
+                                      <td></td>
+                                      <td style="padding-left: 18px;">• ${h.nameNepali || h.name}</td>
+                                      <td style="color: #64748b; font-size: 9px;">${h.code ? `[Code: ${h.code}] ` : ''}${h.name}</td>
+                                      <td style="text-align: center; color: #64748b;">${h.count}</td>
+                                      <td class="num">रू ${(h.amount || 0).toLocaleString()}</td>
+                                    </tr>
+                                  `).join('')}
+                                `).join('')}
+                                ${(rep.expenseByCategory || []).length === 0 ? `
+                                  <tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 8px;">यस आर्थिक वर्षमा कुनै साधारण खर्च प्रविष्टि छैन।</td></tr>
+                                ` : ''}
+                                <tr class="subtotal-row">
+                                  <td colspan="4" style="text-align: right;">शैक्षिक तथा प्रशासनिक खर्च जम्मा (C):</td>
+                                  <td class="num" style="color: #991b1b;">रू ${(rep.totals?.totalGeneralExpenses || 0).toLocaleString()}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            <!-- SECTION 4: STAFF PAYROLL -->
+                            <div class="sec-heading sec-expense" style="margin-top: 10px;">
+                              <span>४. शिक्षक तथा कर्मचारी तलब भुक्तानी विवरण (Staff Payroll & Compensation)</span>
+                              <span>उप-जम्मा: रू ${(rep.totals?.totalPayroll || 0).toLocaleString()}</span>
+                            </div>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th style="width: 32px; text-align: center;">क्र.सं.</th>
+                                  <th>शिक्षक / कर्मचारीको नाम</th>
+                                  <th>दरबन्दी प्रकार / तह</th>
+                                  <th style="width: 60px; text-align: center;">महिना</th>
+                                  <th style="width: 80px; text-align: right;">मूल तलब</th>
+                                  <th style="width: 75px; text-align: right;">भत्ता/चाडपर्व</th>
+                                  <th style="width: 75px; text-align: right;">कट्टी रकम</th>
+                                  <th style="width: 100px; text-align: right;">खुद भुक्तानी (रू)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${(rep.payrollSummary?.teachers || []).map((t: any, tIdx: number) => `
+                                  <tr>
+                                    <td style="text-align: center;">${tIdx + 1}</td>
+                                    <td><strong>${t.fullNameNepali || t.fullName}</strong></td>
+                                    <td><span style="font-size: 8.5px; padding: 1px 4px; border-radius: 2px; background: ${t.type === 'RASTRIYA' ? '#e0f2fe' : '#fef3c7'};">${t.type === 'RASTRIYA' ? 'सरकारी दरबन्दी' : 'निजी स्रोत'}</span> ${t.taha || ''}</td>
+                                    <td style="text-align: center;">${t.monthsCount} महिना</td>
+                                    <td class="num">रू ${(t.totalBasic || 0).toLocaleString()}</td>
+                                    <td class="num">रू ${(t.totalBhata || 0).toLocaleString()}</td>
+                                    <td class="num" style="color: #dc2626;">रू ${(t.totalDeductions || 0).toLocaleString()}</td>
+                                    <td class="num" style="font-weight: 800; color: #991b1b;">रू ${(t.totalNet || 0).toLocaleString()}</td>
+                                  </tr>
+                                `).join('')}
+                                ${(rep.payrollSummary?.teachers || []).length === 0 ? `
+                                  <tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 8px;">यस आर्थिक वर्षमा तलब भुक्तानी रेकर्ड गरिएको छैन।</td></tr>
+                                ` : ''}
+                                <tr class="subtotal-row">
+                                  <td colspan="7" style="text-align: right;">शिक्षक तथा कर्मचारी तलब भुक्तानी जम्मा (D):</td>
+                                  <td class="num" style="color: #991b1b;">रू ${(rep.totals?.totalPayroll || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr class="grand-total-expense">
+                                  <td colspan="7" style="text-align: right; font-size: 10.5px;">कुल जम्मा खर्च (TOTAL CONSOLIDATED EXPENDITURES) [C + D]:</td>
+                                  <td class="num" style="font-size: 11px;">रू ${(rep.totals?.totalExpenses || 0).toLocaleString()}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            <!-- CONSOLIDATED NET SURPLUS / DEFICIT STATEMENT -->
+                            <div class="sec-heading sec-summary" style="margin-top: 14px;">
+                              <span>५. एकीकृत वित्तीय स्थिति तथा खुद बचत/घाटा (Consolidated Balance Statement)</span>
+                              <span>आ.व. ${fyStr}</span>
+                            </div>
+                            <table>
+                              <tbody>
+                                <tr>
+                                  <td style="width: 70%; font-weight: 800;">कुल वार्षिक आम्दानी (Total Consolidated Revenues) [A + B]:</td>
+                                  <td class="num" style="color: #065f46; font-size: 11px;">रू ${(rep.totals?.totalIncome || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr>
+                                  <td style="font-weight: 800;">कुल वार्षिक खर्च तथा भुक्तानी (Total Consolidated Expenditures) [C + D]:</td>
+                                  <td class="num" style="color: #991b1b; font-size: 11px;">रू ${(rep.totals?.totalExpenses || 0).toLocaleString()}</td>
+                                </tr>
+                                <tr style="background: ${(rep.totals?.netSurplus || 0) >= 0 ? '#ecfdf5' : '#fff1f2'}; font-size: 12px; font-weight: 900;">
+                                  <td style="color: #1e3a5f;">वार्षिक खुद बचत / घाटा (NET ANNUAL SURPLUS / DEFICIT):</td>
+                                  <td class="num" style="color: ${(rep.totals?.netSurplus || 0) >= 0 ? '#065f46' : '#991b1b'};">
+                                    ${(rep.totals?.netSurplus || 0) >= 0 ? '(बचत Surplus) +' : '(घाटा Deficit) -'} रू ${Math.abs(rep.totals?.netSurplus || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            <!-- SECTION 6: PAYMENT MEDIUMS & VENDORS SUMMARY -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                              <div>
+                                <div class="sec-heading sec-misc" style="margin-top: 0;">
+                                  <span>६. भुक्तानी माध्यम विवरण (Payment Flow)</span>
+                                </div>
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th>माध्यम (Method)</th>
+                                      <th style="text-align: right;">आम्दानी (रू)</th>
+                                      <th style="text-align: right;">खर्च (रू)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr>
+                                      <td><strong>नगद (CASH)</strong></td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.CASH?.income || 0).toLocaleString()}</td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.CASH?.expense || 0).toLocaleString()}</td>
+                                    </tr>
+                                    <tr>
+                                      <td><strong>बैंक ट्रान्सफर (BANK)</strong></td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.BANK_TRANSFER?.income || 0).toLocaleString()}</td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.BANK_TRANSFER?.expense || 0).toLocaleString()}</td>
+                                    </tr>
+                                    <tr>
+                                      <td><strong>चेक (CHEQUE)</strong></td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.CHEQUE?.income || 0).toLocaleString()}</td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.CHEQUE?.expense || 0).toLocaleString()}</td>
+                                    </tr>
+                                    <tr>
+                                      <td><strong>डिजिटल / QR</strong></td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.QR_CODE?.income || 0).toLocaleString()}</td>
+                                      <td class="num">रू ${(rep.paymentMediumSummary?.QR_CODE?.expense || 0).toLocaleString()}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+
+                              <div>
+                                <div class="sec-heading sec-misc" style="margin-top: 0;">
+                                  <span>७. प्रमुख पार्टी/फर्म भुक्तानी सारांश (Vendor Flow)</span>
+                                </div>
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th>पार्टीको नाम (Party / Vendor)</th>
+                                      <th style="width: 50px; text-align: center;">भौचर</th>
+                                      <th style="text-align: right;">भुक्तानी रकम (रू)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    ${(rep.partiesSummary || []).slice(0, 5).map((p: any) => `
+                                      <tr>
+                                        <td><strong>${p.nameNepali || p.name}</strong> ${p.panNo ? `<span style="font-size: 8.5px; color: #64748b;">(PAN: ${p.panNo})</span>` : ''}</td>
+                                        <td style="text-align: center;">${p.voucherCount}</td>
+                                        <td class="num">रू ${(p.totalPaid || 0).toLocaleString()}</td>
+                                      </tr>
+                                    `).join('')}
+                                    ${(rep.partiesSummary || []).length === 0 ? `
+                                      <tr><td colspan="3" style="text-align: center; color: #94a3b8;">कुनै पार्टी लिंक गरिएको छैन।</td></tr>
+                                    ` : ''}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
 
-                            <div class="footer-sig">
-                              <div class="sig-box">तयार गर्ने (लेखापाल)<br/><span style="font-size: 9px; color: #666;">Accountant</span></div>
-                              <div class="sig-box">पेश गर्ने (प्रधानाध्यापक)<br/><span style="font-size: 9px; color: #666;">Headmaster</span></div>
-                              <div class="sig-box">स्वीकृत गर्ने (अध्यक्ष, SMC)<br/><span style="font-size: 9px; color: #666;">SMC Chairperson</span></div>
+                            <!-- OFFICIAL SIGNATURES -->
+                            <div class="footer-signatures">
+                              <div class="sig-box">
+                                तयार गर्ने (लेखापाल)<br />
+                                <span style="font-size: 9px; color: #64748b;">Accountant</span>
+                              </div>
+                              <div class="sig-box">
+                                जाँच्ने (प्रधानाध्यापक)<br />
+                                <span style="font-size: 9px; color: #64748b;">Headmaster</span>
+                              </div>
+                              <div class="sig-box">
+                                स्वीकृत गर्ने (अध्यक्ष, वि.व्य.स.)<br />
+                                <span style="font-size: 9px; color: #64748b;">SMC Chairperson</span>
+                              </div>
                             </div>
                           </div>
 
@@ -1390,103 +1650,493 @@ export default function UnifiedFinanceHubPage() {
                     `);
                     printWin.document.close();
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 text-xs font-bold transition shadow-2xs"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 text-xs font-bold transition shadow-xs"
+                  title="Print official multi-page A4 audit report"
                 >
                   <Printer size={13} />
                   <span>प्रिन्ट गर्नुहोस् (Print Report)</span>
                 </button>
+
                 <button
                   onClick={() => setIsAnnualReportOpen(false)}
-                  className="p-1.5 rounded-xl text-gray-400 hover:bg-gray-100"
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
                 >
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            {isReportLoading ? (
-              <div className="py-12 text-center text-gray-400">प्रतिवेदन तयार हुँदैछ...</div>
-            ) : annualReportData ? (
-              <div className="space-y-4">
-                {/* 3 KPI Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
-                    <span className="text-[10px] font-bold text-emerald-800 uppercase">कुल आम्दानी (Total Income)</span>
-                    <p className="text-xl font-black text-emerald-900 font-mono mt-1">
-                      रू {(annualReportData.totals?.totalIncome || 0).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-rose-50 border border-rose-200">
-                    <span className="text-[10px] font-bold text-rose-800 uppercase">कुल खर्च (Total Expenditures)</span>
-                    <p className="text-xl font-black text-rose-900 font-mono mt-1">
-                      रू {(annualReportData.totals?.totalExpenses || 0).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className={`p-4 rounded-xl border ${
-                    (annualReportData.totals?.netSurplus || 0) >= 0
-                      ? 'bg-blue-50 border-blue-200 text-blue-900'
-                      : 'bg-amber-50 border-amber-200 text-amber-900'
-                  }`}>
-                    <span className="text-[10px] font-bold uppercase">खुद मौज्दात (Net Balance)</span>
-                    <p className="text-xl font-black font-mono mt-1">
-                      रू {(annualReportData.totals?.netSurplus || 0).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
+            {/* Modal Body with Section Navigation Tabs */}
+            <div className="flex items-center gap-1 border-b border-gray-200 bg-slate-100 px-5 pt-2 overflow-x-auto scrollbar-none">
+              <button
+                onClick={() => setReportSectionTab('overview')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'overview'
+                    ? 'bg-white text-[#1e3a5f] border-[#1e3a5f] shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                📊 कार्यकारी सारांश (Overview)
+              </button>
+              <button
+                onClick={() => setReportSectionTab('income')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'income'
+                    ? 'bg-white text-emerald-800 border-emerald-600 shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                📥 आम्दानी तथा अनुदान (Income)
+              </button>
+              <button
+                onClick={() => setReportSectionTab('fees')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'fees'
+                    ? 'bg-white text-blue-800 border-blue-600 shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                🎓 विद्यार्थी शुल्क (Fees)
+              </button>
+              <button
+                onClick={() => setReportSectionTab('expenses')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'expenses'
+                    ? 'bg-white text-rose-800 border-rose-600 shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                📤 शैक्षिक तथा मर्मत खर्च (Expenses)
+              </button>
+              <button
+                onClick={() => setReportSectionTab('payroll')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'payroll'
+                    ? 'bg-white text-purple-800 border-purple-600 shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                👨‍🏫 शिक्षक तलब (Payroll)
+              </button>
+              <button
+                onClick={() => setReportSectionTab('parties')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'parties'
+                    ? 'bg-white text-amber-800 border-amber-600 shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                🤝 पार्टी/फर्म (Parties)
+              </button>
+              <button
+                onClick={() => setReportSectionTab('banks')}
+                className={`px-3 py-1.5 rounded-t-lg font-bold text-xs transition border-b-2 ${
+                  reportSectionTab === 'banks'
+                    ? 'bg-white text-teal-800 border-teal-600 shadow-2xs'
+                    : 'text-gray-600 hover:text-gray-900 border-transparent'
+                }`}
+              >
+                🏦 बैंक तथा नगद (Banks & Cash)
+              </button>
+            </div>
 
-                {/* Income and Expense Tables */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Income breakdown */}
-                  <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-                    <div className="bg-emerald-800 px-3.5 py-2 text-white font-bold text-xs flex justify-between">
-                      <span>आम्दानीका स्रोतहरू (Income Sources)</span>
-                      <span>{annualReportData.incomes?.length || 0} प्रविष्टि</span>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto divide-y divide-gray-100">
-                      {(annualReportData.incomes || []).map((inc: any) => (
-                        <div key={inc.id} className="p-2.5 flex justify-between items-center hover:bg-slate-50 text-[11px]">
-                          <div>
-                            <div className="font-bold text-gray-900">{inc.head?.name || 'General Income'}</div>
-                            <div className="text-[10px] text-gray-500">{inc.receivedDateBs} • {inc.sourceLevel || inc.party?.name || 'School'}</div>
-                          </div>
-                          <span className="font-mono font-bold text-emerald-700">रू {(inc.amount || 0).toLocaleString()}</span>
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
+              {isReportLoading ? (
+                <div className="py-16 text-center text-gray-400 font-bold">प्रतिवेदन तयार हुँदैछ...</div>
+              ) : annualReportData ? (
+                <div>
+                  {/* TAB 1: EXECUTIVE OVERVIEW */}
+                  {reportSectionTab === 'overview' && (
+                    <div className="space-y-4">
+                      {/* 4 KPI Summary Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                          <span className="text-[10px] font-bold text-emerald-800 uppercase">कुल आम्दानी (Total Inflow)</span>
+                          <p className="text-lg font-black text-emerald-900 font-mono mt-0.5">
+                            रू {(annualReportData.totals?.totalIncome || 0).toLocaleString()}
+                          </p>
+                          <span className="text-[9px] text-emerald-700">अनुदान: रू {(annualReportData.totals?.totalGeneralIncome || 0).toLocaleString()} • शुल्क: रू {(annualReportData.totals?.totalFeeCollections || 0).toLocaleString()}</span>
                         </div>
-                      ))}
-                      {(annualReportData.incomes || []).length === 0 && (
-                        <div className="p-4 text-center text-gray-400">यस आर्थिक वर्षमा कुनै आम्दानी भेटिएन।</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Expense breakdown */}
-                  <div className="rounded-xl border border-gray-200 overflow-hidden bg-white">
-                    <div className="bg-rose-800 px-3.5 py-2 text-white font-bold text-xs flex justify-between">
-                      <span>खर्चका शीर्षकहरू (Expense Categories)</span>
-                      <span>{annualReportData.expenses?.length || 0} प्रविष्टि</span>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto divide-y divide-gray-100">
-                      {(annualReportData.expenses || []).map((exp: any) => (
-                        <div key={exp.id} className="p-2.5 flex justify-between items-center hover:bg-slate-50 text-[11px]">
-                          <div>
-                            <div className="font-bold text-gray-900">{exp.head?.name || 'General Expense'}</div>
-                            <div className="text-[10px] text-gray-500">{exp.expenseDateBs} • {exp.paidTo || exp.party?.name || 'Self'}</div>
-                          </div>
-                          <span className="font-mono font-bold text-rose-700">रू {(exp.amount || 0).toLocaleString()}</span>
+                        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200">
+                          <span className="text-[10px] font-bold text-rose-800 uppercase">कुल खर्च (Total Outflow)</span>
+                          <p className="text-lg font-black text-rose-900 font-mono mt-0.5">
+                            रू {(annualReportData.totals?.totalExpenses || 0).toLocaleString()}
+                          </p>
+                          <span className="text-[9px] text-rose-700">साधारण खर्च: रू {(annualReportData.totals?.totalGeneralExpenses || 0).toLocaleString()} • तलब: रू {(annualReportData.totals?.totalPayroll || 0).toLocaleString()}</span>
                         </div>
-                      ))}
-                      {(annualReportData.expenses || []).length === 0 && (
-                        <div className="p-4 text-center text-gray-400">यस आर्थिक वर्षमा कुनै खर्च भेटिएन।</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+                        <div className={`p-3.5 rounded-xl border ${
+                          (annualReportData.totals?.netSurplus || 0) >= 0
+                            ? 'bg-blue-50 border-blue-200 text-blue-900'
+                            : 'bg-amber-50 border-amber-200 text-amber-900'
+                        }`}>
+                          <span className="text-[10px] font-bold uppercase">वार्षिक खुद स्थिति (Net Balance)</span>
+                          <p className="text-lg font-black font-mono mt-0.5">
+                            {(annualReportData.totals?.netSurplus || 0) >= 0 ? '+' : '-'} रू {Math.abs(annualReportData.totals?.netSurplus || 0).toLocaleString()}
+                          </p>
+                          <span className="text-[9px] font-bold">{(annualReportData.totals?.netSurplus || 0) >= 0 ? 'बचत (Surplus)' : 'घाटा (Deficit)'}</span>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-slate-100 border border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-700 uppercase">कुल भौचर तथा कारोबार</span>
+                          <p className="text-lg font-black text-slate-900 font-mono mt-0.5">
+                            {(annualReportData.totals?.incomeVouchersCount || 0) + (annualReportData.totals?.expenseVouchersCount || 0)} भौचर
+                          </p>
+                          <span className="text-[9px] text-slate-500">आम्दानी: {annualReportData.totals?.incomeVouchersCount} • खर्च: {annualReportData.totals?.expenseVouchersCount}</span>
+                        </div>
+                      </div>
 
-            <div className="flex justify-end pt-3 border-t border-gray-100">
+                      {/* Summary Statement Table */}
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                        <div className="bg-[#1e3a5f] px-4 py-2.5 text-white font-bold text-xs flex justify-between">
+                          <span>वार्षिक एकीकृत आय-व्यय विवरण सारांश (Consolidated Revenue vs Expenditure Statement)</span>
+                          <span>आ.व. {annualReportData.financialYear?.year}</span>
+                        </div>
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                            <tr>
+                              <th className="py-2 px-3">विवरण / लेखा शीर्षक (Accounting Head / Component)</th>
+                              <th className="py-2 px-3 text-center">भौचर / प्रविष्टि</th>
+                              <th className="py-2 px-3 text-right">रकम (रू)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-gray-800 text-[11px]">
+                            <tr className="hover:bg-emerald-50/40">
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-emerald-900">१. सरकारी अनुदान तथा अन्य आम्दानी (Government Grants & Incomes)</div>
+                                <div className="text-[10px] text-gray-500">केन्द्र, प्रदेश, स्थानीय तह तथा आन्तरिक अनुदान</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold">{annualReportData.incomes?.length || 0} भौचर</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">रू {(annualReportData.totals?.totalGeneralIncome || 0).toLocaleString()}</td>
+                            </tr>
+                            <tr className="hover:bg-emerald-50/40">
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-emerald-900">२. विद्यार्थी शुल्क संकलन (Student Fee Revenue)</div>
+                                <div className="text-[10px] text-gray-500">भर्ना, मासिक, परीक्षा, परिचयपत्र, कम्प्युटर आदि शुल्क</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold">{annualReportData.feeCollections?.length || 0} रसिद</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">रू {(annualReportData.totals?.totalFeeCollections || 0).toLocaleString()}</td>
+                            </tr>
+                            <tr className="bg-emerald-100/60 font-black text-emerald-900">
+                              <td colSpan={2} className="py-2.5 px-3 text-right uppercase text-[10px]">कुल जम्मा आम्दानी (TOTAL CONSOLIDATED REVENUE):</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-xs">रू {(annualReportData.totals?.totalIncome || 0).toLocaleString()}</td>
+                            </tr>
+
+                            <tr className="hover:bg-rose-50/40">
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-rose-900">३. शैक्षिक, प्रशासनिक तथा मर्मत खर्च (Operating & Capital Expenses)</div>
+                                <div className="text-[10px] text-gray-500">स्टेशनरी, परीक्षा, निर्माण, मर्मत, मसलन्द, इन्धन तथा विविध</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold">{annualReportData.expenses?.length || 0} भौचर</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">रू {(annualReportData.totals?.totalGeneralExpenses || 0).toLocaleString()}</td>
+                            </tr>
+                            <tr className="hover:bg-rose-50/40">
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-rose-900">४. शिक्षक तथा कर्मचारी तलब भुक्तानी (Staff Payroll Disbursement)</div>
+                                <div className="text-[10px] text-gray-500">सरकारी दरबन्दी तथा निजी स्रोत शिक्षक तलब, भत्ता र चाडपर्व</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold">{annualReportData.payrolls?.length || 0} महिना/भुक्तानी</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">रू {(annualReportData.totals?.totalPayroll || 0).toLocaleString()}</td>
+                            </tr>
+                            <tr className="bg-rose-100/60 font-black text-rose-900">
+                              <td colSpan={2} className="py-2.5 px-3 text-right uppercase text-[10px]">कुल जम्मा खर्च (TOTAL CONSOLIDATED EXPENDITURES):</td>
+                              <td className="py-2.5 px-3 text-right font-mono text-xs">रू {(annualReportData.totals?.totalExpenses || 0).toLocaleString()}</td>
+                            </tr>
+
+                            <tr className={`font-black text-xs ${
+                              (annualReportData.totals?.netSurplus || 0) >= 0 ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900'
+                            }`}>
+                              <td colSpan={2} className="py-3 px-3 uppercase text-[11px]">
+                                वार्षिक खुद बचत / घाटा (NET ANNUAL SURPLUS / DEFICIT):
+                              </td>
+                              <td className="py-3 px-3 text-right font-mono text-sm">
+                                {(annualReportData.totals?.netSurplus || 0) >= 0 ? '+' : '-'} रू {Math.abs(annualReportData.totals?.netSurplus || 0).toLocaleString()}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: INCOME & GRANTS */}
+                  {reportSectionTab === 'income' && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                        <div className="bg-emerald-800 px-4 py-2.5 text-white font-bold text-xs flex justify-between">
+                          <span>आम्दानी तथा सरकारी अनुदान विवरण (Income by Category & Head)</span>
+                          <span>कुल: रू {(annualReportData.totals?.totalGeneralIncome || 0).toLocaleString()}</span>
+                        </div>
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                            <tr>
+                              <th className="py-2 px-3">आम्दानीको शीर्षक / वर्ग (Category & Head)</th>
+                              <th className="py-2 px-3 text-center">भौचर संख्या</th>
+                              <th className="py-2 px-3 text-right">रकम (रू)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-gray-800 text-[11px]">
+                            {(annualReportData.incomeByCategory || []).map((cat: any, cIdx: number) => (
+                              <React.Fragment key={`cat-${cIdx}`}>
+                                <tr className="bg-slate-50 font-bold">
+                                  <td className="py-2 px-3 text-[#1e3a5f]">{cat.nameNepali || cat.name} ({cat.name})</td>
+                                  <td className="py-2 px-3 text-center text-gray-600">{cat.count}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-emerald-800">रू {(cat.total || 0).toLocaleString()}</td>
+                                </tr>
+                                {(cat.heads || []).map((h: any, hIdx: number) => (
+                                  <tr key={`head-${hIdx}`} className="hover:bg-slate-50 text-gray-600">
+                                    <td className="py-1.5 px-3 pl-8">• {h.nameNepali || h.name}</td>
+                                    <td className="py-1.5 px-3 text-center text-gray-400">{h.count}</td>
+                                    <td className="py-1.5 px-3 text-right font-mono font-bold text-gray-700">रू {(h.amount || 0).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            ))}
+                            {(annualReportData.incomeByCategory || []).length === 0 && (
+                              <tr><td colSpan={3} className="py-8 text-center text-gray-400">कुनै आम्दानी प्रविष्टि भेटिएन।</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 3: STUDENT FEES */}
+                  {reportSectionTab === 'fees' && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                        <div className="bg-blue-800 px-4 py-2.5 text-white font-bold text-xs flex justify-between">
+                          <span>विद्यार्थी शुल्क संकलन शीर्षकगत विवरण (Fee Collections by Head)</span>
+                          <span>कुल शुल्क: रू {(annualReportData.totals?.totalFeeCollections || 0).toLocaleString()}</span>
+                        </div>
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                            <tr>
+                              <th className="py-2 px-3">शुल्कको शीर्षक (Fee Head)</th>
+                              <th className="py-2 px-3 text-center">संकलित रसिद संख्या</th>
+                              <th className="py-2 px-3 text-right">संकलित रकम (रू)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-gray-800 text-[11px]">
+                            {(annualReportData.feeByHead || []).map((f: any, fIdx: number) => (
+                              <tr key={`fee-${fIdx}`} className="hover:bg-blue-50/30">
+                                <td className="py-2 px-3 font-bold">{f.nameNepali || f.name}</td>
+                                <td className="py-2 px-3 text-center font-bold text-blue-700">{f.count} रसिद</td>
+                                <td className="py-2 px-3 text-right font-mono font-black text-blue-900">रू {(f.amount || 0).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                            {(annualReportData.feeByHead || []).length === 0 && (
+                              <tr><td colSpan={3} className="py-8 text-center text-gray-400">कुनै शुल्क संकलन रेकर्ड भेटिएन।</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 4: OPERATING & CAPITAL EXPENSES */}
+                  {reportSectionTab === 'expenses' && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                        <div className="bg-rose-800 px-4 py-2.5 text-white font-bold text-xs flex justify-between">
+                          <span>शैक्षिक तथा प्रशासनिक खर्च शीर्षकगत विवरण (Expenses by Category & Head)</span>
+                          <span>कुल खर्च: रू {(annualReportData.totals?.totalGeneralExpenses || 0).toLocaleString()}</span>
+                        </div>
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                            <tr>
+                              <th className="py-2 px-3">खर्चको शीर्षक / वर्ग (Category & Head)</th>
+                              <th className="py-2 px-3">लेखा कोड</th>
+                              <th className="py-2 px-3 text-center">भौचर संख्या</th>
+                              <th className="py-2 px-3 text-right">रकम (रू)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-gray-800 text-[11px]">
+                            {(annualReportData.expenseByCategory || []).map((cat: any, cIdx: number) => (
+                              <React.Fragment key={`exp-cat-${cIdx}`}>
+                                <tr className="bg-slate-50 font-bold">
+                                  <td className="py-2 px-3 text-rose-900">{cat.nameNepali || cat.name} ({cat.name})</td>
+                                  <td className="py-2 px-3 text-gray-400">—</td>
+                                  <td className="py-2 px-3 text-center text-gray-600">{cat.count}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-rose-800">रू {(cat.total || 0).toLocaleString()}</td>
+                                </tr>
+                                {(cat.heads || []).map((h: any, hIdx: number) => (
+                                  <tr key={`exp-head-${hIdx}`} className="hover:bg-slate-50 text-gray-600">
+                                    <td className="py-1.5 px-3 pl-8">• {h.nameNepali || h.name}</td>
+                                    <td className="py-1.5 px-3 font-mono text-gray-500">{h.code || '-'}</td>
+                                    <td className="py-1.5 px-3 text-center text-gray-400">{h.count}</td>
+                                    <td className="py-1.5 px-3 text-right font-mono font-bold text-gray-700">रू {(h.amount || 0).toLocaleString()}</td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            ))}
+                            {(annualReportData.expenseByCategory || []).length === 0 && (
+                              <tr><td colSpan={4} className="py-8 text-center text-gray-400">कुनै खर्च प्रविष्टि भेटिएन।</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 5: STAFF PAYROLL */}
+                  {reportSectionTab === 'payroll' && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                        <div className="bg-purple-800 px-4 py-2.5 text-white font-bold text-xs flex justify-between">
+                          <span>शिक्षक तथा कर्मचारी तलब भुक्तानी विवरण (Staff Payroll & Allowances)</span>
+                          <span>कुल तलब भुक्तानी: रू {(annualReportData.totals?.totalPayroll || 0).toLocaleString()}</span>
+                        </div>
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                            <tr>
+                              <th className="py-2 px-3">शिक्षक / कर्मचारीको नाम</th>
+                              <th className="py-2 px-3">दरबन्दी प्रकार / तह</th>
+                              <th className="py-2 px-3 text-center">महिना</th>
+                              <th className="py-2 px-3 text-right">मूल तलब</th>
+                              <th className="py-2 px-3 text-right">भत्ता/चाडपर्व</th>
+                              <th className="py-2 px-3 text-right">कट्टी रकम</th>
+                              <th className="py-2 px-3 text-right">खुद भुक्तानी (रू)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-gray-800 text-[11px]">
+                            {(annualReportData.payrollSummary?.teachers || []).map((t: any, tIdx: number) => (
+                              <tr key={`t-${tIdx}`} className="hover:bg-purple-50/30">
+                                <td className="py-2 px-3 font-bold">{t.fullNameNepali || t.fullName}</td>
+                                <td className="py-2 px-3">
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    t.type === 'RASTRIYA' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {t.type === 'RASTRIYA' ? 'सरकारी दरबन्दी' : 'निजी स्रोत'}
+                                  </span> {t.taha || ''}
+                                </td>
+                                <td className="py-2 px-3 text-center font-bold">{t.monthsCount} महिना</td>
+                                <td className="py-2 px-3 text-right font-mono">रू {(t.totalBasic || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono">रू {(t.totalBhata || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono text-rose-600">रू {(t.totalDeductions || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono font-black text-purple-900">रू {(t.totalNet || 0).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                            {(annualReportData.payrollSummary?.teachers || []).length === 0 && (
+                              <tr><td colSpan={7} className="py-8 text-center text-gray-400">यस आर्थिक वर्षमा कुनै तलब भुक्तानी भेटिएन।</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 6: PARTIES & VENDORS */}
+                  {reportSectionTab === 'parties' && (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                        <div className="bg-amber-700 px-4 py-2.5 text-white font-bold text-xs flex justify-between">
+                          <span>पार्टी, फर्म तथा सप्लायर्स भुक्तानी सारांश (Parties & Vendors Summary)</span>
+                          <span>{annualReportData.partiesSummary?.length || 0} पार्टीहरू</span>
+                        </div>
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                            <tr>
+                              <th className="py-2 px-3">पार्टीको नाम (Party Name)</th>
+                              <th className="py-2 px-3">PAN No / सम्पर्क</th>
+                              <th className="py-2 px-3 text-center">भौचर संख्या</th>
+                              <th className="py-2 px-3 text-right">भुक्तानी भएको रकम (रू)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-gray-800 text-[11px]">
+                            {(annualReportData.partiesSummary || []).map((p: any, pIdx: number) => (
+                              <tr key={`party-${pIdx}`} className="hover:bg-amber-50/30">
+                                <td className="py-2 px-3 font-bold text-gray-900">{p.nameNepali || p.name}</td>
+                                <td className="py-2 px-3 font-mono text-gray-600">{p.panNo || 'N/A'} • {p.phone || 'N/A'}</td>
+                                <td className="py-2 px-3 text-center font-bold text-amber-800">{p.voucherCount} भौचर</td>
+                                <td className="py-2 px-3 text-right font-mono font-black text-rose-700">रू {(p.totalPaid || 0).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                            {(annualReportData.partiesSummary || []).length === 0 && (
+                              <tr><td colSpan={4} className="py-8 text-center text-gray-400">कुनै पार्टी/सप्लायर्स कारोबार भेटिएन।</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 7: BANKS & CASH */}
+                  {reportSectionTab === 'banks' && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                          <div className="bg-teal-800 px-4 py-2.5 text-white font-bold text-xs">
+                            भुक्तानी माध्यम अनुसार कारोबार (Payment Mediums)
+                          </div>
+                          <table className="w-full text-left text-[11px]">
+                            <thead className="bg-slate-100 text-gray-700 text-[10px] uppercase font-bold border-b">
+                              <tr>
+                                <th className="py-2 px-3">माध्यम</th>
+                                <th className="py-2 px-3 text-right">आम्दानी (रू)</th>
+                                <th className="py-2 px-3 text-right">खर्च (रू)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 text-gray-800">
+                              <tr>
+                                <td className="py-2 px-3 font-bold">नगद (CASH)</td>
+                                <td className="py-2 px-3 text-right font-mono text-emerald-700">रू {(annualReportData.paymentMediumSummary?.CASH?.income || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono text-rose-700">रू {(annualReportData.paymentMediumSummary?.CASH?.expense || 0).toLocaleString()}</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 px-3 font-bold">बैंक ट्रान्सफर (BANK)</td>
+                                <td className="py-2 px-3 text-right font-mono text-emerald-700">रू {(annualReportData.paymentMediumSummary?.BANK_TRANSFER?.income || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono text-rose-700">रू {(annualReportData.paymentMediumSummary?.BANK_TRANSFER?.expense || 0).toLocaleString()}</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 px-3 font-bold">चेक (CHEQUE)</td>
+                                <td className="py-2 px-3 text-right font-mono text-emerald-700">रू {(annualReportData.paymentMediumSummary?.CHEQUE?.income || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono text-rose-700">रू {(annualReportData.paymentMediumSummary?.CHEQUE?.expense || 0).toLocaleString()}</td>
+                              </tr>
+                              <tr>
+                                <td className="py-2 px-3 font-bold">डिजिटल / QR</td>
+                                <td className="py-2 px-3 text-right font-mono text-emerald-700">रू {(annualReportData.paymentMediumSummary?.QR_CODE?.income || 0).toLocaleString()}</td>
+                                <td className="py-2 px-3 text-right font-mono text-rose-700">रू {(annualReportData.paymentMediumSummary?.QR_CODE?.expense || 0).toLocaleString()}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-xs">
+                          <div className="bg-slate-800 px-4 py-2.5 text-white font-bold text-xs">
+                            विद्यालयका बैंक खाताहरू (Registered Bank Accounts)
+                          </div>
+                          <div className="p-3 divide-y divide-gray-100">
+                            {(annualReportData.bankAccounts || []).map((b: any) => (
+                              <div key={b.id} className="py-2 flex justify-between items-center text-[11px]">
+                                <div>
+                                  <div className="font-bold text-gray-900">{b.bankName} - {b.branch || 'Branch'}</div>
+                                  <div className="text-[10px] text-gray-500 font-mono">A/C: {b.accountNo} ({b.accountName})</div>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px]">
+                                  {b.accountType || 'Current'}
+                                </span>
+                              </div>
+                            ))}
+                            {(annualReportData.bankAccounts || []).length === 0 && (
+                              <div className="py-4 text-center text-gray-400">कुनै बैंक खाता दर्ता गरिएको छैन।</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between border-t border-gray-200 bg-white px-5 py-3">
+              <span className="text-[11px] text-gray-500 font-nepali">
+                नेपाल सरकार स्थानीय तह विद्यालय आर्थिक नियमावली ढाँचा अनुसार तयार पारिएको प्रतिवेदन
+              </span>
               <button
                 onClick={() => setIsAnnualReportOpen(false)}
-                className="rounded-xl bg-[#1e3a5f] text-white px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#2a5280]"
+                className="rounded-xl bg-[#1e3a5f] text-white px-5 py-2 text-xs font-bold shadow-xs hover:bg-[#2a5280] transition"
               >
                 बन्द गर्नुहोस् (Close)
               </button>
