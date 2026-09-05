@@ -257,16 +257,28 @@ export default function SchoolProfilePage() {
   });
 
   const deleteYearMutation = useMutation({
-    mutationFn: async (yearId: number) => {
-      const res = await api.post(`/classes/academic-years/${yearId}/delete`);
+    mutationFn: async ({ yearId, force }: { yearId: number; force?: boolean }) => {
+      const res = await api.post(`/classes/academic-years/${yearId}/delete`, { force: !!force });
       return res.data;
     },
     onSuccess: (res: any) => {
-      toast.success(res.message || 'Academic Year deleted successfully.');
+      toast.success(res?.message || 'Academic Year deleted successfully.');
       queryClient.invalidateQueries({ queryKey: ['academic-years'] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete Academic Year.');
+    onError: (err: any, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
+      if (err.response?.status === 404) {
+        toast.success('Academic Year already removed. List refreshed.');
+        return;
+      }
+      const msg = err.response?.data?.message || 'Failed to delete Academic Year.';
+      if (err.response?.status === 400 && msg.includes('linked data') && !variables.force) {
+        if (window.confirm(`${msg}\n\nDo you want to FORCE reassign all its linked transactions to the Active Academic Year and delete it?`)) {
+          deleteYearMutation.mutate({ yearId: variables.yearId, force: true });
+          return;
+        }
+      }
+      toast.error(msg);
     },
   });
 
@@ -741,7 +753,7 @@ export default function SchoolProfilePage() {
                         <button
                           onClick={() => {
                             if (window.confirm(`Are you sure you want to delete Academic Year "${y.year}"?`)) {
-                              deleteYearMutation.mutate(y.id);
+                              deleteYearMutation.mutate({ yearId: y.id });
                             }
                           }}
                           className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"

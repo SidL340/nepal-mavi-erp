@@ -8,8 +8,15 @@ const router = express.Router();
 router.post('/academic-years-delete-direct', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     const yearId = parseInt(req.body.id);
+    if (isNaN(yearId)) {
+      return res.status(400).json({ success: false, message: 'Invalid Year ID.' });
+    }
     const yr = await prisma.academicYear.findUnique({ where: { id: yearId } });
-    if (!yr) return res.status(404).json({ success: false, message: 'Academic Year not found.' });
+    if (!yr) {
+      return res.json({ success: true, message: 'Academic Year already removed.' });
+    }
+
+    const force = req.body.force === true || req.query.force === 'true';
 
     // Check if linked data exists
     const [expenseCount, incomeCount, enrollmentCount, classCount] = await Promise.all([
@@ -19,11 +26,23 @@ router.post('/academic-years-delete-direct', authenticate, authorize('SUPER_ADMI
       prisma.class.count({ where: { academicYearId: yearId } }),
     ]);
 
-    if (expenseCount > 0 || incomeCount > 0 || enrollmentCount > 0 || classCount > 0) {
+    if (!force && (expenseCount > 0 || incomeCount > 0 || enrollmentCount > 0 || classCount > 0)) {
       return res.status(400).json({
         success: false,
         message: `Cannot delete Academic Year "${yr.year}" because it has linked data (${expenseCount} expenses, ${incomeCount} income, ${enrollmentCount} student enrollments, ${classCount} classes).`
       });
+    }
+
+    if (force) {
+      const activeYr = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (activeYr && activeYr.id !== yearId) {
+        await prisma.expenseEntry.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.incomeEntry.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.classEnrollment.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.class.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.exam.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.payroll.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+      }
     }
 
     await prisma.academicYear.delete({ where: { id: yearId } });
@@ -678,8 +697,11 @@ router.put('/academic-years/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'
 router.delete('/academic-years/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     const yearId = parseInt(req.params.id);
+    if (isNaN(yearId)) return res.status(400).json({ success: false, message: 'Invalid Year ID.' });
     const yr = await prisma.academicYear.findUnique({ where: { id: yearId } });
-    if (!yr) return res.status(404).json({ success: false, message: 'Academic Year not found.' });
+    if (!yr) return res.json({ success: true, message: 'Academic Year already removed.' });
+
+    const force = req.body?.force === true || req.query?.force === 'true';
 
     // Check if linked data exists
     const [expenseCount, incomeCount, enrollmentCount, classCount] = await Promise.all([
@@ -689,11 +711,23 @@ router.delete('/academic-years/:id', authenticate, authorize('SUPER_ADMIN', 'ADM
       prisma.class.count({ where: { academicYearId: yearId } }),
     ]);
 
-    if (expenseCount > 0 || incomeCount > 0 || enrollmentCount > 0 || classCount > 0) {
+    if (!force && (expenseCount > 0 || incomeCount > 0 || enrollmentCount > 0 || classCount > 0)) {
       return res.status(400).json({
         success: false,
         message: `Cannot delete Academic Year "${yr.year}" because it has linked transactions or classes (${expenseCount} expenses, ${incomeCount} income, ${enrollmentCount} enrollments, ${classCount} classes).`
       });
+    }
+
+    if (force) {
+      const activeYr = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (activeYr && activeYr.id !== yearId) {
+        await prisma.expenseEntry.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.incomeEntry.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.classEnrollment.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.class.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.exam.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.payroll.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+      }
     }
 
     await prisma.academicYear.delete({ where: { id: yearId } });
@@ -706,8 +740,11 @@ router.delete('/academic-years/:id', authenticate, authorize('SUPER_ADMIN', 'ADM
 router.post('/academic-years/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     const yearId = parseInt(req.params.id);
+    if (isNaN(yearId)) return res.status(400).json({ success: false, message: 'Invalid Year ID.' });
     const yr = await prisma.academicYear.findUnique({ where: { id: yearId } });
-    if (!yr) return res.status(404).json({ success: false, message: 'Academic Year not found.' });
+    if (!yr) return res.json({ success: true, message: 'Academic Year already removed.' });
+
+    const force = req.body?.force === true || req.query?.force === 'true';
 
     // Check if linked data exists
     const [expenseCount, incomeCount, enrollmentCount, classCount] = await Promise.all([
@@ -717,11 +754,23 @@ router.post('/academic-years/:id/delete', authenticate, authorize('SUPER_ADMIN',
       prisma.class.count({ where: { academicYearId: yearId } }),
     ]);
 
-    if (expenseCount > 0 || incomeCount > 0 || enrollmentCount > 0 || classCount > 0) {
+    if (!force && (expenseCount > 0 || incomeCount > 0 || enrollmentCount > 0 || classCount > 0)) {
       return res.status(400).json({
         success: false,
         message: `Cannot delete Academic Year "${yr.year}" because it has linked transactions or classes (${expenseCount} expenses, ${incomeCount} income, ${enrollmentCount} enrollments, ${classCount} classes).`
       });
+    }
+
+    if (force) {
+      const activeYr = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (activeYr && activeYr.id !== yearId) {
+        await prisma.expenseEntry.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.incomeEntry.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.classEnrollment.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.class.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.exam.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+        await prisma.payroll.updateMany({ where: { academicYearId: yearId }, data: { academicYearId: activeYr.id } }).catch(() => {});
+      }
     }
 
     await prisma.academicYear.delete({ where: { id: yearId } });
