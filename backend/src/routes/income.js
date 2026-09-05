@@ -254,7 +254,7 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
     // Generate receipt no
     const count = await prisma.feeCollection.count();
     const receiptNo = `RCP-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
-    const { paidDateAd, academicYearId, feeDueId, ...rest } = req.body;
+    const { paidDateAd, academicYearId, feeDueId, previousReceiptId, ...rest } = req.body;
     const collection = await prisma.feeCollection.create({
       data: {
         ...rest,
@@ -266,6 +266,43 @@ router.post('/fee-collections', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 
       },
       include: { student: true, feeHead: true },
     });
+
+    // If this payment is a due settlement for a previous receipt, update previous receipt to mark due settled
+    if (previousReceiptId) {
+      try {
+        const prev = await prisma.feeCollection.findUnique({ where: { id: parseInt(previousReceiptId) } });
+        if (prev) {
+          const updatedRemarks = prev.remarks
+            ? prev.remarks.replace(/Due:\s*(?:Rs\.|रू)?\s*[\d,.]+/gi, `Due: Rs. 0 [Settled by ${receiptNo}]`)
+            : `[Settled by ${receiptNo} | Due: Rs. 0]`;
+          await prisma.feeCollection.update({
+            where: { id: parseInt(previousReceiptId) },
+            data: { remarks: updatedRemarks },
+          });
+        }
+      } catch (prevErr) {
+        console.error('Failed to update previous due receipt:', prevErr);
+      }
+    }
+
+    // Also check if remarks reference a previous receipt number (Ref Receipt: RCP-XXXX)
+    const refMatch = (rest.remarks || '').match(/Ref Receipt:\s*(RCP-[\w-]+)/i);
+    if (refMatch && refMatch[1]) {
+      try {
+        const refRec = await prisma.feeCollection.findFirst({ where: { receiptNo: refMatch[1] } });
+        if (refRec && (!previousReceiptId || refRec.id !== parseInt(previousReceiptId))) {
+          const updatedRemarks = refRec.remarks
+            ? refRec.remarks.replace(/Due:\s*(?:Rs\.|रू)?\s*[\d,.]+/gi, `Due: Rs. 0 [Settled by ${receiptNo}]`)
+            : `[Settled by ${receiptNo} | Due: Rs. 0]`;
+          await prisma.feeCollection.update({
+            where: { id: refRec.id },
+            data: { remarks: updatedRemarks },
+          });
+        }
+      } catch (refErr) {
+        console.error('Failed to update referenced receipt:', refErr);
+      }
+    }
 
     // Mark corresponding fee due as paid if feeDueId passed
     if (feeDueId) {

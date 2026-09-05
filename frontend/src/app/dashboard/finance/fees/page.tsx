@@ -33,10 +33,21 @@ import toast from 'react-hot-toast';
 function FeeCollectionPortalContent() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const queryTab = searchParams.get('tab');
   const queryStudentId = searchParams.get('studentId');
 
   // Active Tab: 'COLLECTION' (Fee Collection & Receipts) | 'RECEIVABLES' (Accounts Receivable / Student Dues)
-  const [activeTab, setActiveTab] = useState<'COLLECTION' | 'RECEIVABLES'>('COLLECTION');
+  const [activeTab, setActiveTab] = useState<'COLLECTION' | 'RECEIVABLES'>(
+    queryTab?.toUpperCase() === 'RECEIVABLES' ? 'RECEIVABLES' : 'COLLECTION'
+  );
+
+  useEffect(() => {
+    if (queryTab?.toUpperCase() === 'RECEIVABLES') {
+      setActiveTab('RECEIVABLES');
+    } else if (queryTab?.toUpperCase() === 'COLLECTION') {
+      setActiveTab('COLLECTION');
+    }
+  }, [queryTab]);
 
   // Selected student state for fee collection
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -131,8 +142,11 @@ function FeeCollectionPortalContent() {
   useEffect(() => {
     if (initialStudentData) {
       setSelectedStudent(initialStudentData);
+      if (queryTab?.toUpperCase() === 'RECEIVABLES') {
+        setFilterSearch(initialStudentData.fullName || '');
+      }
     }
-  }, [initialStudentData]);
+  }, [initialStudentData, queryTab]);
 
   // Fee Collections History
   const { data: collectionsData, isLoading: isLoadingCollections } = useQuery({
@@ -269,6 +283,7 @@ function FeeCollectionPortalContent() {
         paymentMedium: duePaymentMedium,
         paymentRef: duePaymentRef,
         chequePayeeName: duePaymentMedium === 'CHEQUE' ? dueChequePayeeName : undefined,
+        previousReceiptId: selectedDueRecord.id,
         remarks: computedRemarks,
       };
 
@@ -398,19 +413,35 @@ function FeeCollectionPortalContent() {
   });
 
   // Filtered for Accounts Receivable (Pending Dues Table)
-  const pendingDuesList = processedCollections.filter((c: any) => {
-    if (c.isDuesCleared) return false;
-    if (filterClassId !== 'ALL' && c.student?.classEnrollments?.[0]?.classId?.toString() !== filterClassId) return false;
-    if (filterFeeHeadId !== 'ALL' && c.feeHeadId?.toString() !== filterFeeHeadId) return false;
-    if (filterSearch) {
-      const q = filterSearch.toLowerCase();
-      const matchName = c.student?.fullName?.toLowerCase().includes(q);
-      const matchReceipt = c.receiptNo?.toLowerCase().includes(q);
-      const matchHead = c.feeHead?.name?.toLowerCase().includes(q);
-      if (!matchName && !matchReceipt && !matchHead) return false;
+  // Shows only the latest active outstanding balance per student & fee head.
+  // Once the due is completely cleared (remainingDue <= 0), it is removed from the list.
+  const pendingDuesList = useMemo(() => {
+    // Sort descending by id so the newest transaction for each student + fee head is checked first
+    const sorted = [...processedCollections].sort((a: any, b: any) => (b.id || 0) - (a.id || 0));
+    const latestByStudentHead = new Map<string, any>();
+
+    for (const c of sorted) {
+      const key = `${c.studentId}_${c.feeHeadId}`;
+      if (!latestByStudentHead.has(key)) {
+        latestByStudentHead.set(key, c);
+      }
     }
-    return true;
-  });
+
+    return Array.from(latestByStudentHead.values()).filter((c: any) => {
+      // Must not be cleared and remainingDue must be > 0
+      if (c.isDuesCleared || (c.remainingDue || 0) <= 0) return false;
+      if (filterClassId !== 'ALL' && c.student?.classEnrollments?.[0]?.classId?.toString() !== filterClassId) return false;
+      if (filterFeeHeadId !== 'ALL' && c.feeHeadId?.toString() !== filterFeeHeadId) return false;
+      if (filterSearch) {
+        const q = filterSearch.toLowerCase();
+        const matchName = c.student?.fullName?.toLowerCase().includes(q);
+        const matchReceipt = c.receiptNo?.toLowerCase().includes(q);
+        const matchHead = c.feeHead?.name?.toLowerCase().includes(q);
+        if (!matchName && !matchReceipt && !matchHead) return false;
+      }
+      return true;
+    });
+  }, [processedCollections, filterClassId, filterFeeHeadId, filterSearch]);
 
   const totalOutstandingReceivables = pendingDuesList.reduce((sum: number, item: any) => sum + (item.remainingDue || 0), 0);
   const totalStudentsWithDues = new Set(pendingDuesList.map((d: any) => d.studentId)).size;

@@ -273,12 +273,19 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               <span className="text-[10px] font-bold text-gray-400 block uppercase">Total Fees Paid</span>
               <p className="text-base font-black text-emerald-700 font-mono">रू {totalFeesPaid.toLocaleString()}</p>
             </div>
-            <div className="text-right pl-1">
-              <span className="text-[10px] font-bold text-gray-400 block uppercase">Outstanding Dues</span>
-              <p className={`text-base font-black font-mono ${totalOutstandingDues > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            <Link
+              href={`/dashboard/finance/fees?studentId=${student.id}&tab=receivables`}
+              title="Click to view and pay outstanding dues"
+              className="text-right pl-1 group block hover:opacity-80 transition cursor-pointer"
+            >
+              <span className="text-[10px] font-bold text-gray-400 block uppercase group-hover:text-amber-700 flex items-center justify-end gap-1">
+                <span>Outstanding Dues</span>
+                {totalOutstandingDues > 0 && <span className="text-[9px] text-amber-600 font-normal">➔ Pay</span>}
+              </span>
+              <p className={`text-base font-black font-mono ${totalOutstandingDues > 0 ? 'text-amber-600 underline underline-offset-2' : 'text-emerald-600'}`}>
                 रू {totalOutstandingDues.toLocaleString()}
               </p>
-            </div>
+            </Link>
           </div>
         </div>
 
@@ -452,14 +459,28 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-xl font-black text-emerald-900 mt-0.5 font-mono">रू {totalFeesPaid.toLocaleString()}</p>
             </div>
 
-            <div className={`rounded-xl p-3.5 border ${totalOutstandingDues > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
-              <span className={`text-[10px] font-bold uppercase block ${totalOutstandingDues > 0 ? 'text-amber-800' : 'text-slate-500'}`}>
-                Remaining Dues (बाँकी बक्यौता)
-              </span>
+            <Link
+              href={`/dashboard/finance/fees?studentId=${student.id}&tab=receivables`}
+              className={`rounded-xl p-3.5 border block transition hover:shadow-sm cursor-pointer ${
+                totalOutstandingDues > 0
+                  ? 'bg-amber-50 border-amber-200 hover:bg-amber-100/70'
+                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] font-bold uppercase block ${totalOutstandingDues > 0 ? 'text-amber-800' : 'text-slate-500'}`}>
+                  Remaining Dues (बाँकी बक्यौता)
+                </span>
+                {totalOutstandingDues > 0 && (
+                  <span className="text-[10px] bg-amber-600 text-white px-1.5 py-0.5 rounded font-bold">
+                    Pay ➔
+                  </span>
+                )}
+              </div>
               <p className={`text-xl font-black mt-0.5 font-mono ${totalOutstandingDues > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
                 {totalOutstandingDues > 0 ? `रू ${totalOutstandingDues.toLocaleString()}` : 'रू 0 (चुक्ता)'}
               </p>
-            </div>
+            </Link>
 
             <div className="rounded-xl bg-blue-50 p-3.5 border border-blue-100">
               <span className="text-[10px] font-bold uppercase text-blue-700 block">Total Receipts (जम्मा रसिद)</span>
