@@ -73,19 +73,19 @@ export default function AcademicCalendar() {
 
   const events: any[] = eventsData || [];
 
-  // Load Nepali Patro Events Mutation
-  const loadPatroMutation = useMutation({
+  // Load National Calendar Events Mutation
+  const loadNationalEventsMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/events/load-nepali-patro', { yearBs: String(yearNum) });
+      const res = await api.post('/events/load-calendar-events', { yearBs: String(yearNum) });
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'नेपाली पात्रोका चाडपर्वहरू सफलतापूर्वक लोड गरियो!');
+      toast.success(data.message || 'राष्ट्रिय चाडपर्व तथा विदाहरू सफलतापूर्वक लोड गरियो!');
       queryClient.invalidateQueries({ queryKey: ['academic-events'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to load Nepali Patro events.');
+      toast.error(err.response?.data?.message || 'Failed to load national calendar events.');
     },
   });
 
@@ -191,10 +191,10 @@ export default function AcademicCalendar() {
           <CalendarIcon size={20} className="text-[#1e3a5f]" />
           <div>
             <h3 className="font-black text-sm text-[#1e3a5f]">
-              Academic Calendar & Nepali Patro (पात्रो, विदा तथा शैक्षिक कार्यक्रम)
+              Academic Calendar & Holidays (शैक्षिक क्यालेन्डर तथा विदा तालिका)
             </h3>
             <p className="text-[11px] text-gray-500 font-nepali">
-              नेपाली पात्रो चाडपर्व, विद्यालय विदा, परीक्षा र दैनिक कार्यक्रमहरू
+              राष्ट्रिय चाडपर्व, विद्यालय विदा, परीक्षा र दैनिक शैक्षिक कार्यक्रमहरू
             </p>
           </div>
         </div>
@@ -214,15 +214,15 @@ export default function AcademicCalendar() {
             {isSundayHoliday ? '✓ Sunday Holiday (आइतबार विदा: सक्रिय)' : '+ Sunday Holiday (आइतबार विदा)'}
           </button>
 
-          {/* Admin Load Patro Button */}
+          {/* Admin Load Events Button */}
           {isAdmin && (
             <button
-              onClick={() => loadPatroMutation.mutate()}
-              disabled={loadPatroMutation.isPending}
+              onClick={() => loadNationalEventsMutation.mutate()}
+              disabled={loadNationalEventsMutation.isPending}
               className="inline-flex items-center gap-1 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 text-xs font-bold transition shadow-2xs"
             >
               <DownloadCloud size={14} />
-              <span>{loadPatroMutation.isPending ? 'Loading...' : '📥 Load Nepali Patro Events'}</span>
+              <span>{loadNationalEventsMutation.isPending ? 'Loading...' : '📥 Load National Holidays & Events'}</span>
             </button>
           )}
 
@@ -504,7 +504,7 @@ export default function AcademicCalendar() {
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <h3 className="font-extrabold text-sm text-[#1e3a5f]">
-                {editingEvent ? 'Edit Event / Holiday' : 'Add New Event / Holiday (पात्रो कार्यक्रम थप्नुहोस्)'}
+                {editingEvent ? 'Edit Event / Holiday (सम्पादन गर्नुहोस्)' : 'Add New Event / Holiday (कार्यक्रम तथा विदा थप्नुहोस्)'}
               </h3>
               <button onClick={() => setIsAddEventModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />

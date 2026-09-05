@@ -4,7 +4,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-const NEPALI_PATRO_DEFAULT_EVENTS = [
+const NATIONAL_CALENDAR_DEFAULT_EVENTS = [
   // Baisakh (01)
   { monthDay: '01-01', title: 'Nepali New Year (नयाँ वर्ष)', titleNepali: 'नयाँ वर्ष (मेष संक्रान्ति)', eventType: 'HOLIDAY', isHoliday: true, description: 'National Public Holiday for Nepali New Year' },
   { monthDay: '01-11', title: 'Loktantra Diwas (लोकतन्त्र दिवस)', titleNepali: 'लोकतन्त्र दिवस', eventType: 'HOLIDAY', isHoliday: true, description: 'National Democracy Day' },
@@ -164,14 +164,14 @@ router.get('/today', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/events/load-nepali-patro — Seed / Load standard Nepali Patro events for a year
-router.post('/load-nepali-patro', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+// POST /api/events/load-calendar-events — Seed / Load standard National Calendar events for a year
+const handleLoadNationalCalendar = async (req, res) => {
   try {
     const { yearBs = '2083' } = req.body;
     let addedCount = 0;
 
-    for (const patro of NEPALI_PATRO_DEFAULT_EVENTS) {
-      const fullDateBs = `${yearBs}-${patro.monthDay}`;
+    for (const item of NATIONAL_CALENDAR_DEFAULT_EVENTS) {
+      const fullDateBs = `${yearBs}-${item.monthDay}`;
       const existing = await prisma.event.findFirst({
         where: { eventDateBs: fullDateBs, isActive: true },
       });
@@ -179,34 +179,37 @@ router.post('/load-nepali-patro', authenticate, authorize('SUPER_ADMIN', 'ADMIN'
       if (!existing) {
         await prisma.event.create({
           data: {
-            title: patro.title,
-            titleNepali: patro.titleNepali,
-            description: patro.description,
+            title: item.title,
+            titleNepali: item.titleNepali,
+            description: item.description,
             eventDateBs: fullDateBs,
             eventDateAd: new Date(),
-            eventType: patro.eventType,
+            eventType: item.eventType,
             targetAudience: 'ALL',
-            isHoliday: patro.isHoliday,
+            isHoliday: item.isHoliday,
             createdBy: req.user.id,
           },
         });
         addedCount++;
 
-        if (patro.isHoliday) {
-          await syncHolidayWithAttendance(fullDateBs, patro.title, true);
+        if (item.isHoliday) {
+          await syncHolidayWithAttendance(fullDateBs, item.titleNepali || item.title, true);
         }
       }
     }
 
     return res.json({
       success: true,
-      message: `Successfully loaded Nepali Patro events for BS ${yearBs}. ${addedCount} events imported.`,
+      message: `Successfully loaded National Calendar holidays and events for BS ${yearBs}. ${addedCount} events imported.`,
       addedCount,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
-});
+};
+
+router.post('/load-calendar-events', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), handleLoadNationalCalendar);
+router.post('/load-nepali-patro', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), handleLoadNationalCalendar);
 
 // POST /api/events — Create Event & Sync Holiday with Attendance (Admin Only)
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
