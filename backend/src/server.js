@@ -78,12 +78,82 @@ app.listen(PORT, '0.0.0.0', async () => {
       },
     });
 
-    // Ensure active academic year exists
-    await prisma.academicYear.upsert({
-      where: { id: 1 },
-      update: {},
-      create: { year: '2081-82', startDateBs: '2081-04-01', endDateBs: '2082-03-31', isActive: true },
-    });
+    // Deduplicate Academic Years and ensure active 2083-84 (2026 AD) exists
+    try {
+      const allYears = await prisma.academicYear.findMany({ orderBy: { id: 'asc' } });
+      const seen = new Map();
+      const toDelete = [];
+
+      for (const yr of allYears) {
+        const normalized = (yr.year || '').trim();
+        if (!seen.has(normalized)) {
+          seen.set(normalized, yr);
+        } else {
+          const primary = seen.get(normalized);
+          const duplicateId = yr.id;
+          await prisma.expenseEntry.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+          await prisma.incomeEntry.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+          await prisma.classEnrollment.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+          await prisma.class.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+          await prisma.exam.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+          await prisma.payroll.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+          toDelete.push(duplicateId);
+        }
+      }
+
+      if (toDelete.length > 0) {
+        await prisma.academicYear.deleteMany({ where: { id: { in: toDelete } } });
+        console.log(`🧹 Cleaned up ${toDelete.length} duplicate academic years.`);
+      }
+
+      // Ensure active 2083-84 exists
+      let active2083 = await prisma.academicYear.findFirst({ where: { year: { in: ['2083-84', '2083/84', '2083'] } } });
+      if (!active2083) {
+        active2083 = await prisma.academicYear.create({
+          data: {
+            year: '2083-84',
+            startDateBs: '2083-01-01',
+            endDateBs: '2083-12-30',
+            isActive: true,
+          },
+        });
+      }
+
+      // Ensure 2083-84 is marked as isActive
+      const currentActive = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (!currentActive || currentActive.year !== '2083-84') {
+        await prisma.academicYear.updateMany({ data: { isActive: false } });
+        await prisma.academicYear.update({
+          where: { id: active2083.id },
+          data: { isActive: true },
+        });
+      }
+
+      // Ensure standard past fiscal / academic years exist for accounting records
+      const standardYears = [
+        { year: '2083-84', startDateBs: '2083-01-01', endDateBs: '2083-12-30' },
+        { year: '2082-83', startDateBs: '2082-01-01', endDateBs: '2082-12-30' },
+        { year: '2081-82', startDateBs: '2081-01-01', endDateBs: '2081-12-30' },
+        { year: '2080-81', startDateBs: '2080-01-01', endDateBs: '2080-12-30' },
+        { year: '2079-80', startDateBs: '2079-01-01', endDateBs: '2079-12-30' },
+      ];
+
+      for (const sy of standardYears) {
+        const existing = await prisma.academicYear.findFirst({ where: { year: sy.year } });
+        if (!existing) {
+          await prisma.academicYear.create({
+            data: {
+              year: sy.year,
+              startDateBs: sy.startDateBs,
+              endDateBs: sy.endDateBs,
+              isActive: sy.year === '2083-84',
+            },
+          });
+        }
+      }
+    } catch (yrErr) {
+      console.error('Academic year verification error:', yrErr.message);
+    }
 
     // Ensure super admin user exists
     const adminHash = await bcrypt.hash('#Nepal32016', 12);

@@ -66,11 +66,31 @@ export default function UnifiedFinanceHubPage() {
   const [branch, setBranch] = useState('');
   const [accountType, setAccountType] = useState('Current');
 
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
+
   // ── 1. QUERIES ──────────────────────────────────────────────────────────────
-  const { data: summaryData } = useQuery({
-    queryKey: ['financial-summary'],
+  const { data: yearsData } = useQuery({
+    queryKey: ['academic-years'],
     queryFn: async () => {
-      const res = await api.get('/expense/summary');
+      const res = await api.get('/classes/academic-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0];
+
+  // Resolve current filtered year ID
+  const effectiveYearId = selectedYearFilter === 'ALL'
+    ? ''
+    : selectedYearFilter === 'ACTIVE'
+    ? (activeYear?.id ? String(activeYear.id) : '')
+    : selectedYearFilter;
+
+  const { data: summaryData } = useQuery({
+    queryKey: ['financial-summary', effectiveYearId],
+    queryFn: async () => {
+      const res = await api.get('/expense/summary', {
+        params: { academicYearId: effectiveYearId || undefined },
+      });
       return res.data?.data;
     },
   });
@@ -153,7 +173,7 @@ export default function UnifiedFinanceHubPage() {
 
   const deletePartyMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.delete(`/parties/${id}`);
+      const res = await api.post(`/parties/${id}/delete`);
       return res.data;
     },
     onSuccess: () => {
@@ -207,6 +227,27 @@ export default function UnifiedFinanceHubPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl border border-white/15 backdrop-blur-xs">
+              <span className="text-[11px] font-bold text-amber-300">आर्थिक वर्ष:</span>
+              <select
+                value={selectedYearFilter}
+                onChange={(e) => setSelectedYearFilter(e.target.value)}
+                className="bg-transparent text-white font-black text-xs border-none outline-hidden cursor-pointer"
+              >
+                <option value="ACTIVE" className="text-gray-900 font-bold">
+                  चालु आ.व. ({activeYear?.year || '2083-84'})
+                </option>
+                <option value="ALL" className="text-gray-900 font-bold">
+                  सबै आर्थिक वर्षहरू (All Fiscal Years)
+                </option>
+                {yearsData?.map((y: any) => (
+                  <option key={y.id} value={y.id.toString()} className="text-gray-900 font-bold">
+                    आ.व. {y.year} {y.isActive ? '(Active)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               onClick={() => setIsPartyModalOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/20 backdrop-blur-xs transition border border-white/15"

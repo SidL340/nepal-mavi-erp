@@ -242,9 +242,23 @@ export default function SchoolProfilePage() {
     },
   });
 
+  const deduplicateYearsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/classes/academic-years/deduplicate');
+      return res.data;
+    },
+    onSuccess: (res: any) => {
+      toast.success(res.message || 'Duplicate years cleaned up successfully!');
+      queryClient.invalidateQueries({ queryKey: ['academic-years'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to deduplicate years.');
+    },
+  });
+
   const deleteYearMutation = useMutation({
     mutationFn: async (yearId: number) => {
-      const res = await api.post('/classes/academic-years-delete-direct', { id: yearId });
+      const res = await api.post(`/classes/academic-years/${yearId}/delete`);
       return res.data;
     },
     onSuccess: (res: any) => {
@@ -642,29 +656,49 @@ export default function SchoolProfilePage() {
         </div>
       )}
 
-      {/* ─── TAB 2: ACADEMIC YEARS ───────────────────────────────────────── */}
+      {/* ─── TAB 2: ACADEMIC & FINANCIAL YEARS ─────────────────────────── */}
       {activeTab === 'years' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-bold text-gray-900">Academic Years List</h2>
-            <button
-              onClick={() => setIsAddYearOpen(true)}
-              className="inline-flex items-center gap-1 rounded-xl bg-[#1e3a5f] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs"
-            >
-              <Plus size={14} />
-              <span>Add Academic Year</span>
-            </button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Calendar size={16} className="text-[#1e3a5f]" />
+                <span>शैक्षिक सत्र तथा आर्थिक वर्ष व्यवस्थापन (Academic & Fiscal Years)</span>
+              </h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                शैक्षिक सत्र (Baisakh–Chaitra) विद्यार्थी तथा परीक्षाका लागि र आर्थिक वर्ष (Shrawan–Ashadh) सम्पूर्ण आय, व्यय, शुल्क तथा तलब भुक्तानीका लागि प्रयोग हुन्छ।
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => deduplicateYearsMutation.mutate()}
+                disabled={deduplicateYearsMutation.isPending}
+                className="inline-flex items-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-3 py-1.5 text-xs font-bold transition shadow-2xs disabled:opacity-60"
+                title="दोहोरिएका वर्षहरू हटाएर सफा गर्नुहोस्"
+              >
+                <RefreshCw size={13} className={deduplicateYearsMutation.isPending ? 'animate-spin' : ''} />
+                <span>{deduplicateYearsMutation.isPending ? 'सफा गर्दै...' : 'दोहोरिएका हटाउनुहोस्'}</span>
+              </button>
+              <button
+                onClick={() => setIsAddYearOpen(true)}
+                className="inline-flex items-center gap-1 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition"
+              >
+                <Plus size={14} />
+                <span>नयाँ वर्ष थप्नुहोस् (Add Year)</span>
+              </button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#1e3a5f] text-white">
                 <tr>
-                  <th className="p-3.5 font-bold">Academic Year</th>
-                  <th className="p-3.5 font-bold">Start Date (BS)</th>
-                  <th className="p-3.5 font-bold">End Date (BS)</th>
-                  <th className="p-3.5 font-bold text-center">Status</th>
-                  <th className="p-3.5 font-bold text-right">Action</th>
+                  <th className="p-3.5 font-bold">वर्ष / सत्र (Year / Session)</th>
+                  <th className="p-3.5 font-bold">सुरु मिति (Start Date BS)</th>
+                  <th className="p-3.5 font-bold">अन्तिम मिति (End Date BS)</th>
+                  <th className="p-3.5 font-bold text-center">स्थिति (Status)</th>
+                  <th className="p-3.5 font-bold text-right">कार्य (Action)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

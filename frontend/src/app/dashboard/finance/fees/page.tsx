@@ -65,6 +65,8 @@ function FeeCollectionPortalContent() {
   const [remarks, setRemarks] = useState('');
 
   // Table filters & state
+  const [feeFormYearId, setFeeFormYearId] = useState('');
+  const [filterYearId, setFilterYearId] = useState('ALL');
   const [filterClassId, setFilterClassId] = useState('ALL');
   const [filterFeeHeadId, setFilterFeeHeadId] = useState('ALL');
   const [filterSearch, setFilterSearch] = useState('');
@@ -159,8 +161,15 @@ function FeeCollectionPortalContent() {
     },
   });
 
-  // Active Academic Year
-  const activeYear = schoolProfile?.academicYears?.find((y: any) => y.isActive);
+  // Academic & Financial Years
+  const { data: yearsData } = useQuery({
+    queryKey: ['academic-years'],
+    queryFn: async () => {
+      const res = await api.get('/classes/academic-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0] || schoolProfile?.academicYears?.find((y: any) => y.isActive);
 
   // ── HELPER: PARSE DUE INFO FROM REMARKS & AMOUNT ───────────────────────────
   const parseDueInfo = (rem: string, paidAmount: number) => {
@@ -213,7 +222,7 @@ function FeeCollectionPortalContent() {
         amount: parsedPaying,
         paidDateBs,
         paidDateAd: new Date(),
-        academicYearId: activeYear?.id || 1,
+        academicYearId: feeFormYearId ? parseInt(feeFormYearId) : (activeYear?.id || 1),
         paymentMedium,
         paymentRef,
         chequePayeeName: paymentMedium === 'CHEQUE' ? chequePayeeName : undefined,
@@ -399,6 +408,9 @@ function FeeCollectionPortalContent() {
 
   // Filtered for Collection History Table
   const filteredCollections = processedCollections.filter((c: any) => {
+    if (filterYearId !== 'ALL' && c.academicYearId?.toString() !== filterYearId) {
+      return false;
+    }
     if (filterClassId !== 'ALL' && c.student?.classEnrollments?.[0]?.classId?.toString() !== filterClassId) {
       return false;
     }
@@ -430,6 +442,7 @@ function FeeCollectionPortalContent() {
     return Array.from(latestByStudentHead.values()).filter((c: any) => {
       // Must not be cleared and remainingDue must be > 0
       if (c.isDuesCleared || (c.remainingDue || 0) <= 0) return false;
+      if (filterYearId !== 'ALL' && c.academicYearId?.toString() !== filterYearId) return false;
       if (filterClassId !== 'ALL' && c.student?.classEnrollments?.[0]?.classId?.toString() !== filterClassId) return false;
       if (filterFeeHeadId !== 'ALL' && c.feeHeadId?.toString() !== filterFeeHeadId) return false;
       if (filterSearch) {
@@ -441,7 +454,7 @@ function FeeCollectionPortalContent() {
       }
       return true;
     });
-  }, [processedCollections, filterClassId, filterFeeHeadId, filterSearch]);
+  }, [processedCollections, filterYearId, filterClassId, filterFeeHeadId, filterSearch]);
 
   const totalOutstandingReceivables = pendingDuesList.reduce((sum: number, item: any) => sum + (item.remainingDue || 0), 0);
   const totalStudentsWithDues = new Set(pendingDuesList.map((d: any) => d.studentId)).size;
@@ -793,7 +806,25 @@ function FeeCollectionPortalContent() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/70 p-3 rounded-xl border border-slate-200">
+                  {/* Academic / Financial Year */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                      आर्थिक/शैक्षिक वर्ष (Year) *
+                    </label>
+                    <select
+                      value={feeFormYearId || activeYear?.id || ''}
+                      onChange={(e) => setFeeFormYearId(e.target.value)}
+                      className="w-full rounded-xl border border-gray-300 p-2.5 text-xs bg-white font-bold text-[#1e3a5f] focus:ring-2 focus:ring-blue-500"
+                    >
+                      {yearsData?.map((y: any) => (
+                        <option key={y.id} value={y.id}>
+                          {y.year} {y.isActive ? '(चालु वर्ष)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Fee Head Dropdown */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Fee Head (शुल्क शीर्षक) *</label>
@@ -814,7 +845,7 @@ function FeeCollectionPortalContent() {
                   {/* Total Standard Fee Amount */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">
-                      Total Fee Amount (नियम अनुसार कुल शुल्क) *
+                      Total Fee Amount (कुल शुल्क) *
                     </label>
                     <input
                       type="number"
@@ -824,7 +855,9 @@ function FeeCollectionPortalContent() {
                       className="w-full rounded-xl border border-gray-300 p-2.5 text-xs font-mono font-bold text-gray-900 focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Discount / Scholarship */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Discount / Waiver (छुट रकम)</label>
@@ -967,6 +1000,19 @@ function FeeCollectionPortalContent() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <select
+                  value={filterYearId}
+                  onChange={(e) => setFilterYearId(e.target.value)}
+                  className="rounded-xl border border-gray-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-[#1e3a5f]"
+                >
+                  <option value="ALL">All Years (सबै वर्ष)</option>
+                  {yearsData?.map((y: any) => (
+                    <option key={y.id} value={y.id.toString()}>
+                      वर्ष {y.year} {y.isActive ? '(Active)' : ''}
+                    </option>
+                  ))}
+                </select>
+
+                <select
                   value={filterFeeHeadId}
                   onChange={(e) => setFilterFeeHeadId(e.target.value)}
                   className="rounded-xl border border-gray-200 bg-slate-50 px-3 py-1.5 text-xs font-medium"
@@ -1100,6 +1146,19 @@ function FeeCollectionPortalContent() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={filterYearId}
+                  onChange={(e) => setFilterYearId(e.target.value)}
+                  className="rounded-xl border border-gray-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-[#1e3a5f]"
+                >
+                  <option value="ALL">All Years (सबै वर्ष)</option>
+                  {yearsData?.map((y: any) => (
+                    <option key={y.id} value={y.id.toString()}>
+                      वर्ष {y.year} {y.isActive ? '(Active)' : ''}
+                    </option>
+                  ))}
+                </select>
+
                 <select
                   value={filterFeeHeadId}
                   onChange={(e) => setFilterFeeHeadId(e.target.value)}

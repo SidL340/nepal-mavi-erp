@@ -33,6 +33,7 @@ export default function IncomePage() {
   const [selectedHeadFilter, setSelectedHeadFilter] = useState('');
   const [selectedPartyFilter, setSelectedPartyFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -40,6 +41,7 @@ export default function IncomePage() {
   const [isAddPartyModalOpen, setIsAddPartyModalOpen] = useState(false);
 
   // Form State
+  const [incomeFormYearId, setIncomeFormYearId] = useState<string>('');
   const [paymentMedium, setPaymentMedium] = useState('CASH');
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [selectedBankAcc, setSelectedBankAcc] = useState('');
@@ -66,6 +68,13 @@ export default function IncomePage() {
     },
   });
   const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0];
+
+  // Resolve current filtered year ID
+  const effectiveYearId = selectedYearFilter === 'ALL'
+    ? ''
+    : selectedYearFilter === 'ACTIVE'
+    ? (activeYear?.id ? String(activeYear.id) : '')
+    : selectedYearFilter;
 
   const { data: categoriesData } = useQuery({
     queryKey: ['income-categories'],
@@ -100,14 +109,14 @@ export default function IncomePage() {
   });
 
   const { data: entriesData, isLoading } = useQuery({
-    queryKey: ['income-entries', sourceLevel, selectedHeadFilter, selectedPartyFilter, searchQuery, activeYear?.id],
+    queryKey: ['income-entries', sourceLevel, selectedHeadFilter, selectedPartyFilter, searchQuery, effectiveYearId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (sourceLevel) params.append('sourceLevel', sourceLevel);
       if (selectedHeadFilter) params.append('headId', selectedHeadFilter);
       if (selectedPartyFilter) params.append('partyId', selectedPartyFilter);
       if (searchQuery) params.append('q', searchQuery);
-      if (activeYear?.id) params.append('academicYearId', activeYear.id.toString());
+      if (effectiveYearId) params.append('academicYearId', effectiveYearId);
       const res = await api.get(`/income/entries?${params.toString()}`);
       return res.data;
     },
@@ -164,7 +173,7 @@ export default function IncomePage() {
     mutationFn: async (formData: any) => {
       const res = await api.post('/income/entries', {
         ...formData,
-        academicYearId: activeYear?.id || 1,
+        academicYearId: incomeFormYearId ? parseInt(incomeFormYearId) : (activeYear?.id || 1),
         receivedDateAd: new Date().toISOString().slice(0, 10),
       });
       return res.data;
@@ -181,6 +190,7 @@ export default function IncomePage() {
 
   // Edit & Delete Income State
   const [editingIncome, setEditingIncome] = useState<any>(null);
+  const [editAcademicYearId, setEditAcademicYearId] = useState('');
   const [editHeadId, setEditHeadId] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editReceivedDateBs, setEditReceivedDateBs] = useState('');
@@ -339,6 +349,21 @@ export default function IncomePage() {
             />
           </div>
 
+          {/* Fiscal Year Filter */}
+          <select
+            value={selectedYearFilter}
+            onChange={(e) => setSelectedYearFilter(e.target.value)}
+            className="rounded-xl border border-emerald-300 bg-emerald-50/70 px-3 py-2 text-xs focus:border-[#1e3a5f] focus:outline-hidden font-bold text-emerald-950 shadow-2xs"
+          >
+            <option value="ACTIVE">चालु आ.व. ({activeYear?.year || '2083-84'})</option>
+            <option value="ALL">सबै आर्थिक वर्षहरू (All Fiscal Years)</option>
+            {yearsData?.map((y: any) => (
+              <option key={y.id} value={y.id}>
+                आ.व. {y.year} {y.isActive ? '(Active)' : ''}
+              </option>
+            ))}
+          </select>
+
           {/* Level Filter */}
           <select
             value={sourceLevel}
@@ -453,6 +478,7 @@ export default function IncomePage() {
                       <button
                         onClick={() => {
                           setEditingIncome(item);
+                          setEditAcademicYearId(item.academicYearId?.toString() || '');
                           setEditHeadId(item.headId?.toString() || '');
                           setEditAmount(item.amount?.toString() || '');
                           setEditReceivedDateBs(item.receivedDateBs || todayBS());
@@ -493,10 +519,10 @@ export default function IncomePage() {
         </table>
       </div>
 
-      {/* Record Income Modal */}
+      {/* Add Income Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto text-xs">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-xs">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
                 <TrendingUp size={18} className="text-emerald-600" />
@@ -508,7 +534,22 @@ export default function IncomePage() {
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">आर्थिक वर्ष (Fiscal Year) *</label>
+                  <select
+                    value={incomeFormYearId || activeYear?.id || ''}
+                    onChange={(e) => setIncomeFormYearId(e.target.value)}
+                    className="erp-input font-bold text-[#1e3a5f]"
+                    required
+                  >
+                    {yearsData?.map((y: any) => (
+                      <option key={y.id} value={y.id}>
+                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Source Level *</label>
                   <select name="sourceLevel" className="erp-input font-bold" required>
@@ -789,6 +830,7 @@ export default function IncomePage() {
                 updateIncomeMutation.mutate({
                   id: editingIncome.id,
                   data: {
+                    academicYearId: editAcademicYearId ? parseInt(editAcademicYearId) : undefined,
                     headId: parseInt(editHeadId),
                     amount: parseFloat(editAmount),
                     receivedDateBs: editReceivedDateBs,
@@ -807,7 +849,22 @@ export default function IncomePage() {
               }}
               className="space-y-3"
             >
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">आर्थिक वर्ष (Fiscal Year) *</label>
+                  <select
+                    value={editAcademicYearId}
+                    onChange={(e) => setEditAcademicYearId(e.target.value)}
+                    className="erp-input font-bold text-[#1e3a5f]"
+                    required
+                  >
+                    {yearsData?.map((y: any) => (
+                      <option key={y.id} value={y.id}>
+                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Source Level *</label>
                   <select

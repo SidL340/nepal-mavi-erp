@@ -579,8 +579,58 @@ router.get('/academic-years/all', authenticate, async (req, res) => {
   return res.json({ success: true, data: years });
 });
 
+router.post('/academic-years/deduplicate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const allYears = await prisma.academicYear.findMany({ orderBy: { id: 'asc' } });
+    const seen = new Map();
+    const toDelete = [];
+
+    for (const yr of allYears) {
+      const normalized = (yr.year || '').trim();
+      if (!seen.has(normalized)) {
+        seen.set(normalized, yr);
+      } else {
+        const primary = seen.get(normalized);
+        const duplicateId = yr.id;
+        await prisma.expenseEntry.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+        await prisma.incomeEntry.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+        await prisma.classEnrollment.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+        await prisma.class.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+        await prisma.exam.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+        await prisma.payroll.updateMany({ where: { academicYearId: duplicateId }, data: { academicYearId: primary.id } }).catch(() => {});
+        toDelete.push(duplicateId);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await prisma.academicYear.deleteMany({ where: { id: { in: toDelete } } });
+    }
+
+    // Ensure 2083-84 is active
+    const active2083 = await prisma.academicYear.findFirst({ where: { year: '2083-84' } });
+    if (active2083) {
+      await prisma.academicYear.updateMany({ data: { isActive: false } });
+      await prisma.academicYear.update({ where: { id: active2083.id }, data: { isActive: true } });
+    }
+
+    const cleanedYears = await prisma.academicYear.findMany({ orderBy: { year: 'desc' } });
+    return res.json({
+      success: true,
+      message: `Successfully cleaned up ${toDelete.length} duplicate academic/fiscal years.`,
+      deletedCount: toDelete.length,
+      data: cleanedYears,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.post('/academic-years', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
+    const existing = await prisma.academicYear.findFirst({ where: { year: (req.body.year || '').trim() } });
+    if (existing) {
+      return res.status(400).json({ success: false, message: `Academic Year "${req.body.year}" already exists.` });
+    }
     if (req.body.isActive) {
       await prisma.academicYear.updateMany({ data: { isActive: false } });
     }

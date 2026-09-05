@@ -33,6 +33,7 @@ export default function ExpensesPage() {
   const [selectedHeadFilter, setSelectedHeadFilter] = useState('');
   const [selectedPartyFilter, setSelectedPartyFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
   
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -41,6 +42,7 @@ export default function ExpensesPage() {
   const [inspectPartyId, setInspectPartyId] = useState<number | null>(null);
 
   // Form State
+  const [expenseFormYearId, setExpenseFormYearId] = useState<string>('');
   const [newHeadCode, setNewHeadCode] = useState('');
   const [newHeadName, setNewHeadName] = useState('');
   const [newHeadNameNepali, setNewHeadNameNepali] = useState('');
@@ -64,6 +66,7 @@ export default function ExpensesPage() {
 
   // Edit Expense State
   const [editingExpense, setEditingExpense] = useState<any>(null);
+  const [editAcademicYearId, setEditAcademicYearId] = useState('');
   const [editHeadId, setEditHeadId] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editExpenseDateBs, setEditExpenseDateBs] = useState('');
@@ -88,6 +91,7 @@ export default function ExpensesPage() {
   const [selectedPayableBill, setSelectedPayableBill] = useState<any>(null);
 
   // New Bill Form State
+  const [billAcademicYearId, setBillAcademicYearId] = useState('');
   const [billPartyId, setBillPartyId] = useState('');
   const [billHeadId, setBillHeadId] = useState('');
   const [billNo, setBillNo] = useState('');
@@ -137,6 +141,13 @@ export default function ExpensesPage() {
   });
   const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0];
 
+  // Resolve current filtered year ID
+  const effectiveYearId = selectedYearFilter === 'ALL'
+    ? ''
+    : selectedYearFilter === 'ACTIVE'
+    ? (activeYear?.id ? String(activeYear.id) : '')
+    : selectedYearFilter;
+
   const { data: categoriesData } = useQuery({
     queryKey: ['expense-categories'],
     queryFn: async () => {
@@ -170,14 +181,14 @@ export default function ExpensesPage() {
   });
 
   const { data: entriesData, isLoading } = useQuery({
-    queryKey: ['expense-entries', selectedCategory, selectedHeadFilter, selectedPartyFilter, searchQuery, activeYear?.id],
+    queryKey: ['expense-entries', selectedCategory, selectedHeadFilter, selectedPartyFilter, searchQuery, effectiveYearId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedCategory) params.append('categoryId', selectedCategory);
       if (selectedHeadFilter) params.append('headId', selectedHeadFilter);
       if (selectedPartyFilter) params.append('partyId', selectedPartyFilter);
       if (searchQuery) params.append('q', searchQuery);
-      if (activeYear?.id) params.append('academicYearId', activeYear.id.toString());
+      if (effectiveYearId) params.append('academicYearId', effectiveYearId);
       const res = await api.get(`/expense/entries?${params.toString()}`);
       return res.data;
     },
@@ -237,7 +248,7 @@ export default function ExpensesPage() {
     mutationFn: async (formData: any) => {
       const res = await api.post('/expense/entries', {
         ...formData,
-        academicYearId: activeYear?.id || 1,
+        academicYearId: formData.academicYearId ? parseInt(formData.academicYearId) : (expenseFormYearId ? parseInt(expenseFormYearId) : (activeYear?.id || 1)),
         expenseDateAd: new Date().toISOString().slice(0, 10),
       });
       return res.data;
@@ -289,7 +300,10 @@ export default function ExpensesPage() {
 
   const updateExpenseMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      const res = await api.put(`/expense/entries/${id}`, data);
+      const res = await api.put(`/expense/entries/${id}`, {
+        ...data,
+        academicYearId: editAcademicYearId ? parseInt(editAcademicYearId) : undefined,
+      });
       return res.data;
     },
     onSuccess: () => {
@@ -320,6 +334,7 @@ export default function ExpensesPage() {
 
   const handleOpenEditModal = (entry: any) => {
     setEditingExpense(entry);
+    setEditAcademicYearId(entry.academicYearId ? entry.academicYearId.toString() : (activeYear?.id ? activeYear.id.toString() : ''));
     setEditHeadId(entry.headId ? entry.headId.toString() : '');
     setEditAmount(entry.amount ? entry.amount.toString() : '');
     setEditExpenseDateBs(entry.expenseDateBs || todayBS());
@@ -780,6 +795,7 @@ export default function ExpensesPage() {
     const totalBillNum = parseFloat(billTotalAmount);
 
     const payload: any = {
+      academicYearId: billAcademicYearId ? parseInt(billAcademicYearId) : (activeYear?.id || 1),
       headId: billHeadId ? parseInt(billHeadId) : (headsData?.[0]?.id || 1),
       amount: initialPaidNum,
       expenseDateBs: billDateBs || todayBS(),
@@ -840,6 +856,7 @@ export default function ExpensesPage() {
     }
 
     const payload: any = {
+      academicYearId: selectedPayableBill.academicYearId || (activeYear?.id || 1),
       headId: selectedPayableBill.headId || (headsData?.[0]?.id || 1),
       amount: instNum,
       expenseDateBs: instDateBs || todayBS(),
@@ -1089,6 +1106,21 @@ export default function ExpensesPage() {
                   className="w-full rounded-xl border border-gray-200 bg-slate-50/50 pl-9 pr-3 py-2 text-xs focus:border-[#1e3a5f] focus:outline-hidden font-medium"
                 />
               </div>
+
+              {/* Fiscal Year Filter */}
+              <select
+                value={selectedYearFilter}
+                onChange={(e) => setSelectedYearFilter(e.target.value)}
+                className="rounded-xl border border-rose-300 bg-rose-50/70 px-3 py-2 text-xs focus:border-[#1e3a5f] focus:outline-hidden font-bold text-rose-950 shadow-2xs"
+              >
+                <option value="ACTIVE">चालु आ.व. ({activeYear?.year || '2083-84'})</option>
+                <option value="ALL">सबै आर्थिक वर्षहरू (All Fiscal Years)</option>
+                {yearsData?.map((y: any) => (
+                  <option key={y.id} value={y.id}>
+                    आ.व. {y.year} {y.isActive ? '(Active)' : ''}
+                  </option>
+                ))}
+              </select>
 
               {/* Expense Category Filter */}
               <select
@@ -1506,7 +1538,24 @@ export default function ExpensesPage() {
             </div>
 
             <form onSubmit={handleRecordBillSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-purple-50/50 p-3 rounded-xl border border-purple-100">
+                <div>
+                  <label className="block font-extrabold text-purple-950 mb-1">
+                    आर्थिक वर्ष (Fiscal Year) *
+                  </label>
+                  <select
+                    value={billAcademicYearId || activeYear?.id || ''}
+                    onChange={(e) => setBillAcademicYearId(e.target.value)}
+                    className="erp-input font-bold text-[#1e3a5f]"
+                    required
+                  >
+                    {yearsData?.map((y: any) => (
+                      <option key={y.id} value={y.id}>
+                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block font-extrabold text-gray-800 mb-1">
                     Vendor / Party (पाउने व्यक्ति/संस्था) *
@@ -1916,6 +1965,25 @@ export default function ExpensesPage() {
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
+              {/* Row 0: Fiscal Year Selector */}
+              <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                <label className="block font-extrabold text-[#1e3a5f] mb-1">
+                  आर्थिक वर्ष (Fiscal Year) *
+                </label>
+                <select
+                  value={expenseFormYearId || activeYear?.id || ''}
+                  onChange={(e) => setExpenseFormYearId(e.target.value)}
+                  className="erp-input font-bold text-[#1e3a5f]"
+                  required
+                >
+                  {yearsData?.map((y: any) => (
+                    <option key={y.id} value={y.id}>
+                      आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Row 1: Searchable Expense Topic & Amount */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
@@ -2210,6 +2278,25 @@ export default function ExpensesPage() {
             </div>
 
             <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
+              {/* Row 0: Fiscal Year Selector */}
+              <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                <label className="block font-extrabold text-[#1e3a5f] mb-1">
+                  आर्थिक वर्ष (Fiscal Year) *
+                </label>
+                <select
+                  value={editAcademicYearId || activeYear?.id || ''}
+                  onChange={(e) => setEditAcademicYearId(e.target.value)}
+                  className="erp-input font-bold text-[#1e3a5f]"
+                  required
+                >
+                  {yearsData?.map((y: any) => (
+                    <option key={y.id} value={y.id}>
+                      आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Row 1: Expense Topic & Amount */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
