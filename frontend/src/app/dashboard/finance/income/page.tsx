@@ -47,6 +47,14 @@ export default function IncomePage() {
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [selectedBankAcc, setSelectedBankAcc] = useState('');
 
+  // Continuous Entry States for Add Income Modal
+  const [addIncomeHeadId, setAddIncomeHeadId] = useState('');
+  const [addIncomeAmount, setAddIncomeAmount] = useState('');
+  const [addIncomeSourceOrg, setAddIncomeSourceOrg] = useState('');
+  const [addIncomeVoucherNo, setAddIncomeVoucherNo] = useState('');
+  const [addIncomeChequeNo, setAddIncomeChequeNo] = useState('');
+  const [addIncomeRemarks, setAddIncomeRemarks] = useState('');
+
   // Inline Income Head Modal State
   const [newHeadCode, setNewHeadCode] = useState('');
   const [newHeadName, setNewHeadName] = useState('');
@@ -148,9 +156,12 @@ export default function IncomePage() {
       const res = await api.post('/income/heads', payload);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       toast.success('New Income Topic created!');
       queryClient.invalidateQueries({ queryKey: ['income-heads'] });
+      if (res?.data?.id) {
+        setAddIncomeHeadId(res.data.id.toString());
+      }
       setIsAddHeadModalOpen(false);
       setNewHeadCode('');
       setNewHeadName('');
@@ -192,9 +203,13 @@ export default function IncomePage() {
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Income Entry recorded successfully!');
+      toast.success('आम्दानी सुरक्षित भयो! (सोही शीर्षक/दातामा थप प्रविष्टि गर्न सक्नुहुन्छ वा बन्द गर्न Cancel थिच्नुहोस्)');
       queryClient.invalidateQueries({ queryKey: ['income-entries'] });
-      setIsAddModalOpen(false);
+      // Continuous entry: retain Party, Head, Date, FY; reset per-transaction fields
+      setAddIncomeAmount('');
+      setAddIncomeVoucherNo('');
+      setAddIncomeChequeNo('');
+      setAddIncomeRemarks('');
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to record income entry.');
@@ -245,17 +260,34 @@ export default function IncomePage() {
 
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const data: any = {};
-    fd.forEach((value, key) => {
-      if (value) data[key] = value;
-    });
+    if (!addIncomeHeadId) {
+      toast.error('कृपया आम्दानी शीर्षक छनौट गर्नुहोस् (Please select an Income Topic).');
+      return;
+    }
+    if (!addIncomeAmount || parseFloat(addIncomeAmount) <= 0) {
+      toast.error('कृपया मान्य आम्दानी रकम प्रविष्टि गर्नुहोस् (Please enter a valid amount).');
+      return;
+    }
 
-    data.paymentMedium = paymentMedium;
+    const data: any = {
+      headId: parseInt(addIncomeHeadId),
+      amount: parseFloat(addIncomeAmount),
+      receivedDateBs: addReceivedDateBs || todayBS(),
+      paymentMedium,
+      voucherNo: addIncomeVoucherNo.trim() || null,
+      remarks: addIncomeRemarks.trim() || null,
+    };
+
+    // Source Level comes from the select (we read it from a controlled state)
+    // We need to capture sourceLevel from a form select — use the sourceLevel state
+    if (sourceLevel) data.sourceLevel = sourceLevel;
+
     if (selectedPartyId) {
       data.partyId = parseInt(selectedPartyId);
       const partyObj = partiesData?.find((p: any) => p.id.toString() === selectedPartyId);
       if (partyObj) data.sourceOrg = partyObj.name;
+    } else if (addIncomeSourceOrg.trim()) {
+      data.sourceOrg = addIncomeSourceOrg.trim();
     }
 
     if (paymentMedium === 'CASH') {
@@ -269,6 +301,12 @@ export default function IncomePage() {
         data.bankAccountId = bankObj.id;
         data.depositedInAccount = `${bankObj.bankName} (${bankObj.accountNo})`;
       }
+    } else {
+      data.depositedInAccount = 'Rastriya Banijya Bank Current A/C';
+    }
+
+    if (paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') {
+      data.chequeNo = addIncomeChequeNo.trim() || null;
     }
 
     addIncomeMutation.mutate(data);
@@ -544,10 +582,20 @@ export default function IncomePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-xs">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
-                <TrendingUp size={18} className="text-emerald-600" />
-                <span>Record Income Entry (आम्दानी प्रविष्टि)</span>
-              </h3>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                    <TrendingUp size={18} className="text-emerald-600" />
+                    <span>Record Income Entry (आम्दानी प्रविष्टि)</span>
+                  </h3>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    🔄 लगातार प्रविष्टि (Continuous Entry Mode)
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  आम्दानी शीर्षक र दाता छनौट गरेपछि सोही रहन्छ — बन्द गर्न Cancel वा X थिच्नुहोस्
+                </p>
+              </div>
               <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
@@ -579,7 +627,12 @@ export default function IncomePage() {
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Source Level *</label>
-                  <select name="sourceLevel" className="erp-input font-bold" required>
+                  <select
+                    value={sourceLevel || 'Central'}
+                    onChange={(e) => setSourceLevel(e.target.value)}
+                    className="erp-input font-bold"
+                    required
+                  >
                     <option value="Central">Central Govt (सङ्घीय सरकार)</option>
                     <option value="Provincial">Provincial Govt (प्रदेश सरकार)</option>
                     <option value="Local">Local Govt (स्थानीय पालिका)</option>
@@ -599,10 +652,15 @@ export default function IncomePage() {
                       <span>+ Add Topic</span>
                     </button>
                   </div>
-                  <select name="headId" className="erp-input font-bold" required>
+                  <select
+                    value={addIncomeHeadId}
+                    onChange={(e) => setAddIncomeHeadId(e.target.value)}
+                    className="erp-input font-bold"
+                    required
+                  >
                     <option value="">-- Select Income Topic --</option>
                     {headsData?.map((h: any) => (
-                      <option key={h.id} value={h.id}>
+                      <option key={h.id} value={h.id.toString()}>
                         {h.code ? `[${h.code}] ` : ''}{h.name} {h.nameNepali ? `(${h.nameNepali})` : ''}
                       </option>
                     ))}
@@ -613,13 +671,20 @@ export default function IncomePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Amount in रू (आम्दानी रकम) *</label>
-                  <input required name="amount" type="number" step="any" placeholder="e.g. 500000" className="erp-input font-mono font-bold text-emerald-700 text-sm" />
+                  <input
+                    required
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 500000"
+                    value={addIncomeAmount}
+                    onChange={(e) => setAddIncomeAmount(e.target.value)}
+                    className="erp-input font-mono font-bold text-emerald-700 text-sm"
+                  />
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Received Date in BS *</label>
                   <input
                     required
-                    name="receivedDateBs"
                     type="text"
                     value={addReceivedDateBs}
                     onChange={(e) => setAddReceivedDateBs(formatDateInput(e.target.value))}
@@ -648,11 +713,17 @@ export default function IncomePage() {
                   >
                     <option value="">-- Select Saved Party / Donor --</option>
                     {partiesData?.map((p: any) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                      <option key={p.id} value={p.id.toString()}>{p.name}</option>
                     ))}
                   </select>
                   {!selectedPartyId && (
-                    <input name="sourceOrg" type="text" placeholder="Or type organization name..." className="erp-input" />
+                    <input
+                      type="text"
+                      placeholder="Or type organization name..."
+                      value={addIncomeSourceOrg}
+                      onChange={(e) => setAddIncomeSourceOrg(e.target.value)}
+                      className="erp-input"
+                    />
                   )}
                 </div>
 
@@ -675,11 +746,23 @@ export default function IncomePage() {
                 <div className="grid grid-cols-2 gap-3 bg-emerald-50/70 p-3 rounded-xl border border-emerald-200">
                   <div>
                     <label className="block font-bold text-emerald-950 mb-1">Cheque / Trans Ref No.</label>
-                    <input name="chequeNo" type="text" placeholder="CHQ-123456" className="erp-input font-mono font-bold" />
+                    <input
+                      type="text"
+                      placeholder="CHQ-123456"
+                      value={addIncomeChequeNo}
+                      onChange={(e) => setAddIncomeChequeNo(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
                   </div>
                   <div>
-                    <label className="block font-bold text-emerald-950 mb-1">Cheque Date (BS)</label>
-                    <input name="chequeDateBs" type="text" defaultValue={todayBS()} className="erp-input font-mono font-bold" />
+                    <label className="block font-bold text-emerald-950 mb-1">Voucher No. (भौचर नं)</label>
+                    <input
+                      type="text"
+                      placeholder="VOUCH-2083-001"
+                      value={addIncomeVoucherNo}
+                      onChange={(e) => setAddIncomeVoucherNo(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
                   </div>
                 </div>
               )}
@@ -701,32 +784,50 @@ export default function IncomePage() {
                       >
                         <option value="">-- Select Bank Account --</option>
                         {bankAccountsData?.map((b: any) => (
-                          <option key={b.id} value={b.id}>{b.bankName} - {b.accountName} ({b.accountNo})</option>
+                          <option key={b.id} value={b.id.toString()}>{b.bankName} - {b.accountName} ({b.accountNo})</option>
                         ))}
                       </select>
                       {!selectedBankAcc && (
-                        <input name="depositedInAccount" type="text" defaultValue="Rastriya Banijya Bank Current A/C" className="erp-input" />
+                        <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 text-xs text-blue-900 font-medium">
+                          Rastriya Banijya Bank Current A/C
+                        </div>
                       )}
                     </>
                   )}
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Received By / Voucher No</label>
-                  <input name="receivedBy" type="text" placeholder="Accountant / Headmaster" className="erp-input" />
+                  <label className="block font-bold text-gray-700 mb-1">Remarks (कैफियत)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Any extra notes..."
+                    value={addIncomeRemarks}
+                    onChange={(e) => setAddIncomeRemarks(e.target.value)}
+                    className="erp-input"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Remarks</label>
-                <textarea name="remarks" rows={2} placeholder="Any extra notes..." className="erp-input" />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
-                <button type="submit" disabled={addIncomeMutation.isPending} className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-xs">
-                  {addIncomeMutation.isPending ? 'Saving...' : 'Save Income Entry'}
-                </button>
+              <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                <span className="text-[11px] text-gray-500 font-medium">
+                  💡 सेभ गरेपछि सोही शीर्षक/दाता यथावत रहन्छ। बन्द गर्न <strong>Cancel</strong> थिच्नुहोस्।
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="px-4 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancel / बन्द गर्नुहोस्
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addIncomeMutation.isPending}
+                    className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-xs hover:bg-emerald-700"
+                  >
+                    {addIncomeMutation.isPending ? 'Saving...' : 'Save Income Entry (सेभ गर्नुहोस्)'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

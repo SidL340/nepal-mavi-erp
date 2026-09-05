@@ -60,6 +60,16 @@ export default function ExpensesPage() {
   const [approvedByOption, setApprovedByOption] = useState('Principal (प्रधानाध्यापक)');
   const [customApprovedBy, setCustomApprovedBy] = useState('');
 
+  // Continuous Entry States for Adding Expense
+  const [addExpenseHeadId, setAddExpenseHeadId] = useState('');
+  const [addExpenseAmount, setAddExpenseAmount] = useState('');
+  const [addExpensePaidToManual, setAddExpensePaidToManual] = useState('');
+  const [addExpenseBillNo, setAddExpenseBillNo] = useState('');
+  const [addExpenseChequeNo, setAddExpenseChequeNo] = useState('');
+  const [addExpenseChequePayeeName, setAddExpenseChequePayeeName] = useState('');
+  const [addExpenseDescription, setAddExpenseDescription] = useState('');
+  const [addExpenseRemarks, setAddExpenseRemarks] = useState('');
+
   // Date States with Auto Formatting
   const [addExpenseDateBs, setAddExpenseDateBs] = useState(todayBS());
   const [addChequeDateBs, setAddChequeDateBs] = useState(todayBS());
@@ -242,6 +252,7 @@ export default function ExpensesPage() {
       queryClient.invalidateQueries({ queryKey: ['expense-heads'] });
       if (res?.data?.id) {
         setBillHeadId(res.data.id.toString());
+        setAddExpenseHeadId(res.data.id.toString());
       }
       setIsAddHeadModalOpen(false);
       setNewHeadCode('');
@@ -287,8 +298,14 @@ export default function ExpensesPage() {
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Expense recorded successfully!');
-      setIsAddModalOpen(false);
+      toast.success('खर्च सुरक्षित भयो! (सोही पार्टी र शीर्षकमा थप खर्च प्रविष्टि गर्न सक्नुहुन्छ)');
+      // Continuous data entry mode: retain Party, Topic, Date & Fiscal Year; reset transaction amounts & bill info
+      setAddExpenseAmount('');
+      setAddExpenseBillNo('');
+      setAddExpenseChequeNo('');
+      setAddExpenseChequePayeeName('');
+      setAddExpenseDescription('');
+      setAddExpenseRemarks('');
       queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
@@ -300,23 +317,38 @@ export default function ExpensesPage() {
 
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const data: any = {};
-    fd.forEach((value, key) => {
-      if (value) data[key] = value;
-    });
+    if (!addExpenseHeadId) {
+      toast.error('कृपया खर्च शीर्षक छनौट गर्नुहोस् (Please select an Expense Topic).');
+      return;
+    }
+    if (!addExpenseAmount || parseFloat(addExpenseAmount) <= 0) {
+      toast.error('कृपया मान्य खर्च रकम प्रविष्टि गर्नुहोस् (Please enter a valid amount).');
+      return;
+    }
 
-    data.paymentMedium = paymentMedium;
+    const data: any = {
+      headId: parseInt(addExpenseHeadId),
+      amount: parseFloat(addExpenseAmount),
+      expenseDateBs: addExpenseDateBs || todayBS(),
+      paymentMedium,
+      billNo: addExpenseBillNo.trim() || null,
+      description: addExpenseDescription.trim() || null,
+      remarks: addExpenseRemarks.trim() || null,
+    };
+
     if (selectedPartyId) {
       data.partyId = parseInt(selectedPartyId);
       const partyObj = partiesData?.find((p: any) => p.id.toString() === selectedPartyId);
       if (partyObj) data.paidTo = partyObj.name;
+    } else if (addExpensePaidToManual) {
+      data.paidTo = addExpensePaidToManual.trim();
     }
 
     if (paymentMedium === 'CASH') {
       data.bankAccountId = null;
       data.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
       data.chequeNo = null;
+      data.chequeDateBs = null;
       data.chequePayeeName = null;
     } else if (selectedBankAcc) {
       const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === selectedBankAcc);
@@ -324,6 +356,14 @@ export default function ExpensesPage() {
         data.bankAccountId = bankObj.id;
         data.paidFromAccount = `${bankObj.bankName} (${bankObj.accountNo})`;
       }
+    } else {
+      data.paidFromAccount = 'School Operational Account';
+    }
+
+    if (paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') {
+      data.chequeNo = addExpenseChequeNo.trim() || null;
+      data.chequeDateBs = addChequeDateBs || null;
+      data.chequePayeeName = addExpenseChequePayeeName.trim() || null;
     }
 
     const finalApprovedBy = approvedByOption === 'CUSTOM' ? customApprovedBy : approvedByOption;
@@ -1125,14 +1165,14 @@ export default function ExpensesPage() {
 
     addExpenseMutation.mutate(payload, {
       onSuccess: () => {
-        toast.success('Vendor Bill & Payable registered!');
-        setIsRecordBillModalOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+        toast.success('बिल दर्ता भयो! (सोही पार्टी/शीर्षकमा थप बिल दर्ता गर्न सक्नुहुन्छ वा बन्द गर्न Cancel थिच्नुहोस्)');
+        // Continuous data entry mode: retain Party, Topic, Date & Fiscal Year; reset bill-specific amounts & no
         setBillNo('');
         setBillTotalAmount('');
         setBillInitialPaid('');
         setBillChequeNo('');
         setBillDescription('');
+        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
       }
     });
   };
@@ -2333,12 +2373,17 @@ export default function ExpensesPage() {
           <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
-                  <TrendingDown size={18} className="text-rose-600" />
-                  <span>Record School Expense (खर्च प्रविष्टि)</span>
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                    <TrendingDown size={18} className="text-rose-600" />
+                    <span>Record School Expense (खर्च प्रविष्टि)</span>
+                  </h2>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    🔄 लगातार प्रविष्टि (Continuous Entry Mode)
+                  </span>
+                </div>
                 <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
-                  नेपाल सरकार ढाँचा बमोजिम खर्च शीर्षक कोड, पाउने व्यक्ति/संस्था, बैंक/चेक र स्वीकृत अधिकारी प्रविष्टि
+                  नेपाल सरकार ढाँचा बमोजिम खर्च शीर्षक, पाउने व्यक्ति/संस्था, रकम र भुक्तानी विवरण प्रविष्टि (बन्द गर्न Cancel वा X थिच्नुहोस्)
                 </p>
               </div>
               <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -2389,10 +2434,15 @@ export default function ExpensesPage() {
                       <span>+ Add Topic (नयाँ शीर्षक)</span>
                     </button>
                   </div>
-                  <select name="headId" required className="erp-input font-bold">
+                  <select
+                    value={addExpenseHeadId}
+                    onChange={(e) => setAddExpenseHeadId(e.target.value)}
+                    required
+                    className="erp-input font-bold"
+                  >
                     <option value="">-- Select Expense Topic (शीर्षक छनौट) --</option>
                     {headsData?.map((h: any) => (
-                      <option key={h.id} value={h.id}>
+                      <option key={h.id} value={h.id.toString()}>
                         {h.code ? `[${h.code}] ` : ''}{h.name} {h.nameNepali ? `(${h.nameNepali})` : ''}
                       </option>
                     ))}
@@ -2405,10 +2455,11 @@ export default function ExpensesPage() {
                   </label>
                   <input
                     required
-                    name="amount"
                     type="number"
                     step="any"
                     placeholder="e.g. 15000"
+                    value={addExpenseAmount}
+                    onChange={(e) => setAddExpenseAmount(e.target.value)}
                     className="erp-input font-bold text-rose-700 font-mono text-sm"
                   />
                 </div>
@@ -2422,7 +2473,6 @@ export default function ExpensesPage() {
                   </label>
                   <input
                     required
-                    name="expenseDateBs"
                     type="text"
                     value={addExpenseDateBs}
                     onChange={(e) => setAddExpenseDateBs(formatDateInput(e.target.value))}
@@ -2451,16 +2501,17 @@ export default function ExpensesPage() {
                   >
                     <option value="">-- Select Saved Party / Vendor --</option>
                     {partiesData?.map((p: any) => (
-                      <option key={p.id} value={p.id}>
+                      <option key={p.id} value={p.id.toString()}>
                         {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
                       </option>
                     ))}
                   </select>
                   {!selectedPartyId && (
                     <input
-                      name="paidTo"
                       type="text"
                       placeholder="Or type Recipient / Vendor name manually..."
+                      value={addExpensePaidToManual}
+                      onChange={(e) => setAddExpensePaidToManual(e.target.value)}
                       className="erp-input font-medium"
                     />
                   )}
@@ -2503,18 +2554,15 @@ export default function ExpensesPage() {
                       >
                         <option value="">-- Select School Bank Account --</option>
                         {bankAccountsData?.map((b: any) => (
-                          <option key={b.id} value={b.id}>
+                          <option key={b.id} value={b.id.toString()}>
                             {b.bankName} - {b.accountName} ({b.accountNo})
                           </option>
                         ))}
                       </select>
                       {!selectedBankAcc && (
-                        <input
-                          name="paidFromAccount"
-                          type="text"
-                          defaultValue="School Operational Account"
-                          className="erp-input"
-                        />
+                        <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 text-xs text-blue-900 font-medium">
+                          School Operational Account
+                        </div>
                       )}
                     </>
                   )}
@@ -2530,9 +2578,10 @@ export default function ExpensesPage() {
                         Cheque / Trans Ref No. (चेक नम्बर) *
                       </label>
                       <input
-                        name="chequeNo"
                         type="text"
                         placeholder="e.g. CHQ-98765432"
+                        value={addExpenseChequeNo}
+                        onChange={(e) => setAddExpenseChequeNo(e.target.value)}
                         className="erp-input font-mono font-bold border-purple-300"
                       />
                     </div>
@@ -2541,7 +2590,6 @@ export default function ExpensesPage() {
                         Cheque Date in BS (चेक मिति)
                       </label>
                       <input
-                        name="chequeDateBs"
                         type="text"
                         value={addChequeDateBs}
                         onChange={(e) => setAddChequeDateBs(formatDateInput(e.target.value))}
@@ -2554,9 +2602,10 @@ export default function ExpensesPage() {
                       Cheque Issued To / Payee Name (चेक कसको नाममा जारी गरियो - Account Holder)
                     </label>
                     <input
-                      name="chequePayeeName"
                       type="text"
                       placeholder="Specify Account Holder Name if different from Shop/Firm Name (e.g. Ram Kumar Sharma)"
+                      value={addExpenseChequePayeeName}
+                      onChange={(e) => setAddExpenseChequePayeeName(e.target.value)}
                       className="erp-input font-bold border-purple-300"
                     />
                     <span className="text-[10px] text-purple-700 font-medium block mt-0.5">
@@ -2573,9 +2622,10 @@ export default function ExpensesPage() {
                     Bill / Voucher Number (बिल/भौचर नं)
                   </label>
                   <input
-                    name="billNo"
                     type="text"
                     placeholder="BILL-2083-042"
+                    value={addExpenseBillNo}
+                    onChange={(e) => setAddExpenseBillNo(e.target.value)}
                     className="erp-input font-mono"
                   />
                 </div>
@@ -2613,34 +2663,46 @@ export default function ExpensesPage() {
                   Description / Particulars (खर्चको विवरण)
                 </label>
                 <input
-                  name="description"
                   type="text"
                   placeholder="Details of purchased stationery, repair work, event expenses..."
+                  value={addExpenseDescription}
+                  onChange={(e) => setAddExpenseDescription(e.target.value)}
                   className="erp-input"
                 />
               </div>
 
               <div>
                 <label className="block font-extrabold text-gray-800 mb-1">Remarks (कैफियत)</label>
-                <textarea name="remarks" rows={2} placeholder="Any extra remarks..." className="erp-input" />
+                <textarea
+                  rows={2}
+                  placeholder="Any extra remarks..."
+                  value={addExpenseRemarks}
+                  onChange={(e) => setAddExpenseRemarks(e.target.value)}
+                  className="erp-input"
+                />
               </div>
 
               {/* Submit Buttons */}
-              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addExpenseMutation.isPending}
-                  className="rounded-xl bg-rose-600 px-6 py-2 font-bold text-white hover:bg-rose-700 disabled:opacity-60 shadow-xs"
-                >
-                  {addExpenseMutation.isPending ? 'Saving...' : 'Save Expense (खर्च सेभ गर्नुहोस्)'}
-                </button>
+              <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+                <span className="text-[11px] text-gray-500 font-medium">
+                  💡 सेभ गरेपछि सोही पार्टी/शीर्षक यथावत रहन्छ। बन्द गर्न <strong>Cancel</strong> थिच्नुहोस्।
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancel / बन्द गर्नुहोस्
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addExpenseMutation.isPending}
+                    className="rounded-xl bg-rose-600 px-6 py-2 font-bold text-white hover:bg-rose-700 disabled:opacity-60 shadow-xs"
+                  >
+                    {addExpenseMutation.isPending ? 'Saving...' : 'Save Expense (खर्च सेभ गर्नुहोस्)'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
