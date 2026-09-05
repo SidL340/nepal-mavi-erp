@@ -34,8 +34,8 @@ export default function AcademicCalendar() {
   const [selectedMonthBs, setSelectedMonthBs] = useState<string>(currentTodayBs.slice(0, 7)); // "2083-05"
   const [selectedDateBs, setSelectedDateBs] = useState<string>(currentTodayBs); // "2083-05-20"
   
-  // Weekly Holiday Config (Saturday is standard; Sunday toggleable)
-  const [isSundayHoliday, setIsSundayHoliday] = useState<boolean>(false);
+  // Weekly Holiday Config (Saturday and Sunday are standard holidays by default)
+  const [isSundayHoliday, setIsSundayHoliday] = useState<boolean>(true);
 
   // Event Modal States (Admin Only)
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
@@ -307,7 +307,10 @@ export default function AcademicCalendar() {
               const dayOfWeek = (monthDetails.startDayOfWeek + idx) % 7;
               const isWeekend = isWeekendHoliday(dayOfWeek);
               const dayEvents = eventsByDateMap[dateStr] || [];
-              const hasHoliday = isWeekend || dayEvents.some((ev) => ev.isHoliday);
+              const hasWorkingOverride = dayEvents.some(
+                (ev) => !ev.isHoliday && (ev.eventType === 'ACADEMIC' || ev.eventType === 'EXAM' || ev.eventType === 'SPORTS')
+              );
+              const hasHoliday = !hasWorkingOverride && (isWeekend || dayEvents.some((ev) => ev.isHoliday));
               const isToday = dateStr === currentTodayBs;
               const isSelected = dateStr === selectedDateBs;
 
@@ -320,6 +323,8 @@ export default function AcademicCalendar() {
                       ? 'border-[#1e3a5f] bg-blue-50/80 font-black shadow-xs ring-2 ring-blue-500/20'
                       : isToday
                       ? 'border-amber-400 bg-amber-50 font-bold'
+                      : hasWorkingOverride
+                      ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-400'
                       : hasHoliday
                       ? 'border-rose-100 bg-rose-50/30 hover:border-rose-300'
                       : 'border-slate-100 hover:border-slate-300 bg-white'
@@ -330,6 +335,8 @@ export default function AcademicCalendar() {
                       className={`text-[11px] ${
                         isToday
                           ? 'text-amber-900 font-black'
+                          : hasWorkingOverride
+                          ? 'text-emerald-700 font-extrabold'
                           : hasHoliday
                           ? 'text-rose-600 font-extrabold'
                           : 'text-gray-800'
@@ -337,9 +344,11 @@ export default function AcademicCalendar() {
                     >
                       {dayNum}
                     </span>
-                    {dayOfWeek === 6 && (
+                    {hasWorkingOverride ? (
+                      <span className="text-[7.5px] font-bold text-emerald-700 bg-emerald-100 px-1 rounded uppercase">कक्षा</span>
+                    ) : (dayOfWeek === 6 || (dayOfWeek === 0 && isSundayHoliday)) ? (
                       <span className="text-[8px] font-bold text-rose-500 uppercase">वि</span>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Event Badges / Dots */}
@@ -353,7 +362,7 @@ export default function AcademicCalendar() {
                               ? 'bg-rose-100 text-rose-800'
                               : ev.eventType === 'EXAM'
                               ? 'bg-purple-100 text-purple-800'
-                              : 'bg-blue-100 text-blue-800'
+                              : 'bg-emerald-100 text-emerald-800'
                           }`}
                           title={ev.title}
                         >
@@ -385,9 +394,31 @@ export default function AcademicCalendar() {
             )}
           </div>
 
-          {/* Quick Action: Declare Holiday Button for Selected Date */}
+          {/* Quick Action Buttons for Selected Date */}
           {isAdmin && (
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setEditingEvent(null);
+                  setEventForm({
+                    title: 'Special Class / Working Day',
+                    titleNepali: 'शनिबार/आइतबार विशेष कक्षा सञ्चालन (कार्यदिन)',
+                    description: `Special working day / extra class held on ${selectedDateBs}`,
+                    eventDateBs: selectedDateBs,
+                    endDateBs: '',
+                    eventType: 'ACADEMIC',
+                    targetAudience: 'ALL',
+                    isHoliday: false,
+                  });
+                  setIsAddEventModalOpen(true);
+                }}
+                className="inline-flex items-center justify-center gap-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 px-2.5 py-2 text-[11px] font-extrabold shadow-2xs transition text-center"
+                title="Mark this day as active class day even if it's a weekend or holiday"
+              >
+                <Sun size={13} className="text-emerald-600 shrink-0" />
+                <span>🟢 Take Class (कार्यदिन)</span>
+              </button>
+
               <button
                 onClick={() => {
                   setEditingEvent(null);
@@ -403,10 +434,10 @@ export default function AcademicCalendar() {
                   });
                   setIsAddEventModalOpen(true);
                 }}
-                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 px-3 py-2 text-xs font-extrabold shadow-2xs transition"
+                className="inline-flex items-center justify-center gap-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 px-2.5 py-2 text-[11px] font-extrabold shadow-2xs transition text-center"
               >
-                <Flag size={14} />
-                <span>⚡ Declare Holiday (यस दिन विदा घोषणा गर्नुहोस्)</span>
+                <Flag size={13} className="shrink-0" />
+                <span>⚡ Declare Holiday (विदा)</span>
               </button>
             </div>
           )}

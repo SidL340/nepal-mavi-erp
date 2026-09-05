@@ -115,9 +115,24 @@ export default function AttendancePage() {
     }
   })();
   const isSaturday = dayOfWeek === 6;
+  const isSunday = dayOfWeek === 0;
+  const isWeekend = isSaturday || isSunday;
+
+  // Check if there is an explicit working day override on this date (event with isHoliday === false)
+  const workingDayOverrideEvent = dateEventsData?.find(
+    (e: any) => !e.isHoliday && (e.eventType === 'ACADEMIC' || e.eventType === 'EXAM' || e.eventType === 'SPORTS')
+  );
+  const isWorkingDayOverride = !!workingDayOverrideEvent;
+
   const eventHoliday = dateEventsData?.find((e: any) => e.isHoliday);
-  const activeHolidayRemark = holidayRemark || eventHoliday?.titleNepali || eventHoliday?.title || (isSaturday ? 'Saturday Weekly Holiday (शनिबार साप्ताहिक विदा)' : null);
-  const isHolidayActive = isTodayHoliday || !!eventHoliday || isSaturday;
+  const activeHolidayRemark =
+    holidayRemark ||
+    eventHoliday?.titleNepali ||
+    eventHoliday?.title ||
+    (isSaturday ? 'शनिबार साप्ताहिक विदा (Saturday Holiday)' : isSunday ? 'आइतबार साप्ताहिक विदा (Sunday Holiday)' : null);
+
+  // If working day override is active, attendance is unlocked even on Saturday/Sunday
+  const isHolidayActive = !isWorkingDayOverride && (isTodayHoliday || !!eventHoliday || isWeekend);
 
   // Fetch Monthly Report
   const { data: monthlyReportData, isLoading: isMonthlyLoading } = useQuery({
@@ -247,6 +262,30 @@ export default function AttendancePage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to remove holiday.');
+    },
+  });
+
+  // Enable Class / Working Day on Weekend Mutation
+  const enableClassMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/events', {
+        title: isSaturday ? 'Saturday Special Class' : isSunday ? 'Sunday Special Class' : 'Special Working Day',
+        titleNepali: isSaturday ? 'शनिबार विशेष कक्षा सञ्चालन (कार्यदिन)' : isSunday ? 'आइतबार विशेष कक्षा सञ्चालन (कार्यदिन)' : 'विशेष कक्षा सञ्चालन (कार्यदिन)',
+        eventDateBs: dateBs,
+        eventType: 'ACADEMIC',
+        targetAudience: 'ALL',
+        isHoliday: false,
+        description: `Active class day conducted on ${dateBs}`,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('यस मितिमा कक्षा सञ्चालन खुला गरियो! अब हाजिरी लिन सक्नुहुन्छ।');
+      queryClient.invalidateQueries({ queryKey: ['date-events'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to enable class on this date.');
     },
   });
 
@@ -826,35 +865,84 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* Holiday Banner if Today is marked as Holiday / Weekend / Patro Holiday */}
+          {/* 1. Working Day Override Banner (When classes are held on Saturday/Sunday or a holiday) */}
+          {isWorkingDayOverride && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-emerald-700 text-white p-4 shadow-md font-bold text-xs">
+              <div className="flex items-center gap-3">
+                <Sparkles size={20} className="shrink-0 text-emerald-200" />
+                <div>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wide">
+                    🟢 विशेष कार्यदिन / कक्षा सञ्चालन (Class Day on {dateBs})
+                  </h4>
+                  <p className="text-[11px] text-emerald-100 mt-0.5">
+                    {workingDayOverrideEvent?.titleNepali || workingDayOverrideEvent?.title || 'यस विदाको दिनमा विशेष कक्षा सञ्चालन गरिएको छ।'} हाजिरी लिन र सेभ गर्न खुला गरिएको छ।
+                  </p>
+                </div>
+              </div>
+              {isAdmin && workingDayOverrideEvent && (
+                <button
+                  onClick={() => {
+                    if (confirm('यस कार्यदिनलाई हटाएर पुनः नियमित विदामा फर्काउन चाहनुहुन्छ?')) {
+                      api.post(`/events/${workingDayOverrideEvent.id}/delete`).then(() => {
+                        toast.success('Reverted back to weekend holiday.');
+                        queryClient.invalidateQueries({ queryKey: ['date-events'] });
+                        queryClient.invalidateQueries({ queryKey: ['attendance-class'] });
+                      });
+                    }
+                  }}
+                  className="px-3.5 py-1.5 bg-white text-emerald-950 font-extrabold rounded-xl hover:bg-emerald-50 transition shadow-xs text-xs self-start sm:self-auto"
+                >
+                  Revert to Holiday (पुनः विदा बनाउनुहोस्)
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 2. Holiday Banner if Today is marked as Holiday / Weekend without override */}
           {isHolidayActive && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-500 text-white p-4 shadow-md font-bold text-xs">
               <div className="flex items-center gap-3">
                 <Sparkles size={20} className="animate-bounce shrink-0 text-amber-100" />
                 <div>
                   <h4 className="font-extrabold text-sm uppercase tracking-wide">
-                    {isSaturday ? '🚩 शनिवार साप्ताहिक विदा (Saturday Weekly Holiday)' : `🎉 School Holiday: ${activeHolidayRemark || 'सार्वजनिक विदा'}`}
+                    {isSaturday
+                      ? '🚩 शनिवार साप्ताहिक विदा (Saturday Holiday)'
+                      : isSunday
+                      ? '🚩 आइतबार साप्ताहिक विदा (Sunday Holiday)'
+                      : `🎉 School Holiday: ${activeHolidayRemark || 'सार्वजनिक विदा'}`}
                   </h4>
                   <p className="text-[11px] text-amber-100 mt-0.5">
-                    {isSaturday
-                      ? `आज शनिबार भएकाले विद्यालयमा विदा रहेको छ (${dateBs})।`
+                    {isWeekend
+                      ? `आज ${isSaturday ? 'शनिबार' : 'आइतबार'} साप्ताहिक विदा रहेकाले नियमित हाजिरी बन्द छ (${dateBs})। यदि कक्षा सञ्चालन गर्ने हो भने "Take Class Today" थिच्नुहोस्।`
                       : `यस मितिमा (${dateBs}) विदा घोषणा गरिएको छ: ${activeHolidayRemark || 'सार्वजनिक विदा'}। हाजिरी विदा (HOLIDAY) को रूपमा दर्ता छ।`}
                   </p>
                 </div>
               </div>
-              {!isSaturday && (
-                <button
-                  onClick={() => removeHolidayMutation.mutate()}
-                  className="px-3.5 py-1.5 bg-white text-amber-950 font-extrabold rounded-xl hover:bg-amber-50 transition shadow-xs text-xs self-start sm:self-auto"
-                >
-                  Remove Holiday (विदा रद्द गर्नुहोस्)
-                </button>
-              )}
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                {isAdmin && isWeekend && (
+                  <button
+                    onClick={() => enableClassMutation.mutate()}
+                    disabled={enableClassMutation.isPending}
+                    className="px-3.5 py-1.5 bg-emerald-900 text-white font-extrabold rounded-xl hover:bg-emerald-800 transition shadow-xs text-xs"
+                  >
+                    {enableClassMutation.isPending ? 'Enabling...' : '⚡ Take Class Today (आज कक्षा सञ्चालन गर्नुहोस्)'}
+                  </button>
+                )}
+                {!isWeekend && (
+                  <button
+                    onClick={() => removeHolidayMutation.mutate()}
+                    className="px-3.5 py-1.5 bg-white text-amber-950 font-extrabold rounded-xl hover:bg-amber-50 transition shadow-xs text-xs"
+                  >
+                    Remove Holiday (विदा रद्द गर्नुहोस्)
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {/* School Event Banner if non-holiday event is active today */}
-          {dateEventsData && dateEventsData.length > 0 && !isHolidayActive && (
+          {/* 3. School Event Banner if non-holiday event is active today and not already covered by working override */}
+          {dateEventsData && dateEventsData.length > 0 && !isHolidayActive && !isWorkingDayOverride && (
             <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900 font-bold flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar size={16} className="text-indigo-600 shrink-0" />
