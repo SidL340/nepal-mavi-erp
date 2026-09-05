@@ -237,9 +237,12 @@ export default function ExpensesPage() {
       const res = await api.post('/expense/heads', payload);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       toast.success('New Expense Topic created!');
       queryClient.invalidateQueries({ queryKey: ['expense-heads'] });
+      if (res?.data?.id) {
+        setBillHeadId(res.data.id.toString());
+      }
       setIsAddHeadModalOpen(false);
       setNewHeadCode('');
       setNewHeadName('');
@@ -258,7 +261,10 @@ export default function ExpensesPage() {
     onSuccess: (res: any) => {
       toast.success('New Party/Recipient saved!');
       queryClient.invalidateQueries({ queryKey: ['parties-list'] });
-      if (res?.data?.id) setSelectedPartyId(res.data.id.toString());
+      if (res?.data?.id) {
+        setSelectedPartyId(res.data.id.toString());
+        setBillPartyId(res.data.id.toString());
+      }
       setIsAddPartyModalOpen(false);
       setNewPartyName('');
       setNewPartyNameNepali('');
@@ -1894,9 +1900,19 @@ export default function ExpensesPage() {
                   </div>
 
                   <div>
-                    <label className="block font-extrabold text-gray-800 mb-1">
-                      Vendor / Party (पाउने व्यक्ति/संस्था) *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-extrabold text-gray-800">
+                        Vendor / Party (पाउने व्यक्ति/संस्था) *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddPartyModalOpen(true)}
+                        className="text-[10px] font-extrabold text-purple-700 hover:text-purple-900 hover:underline flex items-center gap-0.5"
+                      >
+                        <Plus size={11} />
+                        <span>+ Add Party (नयाँ पक्ष)</span>
+                      </button>
+                    </div>
                     <select
                       value={billPartyId}
                       onChange={(e) => setBillPartyId(e.target.value)}
@@ -1905,7 +1921,7 @@ export default function ExpensesPage() {
                     >
                       <option value="">-- Select Party / Vendor --</option>
                       {partiesData?.map((p: any) => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.id.toString()}>
                           {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
                         </option>
                       ))}
@@ -1913,9 +1929,19 @@ export default function ExpensesPage() {
                   </div>
 
                   <div>
-                    <label className="block font-extrabold text-gray-800 mb-1">
-                      Expense Head / Topic (खर्च शीर्षक) *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-extrabold text-gray-800">
+                        Expense Topic (खर्च शीर्षक) *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddHeadModalOpen(true)}
+                        className="text-[10px] font-extrabold text-purple-700 hover:text-purple-900 hover:underline flex items-center gap-0.5"
+                      >
+                        <Plus size={11} />
+                        <span>+ Add Topic (नयाँ शीर्षक)</span>
+                      </button>
+                    </div>
                     <select
                       value={billHeadId}
                       onChange={(e) => setBillHeadId(e.target.value)}
@@ -1924,7 +1950,7 @@ export default function ExpensesPage() {
                     >
                       <option value="">-- Select Expense Topic --</option>
                       {headsData?.map((h: any) => (
-                        <option key={h.id} value={h.id}>
+                        <option key={h.id} value={h.id.toString()}>
                           {h.code ? `[${h.code}] ` : ''}{h.name}
                         </option>
                       ))}
@@ -2929,7 +2955,7 @@ export default function ExpensesPage() {
 
       {/* ─── 6. ADD NEW EXPENSE TOPIC WITH CODE MODAL ───────────────────────── */}
       {isAddHeadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <h3 className="font-extrabold text-sm text-[#1e3a5f] flex items-center gap-1.5">
@@ -3000,7 +3026,7 @@ export default function ExpensesPage() {
 
       {/* ─── 7. ADD NEW PARTY / RECIPIENT MODAL ──────────────────────────────── */}
       {isAddPartyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <h3 className="font-extrabold text-sm text-[#1e3a5f] flex items-center gap-1.5">
