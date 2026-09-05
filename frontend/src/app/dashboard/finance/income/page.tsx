@@ -15,7 +15,6 @@ import {
   X,
   Calendar,
   Wallet,
-  DollarSign,
   QrCode,
   CreditCard,
   Receipt,

@@ -19,7 +19,6 @@ import {
   Calendar,
   CheckCircle2,
   Landmark,
-  DollarSign,
   QrCode,
   CreditCard,
   Download,

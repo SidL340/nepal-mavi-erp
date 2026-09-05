@@ -20,7 +20,7 @@ import {
   FileText,
   Building,
   Filter,
-  DollarSign,
+  Coins,
   User,
   BookOpen,
   AlertCircle,
@@ -783,7 +783,7 @@ function FeeCollectionPortalContent() {
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between border-b pb-3">
                   <div className="flex items-center gap-2">
-                    <DollarSign className="text-emerald-600" size={18} />
+                    <Coins className="text-emerald-600" size={18} />
                     <h2 className="text-sm font-bold text-[#1e3a5f]">
                       2. Fee Payment & Voucher Details (शुल्क भुक्तानी फारम)
                     </h2>
@@ -928,12 +928,12 @@ function FeeCollectionPortalContent() {
                 <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-gray-100">
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-3 text-xs">
-                      <span className="text-gray-500">Total Net Fee: <strong className="text-gray-800 font-mono">रू ${netPayable.toLocaleString()}</strong></span>
-                      <span className="text-gray-500">Paying Now: <strong className="text-emerald-700 font-mono">रू ${parsedPaying.toLocaleString()}</strong></span>
+                      <span className="text-gray-500">Total Net Fee: <strong className="text-gray-800 font-mono">रू {netPayable.toLocaleString()}</strong></span>
+                      <span className="text-gray-500">Paying Now: <strong className="text-emerald-700 font-mono">रू {parsedPaying.toLocaleString()}</strong></span>
                     </div>
                     {liveRemainingDue > 0 ? (
                       <span className="inline-block text-[11px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
-                        ⚡ Due Remaining to Receive: रू ${liveRemainingDue.toLocaleString()}
+                        ⚡ Due Remaining to Receive: रू {liveRemainingDue.toLocaleString()}
                       </span>
                     ) : (
                       <span className="inline-block text-[11px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
@@ -1173,7 +1173,7 @@ function FeeCollectionPortalContent() {
                             onClick={() => handleOpenPayDueModal(d)}
                             className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-extrabold shadow-sm transition"
                           >
-                            <DollarSign size={13} />
+                            <Receipt size={13} />
                             <span>Pay Remaining Due (बाँकी भुक्तानी)</span>
                           </button>
                         </td>
@@ -1193,7 +1193,7 @@ function FeeCollectionPortalContent() {
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-gray-100">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
-                <DollarSign className="text-emerald-600" size={18} />
+                <Coins className="text-emerald-600" size={18} />
                 <span>Clear Student Fee Due (बाँकी विद्यार्थी शुल्क भुक्तानी)</span>
               </h3>
               <button onClick={() => setIsPayDueModalOpen(false)} className="text-gray-400 hover:text-gray-600">

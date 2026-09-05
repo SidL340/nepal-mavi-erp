@@ -24,7 +24,6 @@ import {
   CalendarClock,
   BookMarked,
   Check,
-  DollarSign,
   Edit2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
