@@ -81,11 +81,11 @@ export default function IncomePage() {
   const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
   const autoResolvedFY = resolveFinancialYear(addReceivedDateBs, financialYearsData || []);
 
-  // Resolve current filtered year ID
-  const effectiveYearId = selectedYearFilter === 'ALL'
+  // Resolve current filtered financial year ID
+  const effectiveFYId = selectedYearFilter === 'ALL'
     ? ''
     : selectedYearFilter === 'ACTIVE'
-    ? (activeYear?.id ? String(activeYear.id) : '')
+    ? (activeFinancialYear?.id ? String(activeFinancialYear.id) : '')
     : selectedYearFilter;
 
   const { data: categoriesData } = useQuery({
@@ -121,14 +121,14 @@ export default function IncomePage() {
   });
 
   const { data: entriesData, isLoading } = useQuery({
-    queryKey: ['income-entries', sourceLevel, selectedHeadFilter, selectedPartyFilter, searchQuery, effectiveYearId],
+    queryKey: ['income-entries', sourceLevel, selectedHeadFilter, selectedPartyFilter, searchQuery, effectiveFYId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (sourceLevel) params.append('sourceLevel', sourceLevel);
       if (selectedHeadFilter) params.append('headId', selectedHeadFilter);
       if (selectedPartyFilter) params.append('partyId', selectedPartyFilter);
       if (searchQuery) params.append('q', searchQuery);
-      if (effectiveYearId) params.append('academicYearId', effectiveYearId);
+      if (effectiveFYId) params.append('financialYearId', effectiveFYId);
       const res = await api.get(`/income/entries?${params.toString()}`);
       return res.data;
     },
@@ -324,7 +324,9 @@ export default function IncomePage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs">
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total School Income (Year {activeYear?.year || '2081-82'})</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+            Total School Income ({selectedYearFilter === 'ALL' ? 'सबै आर्थिक वर्षहरू' : `आ.व. ${financialYearsData?.find((f: any) => f.id.toString() === effectiveFYId)?.year || activeFinancialYear?.year || '२०८३/८४'}`})
+          </span>
           <p className="text-2xl font-black text-emerald-700 mt-2 font-mono">रू {grandTotalIncome.toLocaleString()}</p>
           <p className="text-[11px] text-gray-400 mt-1">Government Grants + Student Fees + Own Source</p>
         </div>
@@ -368,11 +370,11 @@ export default function IncomePage() {
             onChange={(e) => setSelectedYearFilter(e.target.value)}
             className="rounded-xl border border-emerald-300 bg-emerald-50/70 px-3 py-2 text-xs focus:border-[#1e3a5f] focus:outline-hidden font-bold text-emerald-950 shadow-2xs"
           >
-            <option value="ACTIVE">चालु आ.व. ({activeYear?.year || '2083-84'})</option>
+            <option value="ACTIVE">चालु आ.व. ({activeFinancialYear?.year || '2083/84'})</option>
             <option value="ALL">सबै आर्थिक वर्षहरू (All Fiscal Years)</option>
-            {yearsData?.map((y: any) => (
-              <option key={y.id} value={y.id}>
-                आ.व. {y.year} {y.isActive ? '(Active)' : ''}
+            {financialYearsData?.map((fy: any) => (
+              <option key={fy.id} value={fy.id.toString()}>
+                आ.व. {fy.year} {fy.isActive ? '(चालु)' : ''}
               </option>
             ))}
           </select>
@@ -447,7 +449,12 @@ export default function IncomePage() {
             ) : (
               entries.map((item: any) => (
                 <tr key={item.id} className="hover:bg-slate-50 transition">
-                  <td className="p-3.5 font-mono font-bold text-gray-900">{item.receivedDateBs}</td>
+                  <td className="p-3.5 font-mono font-bold text-gray-900">
+                    <div>{item.receivedDateBs}</div>
+                    <span className="inline-block text-[10px] font-sans font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 mt-0.5">
+                      आ.व. {item.financialYear?.year || getFiscalYearFromBS(item.receivedDateBs)}
+                    </span>
+                  </td>
                   <td className="p-3.5">
                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-[#1e3a5f] border border-slate-200">
                       {item.sourceLevel || 'Central'}

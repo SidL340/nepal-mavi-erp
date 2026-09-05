@@ -152,11 +152,11 @@ export default function ExpensesPage() {
   const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
   const autoResolvedFY = resolveFinancialYear(addExpenseDateBs, financialYearsData || []);
 
-  // Resolve current filtered year ID
-  const effectiveYearId = selectedYearFilter === 'ALL'
+  // Resolve current filtered financial year ID
+  const effectiveFYId = selectedYearFilter === 'ALL'
     ? ''
     : selectedYearFilter === 'ACTIVE'
-    ? (activeYear?.id ? String(activeYear.id) : '')
+    ? (activeFinancialYear?.id ? String(activeFinancialYear.id) : '')
     : selectedYearFilter;
 
   const { data: categoriesData } = useQuery({
@@ -192,14 +192,14 @@ export default function ExpensesPage() {
   });
 
   const { data: entriesData, isLoading } = useQuery({
-    queryKey: ['expense-entries', selectedCategory, selectedHeadFilter, selectedPartyFilter, searchQuery, effectiveYearId],
+    queryKey: ['expense-entries', selectedCategory, selectedHeadFilter, selectedPartyFilter, searchQuery, effectiveFYId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedCategory) params.append('categoryId', selectedCategory);
       if (selectedHeadFilter) params.append('headId', selectedHeadFilter);
       if (selectedPartyFilter) params.append('partyId', selectedPartyFilter);
       if (searchQuery) params.append('q', searchQuery);
-      if (effectiveYearId) params.append('academicYearId', effectiveYearId);
+      if (effectiveFYId) params.append('financialYearId', effectiveFYId);
       const res = await api.get(`/expense/entries?${params.toString()}`);
       return res.data;
     },
@@ -1071,7 +1071,9 @@ export default function ExpensesPage() {
           {/* ─── 2. SUMMARY METRIC CARDS ───────────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs">
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Expenses (Year {activeYear?.year || '2081-82'})</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                Total Expenses ({selectedYearFilter === 'ALL' ? 'सबै आर्थिक वर्षहरू' : `आ.व. ${financialYearsData?.find((f: any) => f.id.toString() === effectiveFYId)?.year || activeFinancialYear?.year || '२०८३/८४'}`})
+              </span>
               <p className="text-2xl font-extrabold text-rose-700 mt-2">रू {totalAmount.toLocaleString()}</p>
               <p className="text-[11px] text-gray-400 mt-1">कुल निकासा भएको खर्च रकम</p>
             </div>
@@ -1125,11 +1127,11 @@ export default function ExpensesPage() {
                 onChange={(e) => setSelectedYearFilter(e.target.value)}
                 className="rounded-xl border border-rose-300 bg-rose-50/70 px-3 py-2 text-xs focus:border-[#1e3a5f] focus:outline-hidden font-bold text-rose-950 shadow-2xs"
               >
-                <option value="ACTIVE">चालु आ.व. ({activeYear?.year || '2083-84'})</option>
+                <option value="ACTIVE">चालु आ.व. ({activeFinancialYear?.year || '2083/84'})</option>
                 <option value="ALL">सबै आर्थिक वर्षहरू (All Fiscal Years)</option>
-                {yearsData?.map((y: any) => (
-                  <option key={y.id} value={y.id}>
-                    आ.व. {y.year} {y.isActive ? '(Active)' : ''}
+                {financialYearsData?.map((fy: any) => (
+                  <option key={fy.id} value={fy.id.toString()}>
+                    आ.व. {fy.year} {fy.isActive ? '(चालु)' : ''}
                   </option>
                 ))}
               </select>
@@ -1219,7 +1221,10 @@ export default function ExpensesPage() {
                     entries.map((entry: any) => (
                       <tr key={entry.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3 px-4 font-mono font-bold text-gray-900 whitespace-nowrap">
-                          {entry.expenseDateBs}
+                          <div>{entry.expenseDateBs}</div>
+                          <span className="inline-block text-[10px] font-sans font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 mt-0.5">
+                            आ.व. {entry.financialYear?.year || getFiscalYearFromBS(entry.expenseDateBs)}
+                          </span>
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-mono font-bold text-[#1e3a5f] block">

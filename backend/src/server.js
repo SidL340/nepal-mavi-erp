@@ -153,13 +153,14 @@ app.listen(PORT, '0.0.0.0', async () => {
         }
       }
 
-      // ── SEED DEDICATED FINANCIAL YEARS (साउन १ – असार ३१) ─────────────────
+      // ── SEED DEDICATED FINANCIAL YEARS (साउन १ – असार ३१/३२) ─────────────────
+      const { getFiscalYearFromBS } = require('./routes/financialYears');
       const standardFiscalYears = [
-        { year: '2083/84', startDateBs: '2083-04-01', endDateBs: '2084-03-31', isActive: true },
-        { year: '2082/83', startDateBs: '2082-04-01', endDateBs: '2083-03-31', isActive: false },
-        { year: '2081/82', startDateBs: '2081-04-01', endDateBs: '2082-03-31', isActive: false },
-        { year: '2080/81', startDateBs: '2080-04-01', endDateBs: '2081-03-31', isActive: false },
-        { year: '2079/80', startDateBs: '2079-04-01', endDateBs: '2080-03-31', isActive: false },
+        { year: '2083/84', startDateBs: '2083-04-01', endDateBs: '2084-03-32', isActive: true },
+        { year: '2082/83', startDateBs: '2082-04-01', endDateBs: '2083-03-32', isActive: false },
+        { year: '2081/82', startDateBs: '2081-04-01', endDateBs: '2082-03-32', isActive: false },
+        { year: '2080/81', startDateBs: '2080-04-01', endDateBs: '2081-03-32', isActive: false },
+        { year: '2079/80', startDateBs: '2079-04-01', endDateBs: '2080-03-32', isActive: false },
       ];
 
       for (const sfy of standardFiscalYears) {
@@ -175,6 +176,15 @@ app.listen(PORT, '0.0.0.0', async () => {
               isActive: sfy.isActive,
             }
           });
+        } else {
+          // Keep start and end dates accurate
+          await prisma.financialYear.update({
+            where: { id: existingFy.id },
+            data: {
+              startDateBs: sfy.startDateBs,
+              endDateBs: sfy.endDateBs,
+            }
+          });
         }
       }
 
@@ -187,33 +197,75 @@ app.listen(PORT, '0.0.0.0', async () => {
         }
       }
 
-      // Auto-backfill financialYearId for existing entries
+      // Auto-backfill and re-assign all accounting records strictly by BS date
       const allFiscalYears = await prisma.financialYear.findMany();
-      for (const fy of allFiscalYears) {
-        await prisma.incomeEntry.updateMany({
-          where: {
-            financialYearId: null,
-            receivedDateBs: { gte: fy.startDateBs, lte: fy.endDateBs }
-          },
-          data: { financialYearId: fy.id }
-        }).catch(() => {});
+      const fyMapByYear = new Map();
+      allFiscalYears.forEach(fy => {
+        fyMapByYear.set(fy.year, fy);
+        fyMapByYear.set(fy.year.replace('/', '-'), fy);
+      });
 
-        await prisma.expenseEntry.updateMany({
-          where: {
-            financialYearId: null,
-            expenseDateBs: { gte: fy.startDateBs, lte: fy.endDateBs }
-          },
-          data: { financialYearId: fy.id }
-        }).catch(() => {});
-
-        await prisma.feeCollection.updateMany({
-          where: {
-            financialYearId: null,
-            paidDateBs: { gte: fy.startDateBs, lte: fy.endDateBs }
-          },
-          data: { financialYearId: fy.id }
-        }).catch(() => {});
+      // 1. Backfill Expenses
+      const allExpenses = await prisma.expenseEntry.findMany({ select: { id: true, expenseDateBs: true, financialYearId: true } });
+      for (const exp of allExpenses) {
+        if (exp.expenseDateBs) {
+          const derived = getFiscalYearFromBS(exp.expenseDateBs);
+          const targetFy = fyMapByYear.get(derived) || allFiscalYears.find(f => exp.expenseDateBs >= f.startDateBs && exp.expenseDateBs <= f.endDateBs);
+          if (targetFy && exp.financialYearId !== targetFy.id) {
+            await prisma.expenseEntry.update({
+              where: { id: exp.id },
+              data: { financialYearId: targetFy.id }
+            }).catch(() => {});
+          }
+        }
       }
+
+      // 2. Backfill Incomes
+      const allIncomes = await prisma.incomeEntry.findMany({ select: { id: true, receivedDateBs: true, financialYearId: true } });
+      for (const inc of allIncomes) {
+        if (inc.receivedDateBs) {
+          const derived = getFiscalYearFromBS(inc.receivedDateBs);
+          const targetFy = fyMapByYear.get(derived) || allFiscalYears.find(f => inc.receivedDateBs >= f.startDateBs && inc.receivedDateBs <= f.endDateBs);
+          if (targetFy && inc.financialYearId !== targetFy.id) {
+            await prisma.incomeEntry.update({
+              where: { id: inc.id },
+              data: { financialYearId: targetFy.id }
+            }).catch(() => {});
+          }
+        }
+      }
+
+      // 3. Backfill Fee Collections
+      const allFees = await prisma.feeCollection.findMany({ select: { id: true, paidDateBs: true, financialYearId: true } });
+      for (const fee of allFees) {
+        if (fee.paidDateBs) {
+          const derived = getFiscalYearFromBS(fee.paidDateBs);
+          const targetFy = fyMapByYear.get(derived) || allFiscalYears.find(f => fee.paidDateBs >= f.startDateBs && fee.paidDateBs <= f.endDateBs);
+          if (targetFy && fee.financialYearId !== targetFy.id) {
+            await prisma.feeCollection.update({
+              where: { id: fee.id },
+              data: { financialYearId: targetFy.id }
+            }).catch(() => {});
+          }
+        }
+      }
+
+      // 4. Backfill Payrolls
+      const allPayrolls = await prisma.payroll.findMany({ select: { id: true, monthFrom: true, financialYearId: true } });
+      for (const pay of allPayrolls) {
+        if (pay.monthFrom) {
+          const dateBs = pay.monthFrom.includes('-') && pay.monthFrom.split('-').length === 2 ? `${pay.monthFrom}-15` : pay.monthFrom;
+          const derived = getFiscalYearFromBS(dateBs);
+          const targetFy = fyMapByYear.get(derived) || allFiscalYears.find(f => dateBs >= f.startDateBs && dateBs <= f.endDateBs);
+          if (targetFy && pay.financialYearId !== targetFy.id) {
+            await prisma.payroll.update({
+              where: { id: pay.id },
+              data: { financialYearId: targetFy.id }
+            }).catch(() => {});
+          }
+        }
+      }
+      console.log('✅ Financial Year auto-backfill completed for all accounting records.');
     } catch (yrErr) {
       console.error('Academic/Financial year verification error:', yrErr.message);
     }

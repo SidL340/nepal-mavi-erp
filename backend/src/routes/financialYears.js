@@ -5,7 +5,28 @@ const { authenticate, authorize } = require('../middleware/auth');
 const router = express.Router();
 
 /**
- * Helper to auto-resolve FinancialYear from a BS date string (e.g. "2083-05-15" or "2083-05")
+ * Helper to compute standard Nepali Fiscal Year string from BS date
+ * (Shrawan 4 to Chaitra 12 -> YYYY/YY+1, Baisakh 1 to Ashadh 3 -> YYYY-1/YY)
+ */
+function getFiscalYearFromBS(dateBs) {
+  if (!dateBs) return '';
+  const parts = dateBs.split('-');
+  const y = parseInt(parts[0]);
+  const m = parseInt(parts[1]);
+  if (isNaN(y) || isNaN(m)) return '';
+
+  if (m >= 4) {
+    const nextY = (y + 1).toString().slice(-2);
+    return `${y}/${nextY}`;
+  } else {
+    const prevY = y - 1;
+    const currY = y.toString().slice(-2);
+    return `${prevY}/${currY}`;
+  }
+}
+
+/**
+ * Helper to auto-resolve FinancialYear from a BS date string (e.g. "2083-05-15" or "2082-03-24")
  */
 async function resolveFinancialYearByDate(dateBs) {
   if (!dateBs) return null;
@@ -21,12 +42,14 @@ async function resolveFinancialYearByDate(dateBs) {
     }
   }
 
-  // Fallback: match by year prefix (e.g. "2083" matches "2083/84" or "2083-84")
-  const yearPrefix = cleanDate.slice(0, 4);
-  const matchPrefix = allYears.find(fy => fy.year.startsWith(yearPrefix));
-  if (matchPrefix) return matchPrefix;
+  // Derived match by BS calculation (e.g. 2082-03-24 -> 2081/82)
+  const derivedYear = getFiscalYearFromBS(cleanDate);
+  if (derivedYear) {
+    const matched = allYears.find(fy => fy.year === derivedYear || fy.year === derivedYear.replace('/', '-') || fy.year.replace(/\s+/g, '') === derivedYear);
+    if (matched) return matched;
+  }
 
-  // Final fallback: active financial year
+  // Fallback: active financial year
   const activeYear = allYears.find(fy => fy.isActive) || allYears[0];
   return activeYear || null;
 }
@@ -360,4 +383,5 @@ router.get('/report/:id', authenticate, async (req, res) => {
 module.exports = {
   router,
   resolveFinancialYearByDate,
+  getFiscalYearFromBS,
 };
