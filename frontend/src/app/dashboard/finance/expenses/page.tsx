@@ -109,6 +109,16 @@ export default function ExpensesPage() {
   const [instVoucherNo, setInstVoucherNo] = useState('');
   const [instRemarks, setInstRemarks] = useState('');
 
+  // Edit Payable Bill State
+  const [editingPayableBill, setEditingPayableBill] = useState<any>(null);
+  const [editPayBillNo, setEditPayBillNo] = useState('');
+  const [editPayBillDateBs, setEditPayBillDateBs] = useState('');
+  const [editPayBillPartyId, setEditPayBillPartyId] = useState('');
+  const [editPayBillHeadId, setEditPayBillHeadId] = useState('');
+  const [editPayBillTotalAmount, setEditPayBillTotalAmount] = useState('');
+  const [editPayBillDescription, setEditPayBillDescription] = useState('');
+  const [isDeletingBill, setIsDeletingBill] = useState(false);
+
   // ── 1. QUERIES ──────────────────────────────────────────────────────────────
   const { data: schoolProfile } = useQuery({
     queryKey: ['school-profile'],
@@ -877,6 +887,83 @@ export default function ExpensesPage() {
     });
   };
 
+  const handleOpenEditPayable = (bill: any) => {
+    setEditingPayableBill(bill);
+    setEditPayBillNo(bill.billNo || '');
+    setEditPayBillDateBs(bill.billDateBs || todayBS());
+    setEditPayBillPartyId(bill.partyId ? bill.partyId.toString() : '');
+    setEditPayBillHeadId(bill.headId ? bill.headId.toString() : '');
+    setEditPayBillTotalAmount(bill.totalBillAmount ? bill.totalBillAmount.toString() : '');
+    const cleanDesc = (bill.description || '').replace(/\[Total Bill:\s*[^\]]+\]/i, '').trim();
+    setEditPayBillDescription(cleanDesc);
+  };
+
+  const handleSaveEditPayable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPayableBill) return;
+
+    const newTotal = parseFloat(editPayBillTotalAmount);
+    if (isNaN(newTotal) || newTotal < 0) {
+      toast.error('Please enter a valid total bill amount.');
+      return;
+    }
+
+    const partyObj = partiesData?.find((p: any) => p.id.toString() === editPayBillPartyId);
+    const newPartyName = partyObj ? partyObj.name : editingPayableBill.partyName;
+    const cleanDesc = editPayBillDescription ? editPayBillDescription.trim() : 'Vendor Purchase Bill';
+    const finalDescription = `${cleanDesc} [Total Bill: Rs. ${newTotal.toLocaleString()}]`;
+
+    try {
+      await Promise.all(
+        editingPayableBill.installments.map((inst: any, idx: number) => {
+          const updatePayload: any = {
+            billNo: editPayBillNo.trim(),
+            headId: editPayBillHeadId ? parseInt(editPayBillHeadId) : inst.headId,
+            partyId: editPayBillPartyId ? parseInt(editPayBillPartyId) : null,
+            paidTo: newPartyName,
+            description: finalDescription,
+          };
+          if (idx === 0 && editPayBillDateBs) {
+            updatePayload.expenseDateBs = editPayBillDateBs;
+          }
+          return api.put(`/expense/entries/${inst.id}`, updatePayload);
+        })
+      );
+
+      toast.success(`Bill "${editPayBillNo}" details updated successfully!`);
+      setEditingPayableBill(null);
+      queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update bill details.');
+    }
+  };
+
+  const handleDeletePayable = async (bill: any) => {
+    if (!bill || !bill.installments || bill.installments.length === 0) return;
+
+    const count = bill.installments.length;
+    const confirmMsg = count > 1
+      ? `Are you sure you want to delete Bill "${bill.billNo}" and all its ${count} payment entries? This will delete these expense entries permanently.`
+      : `Are you sure you want to delete Bill "${bill.billNo}"? This action cannot be undone.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeletingBill(true);
+    try {
+      await Promise.all(
+        bill.installments.map((inst: any) => api.post(`/expense/entries/${inst.id}/delete`))
+      );
+      toast.success(`Bill "${bill.billNo}" deleted successfully!`);
+      queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete bill.');
+    } finally {
+      setIsDeletingBill(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-16">
       {/* ─── 1. PAGE HEADER ───────────────────────────────────────────────────── */}
@@ -1368,6 +1455,25 @@ export default function ExpensesPage() {
                                 <span>Ledger</span>
                               </button>
                             )}
+
+                            <button
+                              onClick={() => handleOpenEditPayable(bill)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100 shadow-2xs transition"
+                              title="Edit Bill & Payable Details (बिल सम्पादन)"
+                            >
+                              <Edit2 size={12} />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeletePayable(bill)}
+                              disabled={isDeletingBill}
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 shadow-2xs transition disabled:opacity-50"
+                              title="Delete Bill and Associated Entries (बिल खारेज)"
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2660,6 +2766,147 @@ export default function ExpensesPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 9. EDIT PAYABLE BILL MODAL ─────────────────────────────────────── */}
+      {editingPayableBill && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+                  <Edit2 size={16} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-[#1e3a5f]">
+                    Edit Payable Bill Details (बिल तथा हिसाब सम्पादन)
+                  </h3>
+                  <p className="text-[11px] text-gray-400 font-mono">
+                    Bill No: <strong className="text-blue-900">{editingPayableBill.billNo}</strong> | Total Paid: Rs. {editingPayableBill.totalPaidAmount.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setEditingPayableBill(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPayable} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Bill / Invoice No (बिल नं.) *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={editPayBillNo}
+                    onChange={(e) => setEditPayBillNo(e.target.value)}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Bill Date BS (मिति) *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={editPayBillDateBs}
+                    onChange={(e) => setEditPayBillDateBs(formatDateInput(e.target.value))}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Vendor / Party (पाउने व्यक्ति/संस्था)
+                  </label>
+                  <select
+                    value={editPayBillPartyId}
+                    onChange={(e) => setEditPayBillPartyId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">-- Select Party / Vendor --</option>
+                    {partiesData?.map((p: any) => (
+                      <option key={p.id} value={p.id.toString()}>
+                        {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Expense Head / Topic (खर्च शीर्षक)
+                  </label>
+                  <select
+                    value={editPayBillHeadId}
+                    onChange={(e) => setEditPayBillHeadId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">-- Select Expense Topic --</option>
+                    {headsData?.map((h: any) => (
+                      <option key={h.id} value={h.id.toString()}>
+                        {h.code ? `[${h.code}] ` : ''}{h.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Total Bill Amount in रू (कुल बिल रकम) *
+                </label>
+                <input
+                  required
+                  type="number"
+                  step="any"
+                  value={editPayBillTotalAmount}
+                  onChange={(e) => setEditPayBillTotalAmount(e.target.value)}
+                  className="erp-input font-mono font-extrabold text-purple-900"
+                />
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Currently paid: <strong className="text-emerald-700 font-mono">Rs. {editingPayableBill.totalPaidAmount.toLocaleString()}</strong> |
+                  Calculated Due: <strong className="text-rose-700 font-mono">Rs. {Math.max(0, (parseFloat(editPayBillTotalAmount || '0') - editingPayableBill.totalPaidAmount)).toLocaleString()}</strong>
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Description / Particulars (विवरण)
+                </label>
+                <textarea
+                  rows={2}
+                  value={editPayBillDescription}
+                  onChange={(e) => setEditPayBillDescription(e.target.value)}
+                  placeholder="Purchase of furniture, stationery, or equipment..."
+                  className="erp-input text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingPayableBill(null)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel (रद्द)
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 font-bold text-white shadow-xs transition"
+                >
+                  Save Bill Changes (परिवर्तन सुरक्षित)
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -202,6 +202,15 @@ router.delete('/entries/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
   }
 });
 
+router.post('/entries/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    await prisma.expenseEntry.delete({ where: { id: parseInt(req.params.id) } });
+    return res.json({ success: true, message: 'Deleted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ── INCOME vs EXPENSE SUMMARY ──────────────────────────────────────────────
 
 router.get('/summary', authenticate, async (req, res) => {
