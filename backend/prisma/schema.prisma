@@ -35,17 +35,32 @@ model School {
 
 model AcademicYear {
   id          Int      @id @default(autoincrement())
-  year        String   // e.g. "2081-82"
+  year        String   // e.g. "2083-84"
   startDateBs String
   endDateBs   String
   isActive    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  classes     Class[]
-  exams       Exam[]
+  classes         Class[]
+  exams           Exam[]
   incomeEntries   IncomeEntry[]
   expenseEntries  ExpenseEntry[]
-  payrolls    Payroll[]
+  feeCollections  FeeCollection[]
+  payrolls        Payroll[]
+}
+
+model FinancialYear {
+  id          Int      @id @default(autoincrement())
+  year        String   // e.g. "2083/84"
+  startDateBs String   // e.g. "2083-04-01"
+  endDateBs   String   // e.g. "2084-03-31"
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  incomeEntries   IncomeEntry[]
+  expenseEntries  ExpenseEntry[]
+  feeCollections  FeeCollection[]
+  payrolls        Payroll[]
 }
 
 // ─── AUTH / USERS ────────────────────────────────────────────────────────────
@@ -346,6 +361,8 @@ model IncomeEntry {
   head            IncomeHead  @relation(fields: [headId], references: [id])
   academicYearId  Int
   academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  financialYearId Int?
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
   partyId         Int?
   party           Party?      @relation(fields: [partyId], references: [id])
   sourceLevel     String?     // "Central", "Provincial", "Local", "District"
@@ -437,6 +454,10 @@ model FeeCollection {
   student         Student  @relation(fields: [studentId], references: [id])
   feeHeadId       Int
   feeHead         FeeHead  @relation(fields: [feeHeadId], references: [id])
+  academicYearId  Int?
+  academicYear    AcademicYear? @relation(fields: [academicYearId], references: [id])
+  financialYearId Int?
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
   amount          Float
   paidDateBs      String
   paidDateAd      DateTime
@@ -481,6 +502,8 @@ model ExpenseEntry {
   head            ExpenseHead @relation(fields: [headId], references: [id])
   academicYearId  Int
   academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  financialYearId Int?
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id])
   partyId         Int?
   party           Party?      @relation(fields: [partyId], references: [id])
   amount          Float
@@ -521,6 +544,8 @@ model Payroll {
   teacher                   Teacher  @relation(fields: [teacherId], references: [id])
   academicYearId            Int
   academicYear              AcademicYear @relation(fields: [academicYearId], references: [id])
+  financialYearId           Int?
+  financialYear             FinancialYear? @relation(fields: [financialYearId], references: [id])
   monthFrom                 String   // BS month e.g. "2081-04"
   monthTo                   String
   taha                      String

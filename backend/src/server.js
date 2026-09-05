@@ -39,6 +39,7 @@ app.use('/api/notices',    require('./routes/notices'));
 app.use('/api/users',      require('./routes/users'));
 app.use('/api/events',     require('./routes/events'));
 app.use('/api/parties',    require('./routes/parties'));
+app.use('/api/financial-years', require('./routes/financialYears').router);
 
 // ── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -151,8 +152,70 @@ app.listen(PORT, '0.0.0.0', async () => {
           });
         }
       }
+
+      // ── SEED DEDICATED FINANCIAL YEARS (साउन १ – असार ३१) ─────────────────
+      const standardFiscalYears = [
+        { year: '2083/84', startDateBs: '2083-04-01', endDateBs: '2084-03-31', isActive: true },
+        { year: '2082/83', startDateBs: '2082-04-01', endDateBs: '2083-03-31', isActive: false },
+        { year: '2081/82', startDateBs: '2081-04-01', endDateBs: '2082-03-31', isActive: false },
+        { year: '2080/81', startDateBs: '2080-04-01', endDateBs: '2081-03-31', isActive: false },
+        { year: '2079/80', startDateBs: '2079-04-01', endDateBs: '2080-03-31', isActive: false },
+      ];
+
+      for (const sfy of standardFiscalYears) {
+        const existingFy = await prisma.financialYear.findFirst({
+          where: { year: { in: [sfy.year, sfy.year.replace('/', '-')] } }
+        });
+        if (!existingFy) {
+          await prisma.financialYear.create({
+            data: {
+              year: sfy.year,
+              startDateBs: sfy.startDateBs,
+              endDateBs: sfy.endDateBs,
+              isActive: sfy.isActive,
+            }
+          });
+        }
+      }
+
+      // Ensure 2083/84 is marked active if no active FY
+      const activeFy = await prisma.financialYear.findFirst({ where: { isActive: true } });
+      if (!activeFy) {
+        const fy2083 = await prisma.financialYear.findFirst({ where: { year: { contains: '2083' } } });
+        if (fy2083) {
+          await prisma.financialYear.update({ where: { id: fy2083.id }, data: { isActive: true } });
+        }
+      }
+
+      // Auto-backfill financialYearId for existing entries
+      const allFiscalYears = await prisma.financialYear.findMany();
+      for (const fy of allFiscalYears) {
+        await prisma.incomeEntry.updateMany({
+          where: {
+            financialYearId: null,
+            receivedDateBs: { gte: fy.startDateBs, lte: fy.endDateBs }
+          },
+          data: { financialYearId: fy.id }
+        }).catch(() => {});
+
+        await prisma.expenseEntry.updateMany({
+          where: {
+            financialYearId: null,
+            expenseDateBs: { gte: fy.startDateBs, lte: fy.endDateBs }
+          },
+          data: { financialYearId: fy.id }
+        }).catch(() => {});
+
+        await prisma.feeCollection.updateMany({
+          where: {
+            financialYearId: null,
+            paidDateBs: { gte: fy.startDateBs, lte: fy.endDateBs }
+          },
+          data: { financialYearId: fy.id }
+        }).catch(() => {});
+      }
     } catch (yrErr) {
-      console.error('Academic year verification error:', yrErr.message);
+      console.error('Academic/Financial year verification error:', yrErr.message);
     }
 
     // Ensure super admin user exists

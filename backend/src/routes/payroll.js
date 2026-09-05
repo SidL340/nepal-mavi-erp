@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { authenticate, authorize } = require('../middleware/auth');
+const { resolveFinancialYearByDate } = require('./financialYears');
 
 const router = express.Router();
 
@@ -40,15 +41,16 @@ function calculatePayroll(data) {
 // GET /api/payroll — list
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { teacherId, academicYearId, status, page = 1, limit = 50 } = req.query;
+    const { teacherId, academicYearId, financialYearId, status, page = 1, limit = 50 } = req.query;
     const where = {};
     if (teacherId) where.teacherId = parseInt(teacherId);
-    if (academicYearId) where.academicYearId = parseInt(academicYearId);
+    if (financialYearId) where.financialYearId = parseInt(financialYearId);
+    else if (academicYearId) where.academicYearId = parseInt(academicYearId);
     if (status) where.status = status;
     const [payrolls, total] = await Promise.all([
       prisma.payroll.findMany({
         where,
-        include: { teacher: { select: { fullName: true, type: true, taha: true } }, academicYear: true },
+        include: { teacher: { select: { fullName: true, type: true, taha: true } }, academicYear: true, financialYear: true },
         orderBy: { createdAt: 'desc' },
         skip: (parseInt(page) - 1) * parseInt(limit),
         take: parseInt(limit),
@@ -69,7 +71,7 @@ router.get('/:id', authenticate, async (req, res) => {
   }
   const p = await prisma.payroll.findUnique({
     where: { id: idNum },
-    include: { teacher: true, academicYear: true },
+    include: { teacher: true, academicYear: true, financialYear: true },
   });
   if (!p) return res.status(404).json({ success: false, message: 'Not found.' });
   return res.json({ success: true, data: p });
@@ -89,10 +91,18 @@ router.post('/calculate', authenticate, async (req, res) => {
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const calc = calculatePayroll(req.body);
+    let fyId = req.body.financialYearId ? parseInt(req.body.financialYearId) : null;
+    if (!fyId && req.body.monthFrom) {
+      const dateForResolution = req.body.monthFrom.length === 7 ? `${req.body.monthFrom}-01` : req.body.monthFrom;
+      const resolved = await resolveFinancialYearByDate(dateForResolution);
+      if (resolved) fyId = resolved.id;
+    }
+
     const payroll = await prisma.payroll.create({
       data: {
         teacherId: parseInt(req.body.teacherId),
         academicYearId: parseInt(req.body.academicYearId),
+        financialYearId: fyId,
         monthFrom: req.body.monthFrom,
         monthTo: req.body.monthTo,
         taha: req.body.taha,
@@ -114,7 +124,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
         remarks: req.body.remarks,
         ...calc,
       },
-      include: { teacher: true, academicYear: true },
+      include: { teacher: true, academicYear: true, financialYear: true },
     });
     return res.status(201).json({ success: true, data: payroll });
   } catch (err) {
@@ -127,11 +137,19 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   try {
     const id = parseInt(req.params.id);
     const calc = calculatePayroll(req.body);
+    let fyId = req.body.financialYearId ? parseInt(req.body.financialYearId) : undefined;
+    if (fyId === undefined && req.body.monthFrom) {
+      const dateForResolution = req.body.monthFrom.length === 7 ? `${req.body.monthFrom}-01` : req.body.monthFrom;
+      const resolved = await resolveFinancialYearByDate(dateForResolution);
+      if (resolved) fyId = resolved.id;
+    }
+
     const payroll = await prisma.payroll.update({
       where: { id },
       data: {
         teacherId: req.body.teacherId ? parseInt(req.body.teacherId) : undefined,
         academicYearId: req.body.academicYearId ? parseInt(req.body.academicYearId) : undefined,
+        financialYearId: fyId,
         monthFrom: req.body.monthFrom,
         monthTo: req.body.monthTo,
         taha: req.body.taha,
@@ -153,8 +171,9 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
         remarks: req.body.remarks,
         ...calc,
       },
-      include: { teacher: true, academicYear: true },
+      include: { teacher: true, academicYear: true, financialYear: true },
     });
+    return res.json({ success: true, data: payroll, message: 'Payroll record updated successfully.' });
     return res.json({ success: true, data: payroll, message: 'Payroll record updated successfully.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

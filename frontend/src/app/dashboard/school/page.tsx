@@ -94,11 +94,24 @@ export default function SchoolProfilePage() {
     }
   }, [schoolData]);
 
+  // Financial Year State
+  const [isAddFinancialYearOpen, setIsAddFinancialYearOpen] = useState(false);
+  const [editingFinancialYear, setEditingFinancialYear] = useState<any>(null);
+
   // Fetch Academic Years
   const { data: yearsData } = useQuery({
     queryKey: ['academic-years'],
     queryFn: async () => {
       const res = await api.get('/classes/academic-years/all');
+      return res.data?.data || [];
+    },
+  });
+
+  // Fetch Financial Years (आर्थिक वर्षहरू)
+  const { data: financialYearsData } = useQuery({
+    queryKey: ['financial-years'],
+    queryFn: async () => {
+      const res = await api.get('/financial-years/all');
       return res.data?.data || [];
     },
   });
@@ -177,6 +190,66 @@ export default function SchoolProfilePage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to save Academic Year');
+    },
+  });
+
+  // Save/Update Financial Year Mutation (आर्थिक वर्ष)
+  const saveFinancialYearMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      if (editingFinancialYear) {
+        const res = await api.put(`/financial-years/${editingFinancialYear.id}`, payload);
+        return res.data;
+      } else {
+        const res = await api.post('/financial-years', payload);
+        return res.data;
+      }
+    },
+    onSuccess: () => {
+      toast.success(editingFinancialYear ? 'Financial Year updated!' : 'Financial Year added successfully!');
+      setIsAddFinancialYearOpen(false);
+      setEditingFinancialYear(null);
+      queryClient.invalidateQueries({ queryKey: ['financial-years'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to save Financial Year');
+    },
+  });
+
+  // Activate Financial Year Mutation
+  const activateFinancialYearMutation = useMutation({
+    mutationFn: async (fyId: number) => {
+      const res = await api.patch(`/financial-years/${fyId}/activate`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Financial Year activated for all accounting!');
+      queryClient.invalidateQueries({ queryKey: ['financial-years'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to activate Financial Year');
+    },
+  });
+
+  // Delete Financial Year Mutation
+  const deleteFinancialYearMutation = useMutation({
+    mutationFn: async ({ fyId, force }: { fyId: number; force?: boolean }) => {
+      const res = await api.post(`/financial-years/${fyId}/delete`, { force: !!force });
+      return res.data;
+    },
+    onSuccess: (res: any) => {
+      toast.success(res?.message || 'Financial Year deleted.');
+      queryClient.invalidateQueries({ queryKey: ['financial-years'] });
+    },
+    onError: (err: any, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['financial-years'] });
+      const msg = err.response?.data?.message || 'Failed to delete Financial Year.';
+      if (err.response?.status === 400 && msg.includes('linked transactions') && !variables.force) {
+        if (window.confirm(`${msg}\n\nDo you want to FORCE reassign all its linked transactions to the Active Financial Year and delete it?`)) {
+          deleteFinancialYearMutation.mutate({ fyId: variables.fyId, force: true });
+          return;
+        }
+      }
+      toast.error(msg);
     },
   });
 
@@ -670,104 +743,239 @@ export default function SchoolProfilePage() {
 
       {/* ─── TAB 2: ACADEMIC & FINANCIAL YEARS ─────────────────────────── */}
       {activeTab === 'years' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
-            <div>
-              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Calendar size={16} className="text-[#1e3a5f]" />
-                <span>शैक्षिक सत्र तथा आर्थिक वर्ष व्यवस्थापन (Academic & Fiscal Years)</span>
-              </h2>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                शैक्षिक सत्र (Baisakh–Chaitra) विद्यार्थी तथा परीक्षाका लागि र आर्थिक वर्ष (Shrawan–Ashadh) सम्पूर्ण आय, व्यय, शुल्क तथा तलब भुक्तानीका लागि प्रयोग हुन्छ।
-              </p>
+        <div className="space-y-8">
+          {/* ══════════ SECTION 1: ACADEMIC YEARS ══════════ */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-100 text-[#1e3a5f] font-bold text-xs">१</span>
+                  <h2 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                    <Calendar size={16} className="text-[#1e3a5f]" />
+                    <span>शैक्षिक सत्रहरू (Academic Years — बैशाख १ देखि चैत मसान्त)</span>
+                  </h2>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1 pl-8">
+                  विद्यार्थी भर्ना, कक्षा विभाजन, हाजिरी, परीक्षा सञ्चालन, ग्रेडसिट तथा प्रमाणपत्रहरूका लागि प्रयोग हुने शैक्षिक सत्र।
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pl-8 sm:pl-0">
+                <button
+                  type="button"
+                  onClick={() => deduplicateYearsMutation.mutate()}
+                  disabled={deduplicateYearsMutation.isPending}
+                  className="inline-flex items-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-3 py-1.5 text-xs font-bold transition shadow-2xs disabled:opacity-60"
+                  title="दोहोरिएका सत्रहरू हटाएर सफा गर्नुहोस्"
+                >
+                  <RefreshCw size={13} className={deduplicateYearsMutation.isPending ? 'animate-spin' : ''} />
+                  <span>{deduplicateYearsMutation.isPending ? 'सफा गर्दै...' : 'दोहोरिएका हटाउनुहोस्'}</span>
+                </button>
+                <button
+                  onClick={() => setIsAddYearOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition"
+                >
+                  <Plus size={14} />
+                  <span>नयाँ शैक्षिक सत्र (Add Academic Year)</span>
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => deduplicateYearsMutation.mutate()}
-                disabled={deduplicateYearsMutation.isPending}
-                className="inline-flex items-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 px-3 py-1.5 text-xs font-bold transition shadow-2xs disabled:opacity-60"
-                title="दोहोरिएका वर्षहरू हटाएर सफा गर्नुहोस्"
-              >
-                <RefreshCw size={13} className={deduplicateYearsMutation.isPending ? 'animate-spin' : ''} />
-                <span>{deduplicateYearsMutation.isPending ? 'सफा गर्दै...' : 'दोहोरिएका हटाउनुहोस्'}</span>
-              </button>
-              <button
-                onClick={() => setIsAddYearOpen(true)}
-                className="inline-flex items-center gap-1 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition"
-              >
-                <Plus size={14} />
-                <span>नयाँ वर्ष थप्नुहोस् (Add Year)</span>
-              </button>
+
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#1e3a5f] text-white">
+                  <tr>
+                    <th className="p-3.5 font-bold">शैक्षिक सत्र (Academic Year)</th>
+                    <th className="p-3.5 font-bold">सुरु मिति (Start Date BS)</th>
+                    <th className="p-3.5 font-bold">अन्तिम मिति (End Date BS)</th>
+                    <th className="p-3.5 font-bold text-center">स्थिति (Status)</th>
+                    <th className="p-3.5 font-bold text-right">कार्य (Action)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {years.map((y: any) => (
+                    <tr key={y.id} className="hover:bg-slate-50">
+                      <td className="p-3.5 font-mono font-bold text-gray-900">{y.year}</td>
+                      <td className="p-3.5 font-mono text-gray-600">{y.startDateBs}</td>
+                      <td className="p-3.5 font-mono text-gray-600">{y.endDateBs}</td>
+                      <td className="p-3.5 text-center">
+                        <span
+                          className={`rounded px-2.5 py-0.5 text-[10px] font-bold ${
+                            y.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {y.isActive ? 'ACTIVE (सक्रिय)' : 'INACTIVE'}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {!y.isActive && (
+                            <button
+                              onClick={() => activateYearMutation.mutate(y.id)}
+                              className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
+                              title="Set as Active Academic Year"
+                            >
+                              Set Active
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingYear(y);
+                              setIsAddYearOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1e3a5f] border border-blue-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                            title="Edit Academic Year"
+                          >
+                            <Edit2 size={12} />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete Academic Year "${y.year}"?`)) {
+                                deleteYearMutation.mutate({ yearId: y.id });
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                            title="Delete Academic Year"
+                          >
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {years.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-gray-400">
+                        कुनै शैक्षिक सत्र फेला परेन।
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#1e3a5f] text-white">
-                <tr>
-                  <th className="p-3.5 font-bold">वर्ष / सत्र (Year / Session)</th>
-                  <th className="p-3.5 font-bold">सुरु मिति (Start Date BS)</th>
-                  <th className="p-3.5 font-bold">अन्तिम मिति (End Date BS)</th>
-                  <th className="p-3.5 font-bold text-center">स्थिति (Status)</th>
-                  <th className="p-3.5 font-bold text-right">कार्य (Action)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {years.map((y: any) => (
-                  <tr key={y.id} className="hover:bg-slate-50">
-                    <td className="p-3.5 font-mono font-bold text-gray-900">{y.year}</td>
-                    <td className="p-3.5 font-mono">{y.startDateBs}</td>
-                    <td className="p-3.5 font-mono">{y.endDateBs}</td>
-                    <td className="p-3.5 text-center">
-                      <span
-                        className={`rounded px-2.5 py-0.5 text-[10px] font-bold ${
-                          y.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {y.isActive ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {!y.isActive && (
-                          <button
-                            onClick={() => activateYearMutation.mutate(y.id)}
-                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
-                            title="Set as Active Academic Year"
-                          >
-                            Set Active
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setEditingYear(y);
-                            setIsAddYearOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#1e3a5f] border border-blue-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
-                          title="Edit Academic Year"
-                        >
-                          <Edit2 size={12} />
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete Academic Year "${y.year}"?`)) {
-                              deleteYearMutation.mutate({ yearId: y.id });
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
-                          title="Delete Academic Year"
-                        >
-                          <Trash2 size={12} />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </td>
+          {/* ══════════ SECTION 2: FINANCIAL / FISCAL YEARS ══════════ */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl border border-emerald-100 bg-emerald-50/20 shadow-2xs">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs">२</span>
+                  <h2 className="text-sm font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Landmark size={16} className="text-emerald-700" />
+                    <span>आर्थिक वर्षहरू (Financial / Fiscal Years — साउन १ देखि असार मसान्त)</span>
+                  </h2>
+                </div>
+                <p className="text-[11px] text-emerald-800/80 mt-1 pl-8">
+                  सरकारी अनुदान, आम्दानी (Income), खर्च (Expense), शुल्क रसिद (Fee Collection), तलब (Payroll) र वार्षिक आय-व्यय प्रतिवेदनका लागि छुट्टै आर्थिक वर्ष।
+                </p>
+              </div>
+              <div className="pl-8 sm:pl-0">
+                <button
+                  onClick={() => {
+                    setEditingFinancialYear(null);
+                    setIsAddFinancialYearOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition"
+                >
+                  <Plus size={14} />
+                  <span>नयाँ आर्थिक वर्ष (Add Financial Year)</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-emerald-800 text-white">
+                  <tr>
+                    <th className="p-3.5 font-bold">आर्थिक वर्ष (Fiscal Year)</th>
+                    <th className="p-3.5 font-bold">सुरु मिति (Start Date BS)</th>
+                    <th className="p-3.5 font-bold">अन्तिम मिति (End Date BS)</th>
+                    <th className="p-3.5 font-bold text-center">कारोबार संख्या (Records)</th>
+                    <th className="p-3.5 font-bold text-center">स्थिति (Status)</th>
+                    <th className="p-3.5 font-bold text-right">कार्य (Action)</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(financialYearsData || []).map((fy: any) => {
+                    const totalRecords =
+                      (fy._count?.incomeEntries || 0) +
+                      (fy._count?.expenseEntries || 0) +
+                      (fy._count?.feeCollections || 0) +
+                      (fy._count?.payrolls || 0);
+
+                    return (
+                      <tr key={fy.id} className="hover:bg-slate-50">
+                        <td className="p-3.5 font-mono font-bold text-gray-900 flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                          <span>{fy.year}</span>
+                        </td>
+                        <td className="p-3.5 font-mono text-gray-600">{fy.startDateBs}</td>
+                        <td className="p-3.5 font-mono text-gray-600">{fy.endDateBs}</td>
+                        <td className="p-3.5 text-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                            {totalRecords} प्रविष्टि
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-center">
+                          <span
+                            className={`rounded px-2.5 py-0.5 text-[10px] font-bold ${
+                              fy.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {fy.isActive ? 'ACTIVE (सक्रिय)' : 'INACTIVE'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {!fy.isActive && (
+                              <button
+                                onClick={() => activateFinancialYearMutation.mutate(fy.id)}
+                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs"
+                                title="Set as Active Financial Year"
+                              >
+                                Set Active
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setEditingFinancialYear(fy);
+                                setIsAddFinancialYearOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                              title="Edit Financial Year"
+                            >
+                              <Edit2 size={12} />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete Financial Year "${fy.year}"?`)) {
+                                  deleteFinancialYearMutation.mutate({ fyId: fy.id });
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2.5 py-1 text-xs font-bold transition shadow-2xs"
+                              title="Delete Financial Year"
+                            >
+                              <Trash2 size={12} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {(!financialYearsData || financialYearsData.length === 0) && (
+                    <tr>
+                      <td colSpan={6} className="p-4 text-center text-gray-400">
+                        कुनै आर्थिक वर्ष फेला परेन।
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1073,6 +1281,101 @@ export default function SchoolProfilePage() {
                 <button type="button" onClick={() => { setIsAddYearOpen(false); setEditingYear(null); }} className="px-3 py-1.5 border rounded-lg">Cancel</button>
                 <button type="submit" disabled={saveYearMutation.isPending} className="px-4 py-1.5 bg-[#1e3a5f] text-white font-bold rounded-lg hover:bg-blue-900 transition">
                   {saveYearMutation.isPending ? 'Saving...' : editingYear ? 'Update Year' : 'Save Year'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ADD / EDIT FINANCIAL YEAR MODAL (आर्थिक वर्ष) ───────────────── */}
+      {isAddFinancialYearOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 border border-emerald-100">
+            <div className="flex justify-between items-center border-b border-emerald-100 pb-2">
+              <div className="flex items-center gap-2">
+                <Landmark size={18} className="text-emerald-700" />
+                <h3 className="font-bold text-sm text-emerald-950">
+                  {editingFinancialYear ? 'Edit Financial Year (आर्थिक वर्ष सम्पादन)' : 'Add Financial Year (नयाँ आर्थिक वर्ष थप्नुहोस्)'}
+                </h3>
+              </div>
+              <button onClick={() => { setIsAddFinancialYearOpen(false); setEditingFinancialYear(null); }}><X size={16} /></button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const fd = new FormData(e.currentTarget);
+                saveFinancialYearMutation.mutate({
+                  year: fd.get('year'),
+                  startDateBs: fd.get('startDateBs'),
+                  endDateBs: fd.get('endDateBs'),
+                  isActive: fd.get('isActive') === 'on',
+                });
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold mb-1 text-gray-700">Fiscal Year Code (e.g. 2083/84 or 2082/83) *</label>
+                <input
+                  required
+                  name="year"
+                  type="text"
+                  defaultValue={editingFinancialYear?.year || ''}
+                  placeholder="2083/84"
+                  className="erp-input font-bold font-mono"
+                />
+                <p className="text-[10px] text-gray-400 mt-0.5">नेपाल सरकारको ढाँचा: २०८३/८४</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1 text-gray-700">Start Date (साउन १) *</label>
+                  <input
+                    required
+                    name="startDateBs"
+                    type="text"
+                    defaultValue={editingFinancialYear?.startDateBs || '2083-04-01'}
+                    placeholder="2083-04-01"
+                    className="erp-input font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1 text-gray-700">End Date (असार मसान्त) *</label>
+                  <input
+                    required
+                    name="endDateBs"
+                    type="text"
+                    defaultValue={editingFinancialYear?.endDateBs || '2084-03-31'}
+                    placeholder="2084-03-31"
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="fyActiveToggle"
+                  name="isActive"
+                  defaultChecked={editingFinancialYear ? editingFinancialYear.isActive : false}
+                  className="rounded text-emerald-700 focus:ring-emerald-700"
+                />
+                <label htmlFor="fyActiveToggle" className="font-bold text-gray-700 cursor-pointer">
+                  Set as Active Financial Year (हालको सक्रिय आर्थिक वर्ष बनाउनुहोस्)
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddFinancialYearOpen(false); setEditingFinancialYear(null); }}
+                  className="px-3.5 py-1.5 border rounded-xl font-semibold"
+                >
+                  रद्द गर्नुहोस् (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={saveFinancialYearMutation.isPending}
+                  className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition shadow-xs disabled:opacity-60"
+                >
+                  {saveFinancialYearMutation.isPending ? 'बचत गर्दै...' : editingFinancialYear ? 'अपडेट गर्नुहोस् (Update)' : 'सुरक्षित गर्नुहोस् (Save)'}
                 </button>
               </div>
             </form>

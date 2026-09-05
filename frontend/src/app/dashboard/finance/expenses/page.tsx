@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS, formatDateInput } from '@/lib/nepali-date';
+import { todayBS, formatDateInput, resolveFinancialYear, getFiscalYearFromBS } from '@/lib/nepali-date';
 import {
   TrendingDown,
   Plus,
@@ -141,6 +141,17 @@ export default function ExpensesPage() {
   });
   const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0];
 
+  // Financial Years (साउन–असार)
+  const { data: financialYearsData } = useQuery({
+    queryKey: ['financial-years-all'],
+    queryFn: async () => {
+      const res = await api.get('/financial-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
+  const autoResolvedFY = resolveFinancialYear(addExpenseDateBs, financialYearsData || []);
+
   // Resolve current filtered year ID
   const effectiveYearId = selectedYearFilter === 'ALL'
     ? ''
@@ -248,7 +259,8 @@ export default function ExpensesPage() {
     mutationFn: async (formData: any) => {
       const res = await api.post('/expense/entries', {
         ...formData,
-        academicYearId: formData.academicYearId ? parseInt(formData.academicYearId) : (expenseFormYearId ? parseInt(expenseFormYearId) : (activeYear?.id || 1)),
+        academicYearId: activeYear?.id || 1,
+        financialYearId: expenseFormYearId ? parseInt(expenseFormYearId) : (autoResolvedFY?.id || activeFinancialYear?.id),
         expenseDateAd: new Date().toISOString().slice(0, 10),
       });
       return res.data;
@@ -1967,16 +1979,23 @@ export default function ExpensesPage() {
             <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
               {/* Row 0: Fiscal Year Selector */}
               <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200">
-                <label className="block font-extrabold text-[#1e3a5f] mb-1">
-                  आर्थिक वर्ष (Fiscal Year) *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-extrabold text-[#1e3a5f]">
+                    आर्थिक वर्ष (Fiscal Year) *
+                  </label>
+                  {autoResolvedFY && (
+                    <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                      स्वतः पहिचान: {autoResolvedFY.year}
+                    </span>
+                  )}
+                </div>
                 <select
-                  value={expenseFormYearId || activeYear?.id || ''}
+                  value={expenseFormYearId || autoResolvedFY?.id || activeFinancialYear?.id || ''}
                   onChange={(e) => setExpenseFormYearId(e.target.value)}
                   className="erp-input font-bold text-[#1e3a5f]"
                   required
                 >
-                  {yearsData?.map((y: any) => (
+                  {financialYearsData?.map((y: any) => (
                     <option key={y.id} value={y.id}>
                       आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
                     </option>

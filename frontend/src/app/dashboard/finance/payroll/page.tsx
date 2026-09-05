@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS } from '@/lib/nepali-date';
+import { todayBS, resolveFinancialYear, getFiscalYearFromBS } from '@/lib/nepali-date';
 import {
   Wallet,
   Plus,
@@ -83,6 +83,16 @@ export default function PayrollPage() {
     },
   });
 
+  // Fetch Financial Years (आर्थिक वर्षहरू)
+  const { data: financialYearsData } = useQuery({
+    queryKey: ['financial-years-all'],
+    queryFn: async () => {
+      const res = await api.get('/financial-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
+
   // Fetch Payroll History
   const { data: payrollsData, isLoading } = useQuery({
     queryKey: ['payrolls'],
@@ -93,6 +103,7 @@ export default function PayrollPage() {
   });
 
   const activeYear = schoolProfile?.academicYears?.find((y: any) => y.isActive);
+  const autoResolvedFY = resolveFinancialYear(monthFrom.length === 7 ? `${monthFrom}-01` : monthFrom, financialYearsData || []);
 
   // ── LIVE FORM FORMULA CALCULATIONS ──────────────────────────────────────
   const gradeRakam = gradeNo * gradeAmount;
@@ -202,6 +213,7 @@ export default function PayrollPage() {
       const payload = {
         teacherId: parseInt(selectedTeacherId),
         academicYearId: activeYear?.id || 1,
+        financialYearId: autoResolvedFY?.id || activeFinancialYear?.id,
         monthFrom,
         monthTo,
         taha,
@@ -243,19 +255,11 @@ export default function PayrollPage() {
     },
   });
 
-  // Delete Payroll Mutation with Fallback
+  // Delete Payroll Mutation (Proxy-Proof)
   const deletePayrollMutation = useMutation({
     mutationFn: async (id: number) => {
-      try {
-        const res = await api.delete(`/payroll/${id}`);
-        return res.data;
-      } catch (err: any) {
-        if (err.response?.status === 404) {
-          const res = await api.post(`/payroll/${id}/delete`);
-          return res.data;
-        }
-        throw err;
-      }
+      const res = await api.post(`/payroll/${id}/delete`);
+      return res.data;
     },
     onSuccess: () => {
       toast.success('Payroll record deleted successfully.');
@@ -313,7 +317,7 @@ export default function PayrollPage() {
             <div class="header">
               <div class="school-name">${schoolProfile?.name || 'SHREE NEPAL SECONDARY SCHOOL'}</div>
               <div style="font-size: 10px; color: #64748b;">${schoolProfile?.address || 'Nepal'} | Teacher & Staff Official Pay Slip</div>
-              <div class="badge">PERIOD: ${p.monthFrom || ''} TO ${p.monthTo || ''}</div>
+              <div class="badge">आर्थिक वर्ष: ${p.financialYear?.year || getFiscalYearFromBS(p.monthFrom || todayBS())} | PERIOD: ${p.monthFrom || ''} TO ${p.monthTo || ''}</div>
             </div>
 
             <div class="meta-grid">

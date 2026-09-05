@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS } from '@/lib/nepali-date';
+import { todayBS, resolveFinancialYear, getFiscalYearFromBS, formatDateInput } from '@/lib/nepali-date';
 import {
   Receipt,
   Plus,
@@ -100,6 +100,17 @@ function FeeCollectionPortalContent() {
       return res.data?.data;
     },
   });
+
+  // Financial Years (साउन–असार)
+  const { data: financialYearsData } = useQuery({
+    queryKey: ['financial-years-all'],
+    queryFn: async () => {
+      const res = await api.get('/financial-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
+  const autoResolvedFY = resolveFinancialYear(paidDateBs, financialYearsData || []);
 
   // Active Classes
   const { data: classesData } = useQuery({
@@ -223,6 +234,7 @@ function FeeCollectionPortalContent() {
         paidDateBs,
         paidDateAd: new Date(),
         academicYearId: feeFormYearId ? parseInt(feeFormYearId) : (activeYear?.id || 1),
+        financialYearId: autoResolvedFY?.id || activeFinancialYear?.id,
         paymentMedium,
         paymentRef,
         chequePayeeName: paymentMedium === 'CHEQUE' ? chequePayeeName : undefined,
@@ -282,6 +294,7 @@ function FeeCollectionPortalContent() {
 
       const computedRemarks = `${dueRemarks ? `${dueRemarks} | ` : ''}[Total: Rs. ${selectedDueRecord.totalFee} | Prev Paid: Rs. ${selectedDueRecord.amount} | Due Clearance: Rs. ${payNum} | Due: Rs. ${newRemainingDue}] (Ref Receipt: ${selectedDueRecord.receiptNo})`;
 
+      const dueResolvedFY = resolveFinancialYear(duePaidDateBs, financialYearsData || []);
       const payload = {
         studentId: selectedDueRecord.studentId,
         feeHeadId: selectedDueRecord.feeHeadId,
@@ -289,6 +302,7 @@ function FeeCollectionPortalContent() {
         paidDateBs: duePaidDateBs,
         paidDateAd: new Date(),
         academicYearId: activeYear?.id || 1,
+        financialYearId: dueResolvedFY?.id || activeFinancialYear?.id,
         paymentMedium: duePaymentMedium,
         paymentRef: duePaymentRef,
         chequePayeeName: duePaymentMedium === 'CHEQUE' ? dueChequePayeeName : undefined,
@@ -528,7 +542,7 @@ function FeeCollectionPortalContent() {
               <div><strong>DATE (BS):</strong> <span style="font-family: monospace; font-weight: bold;">${r.paidDateBs || todayBS()}</span></div>
               <div><strong>STUDENT NAME:</strong> ${studentName}</div>
               <div><strong>CLASS & ROLL:</strong> ${classInfo} (Roll: ${rollNo})</div>
-              <div><strong>STUDENT ID / EMIS:</strong> <span style="font-family: monospace;">${studentId}</span></div>
+              <div><strong>FISCAL YEAR (आ.व.):</strong> <span style="font-weight: bold; color: #1e3a5f;">${r.financialYear?.year || getFiscalYearFromBS(r.paidDateBs || todayBS())}</span></div>
               <div><strong>PAYMENT METHOD:</strong> ${r.paymentMedium || 'CASH'} ${r.paymentRef ? `(Ref: ${r.paymentRef})` : ''}</div>
             </div>
 

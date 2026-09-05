@@ -97,13 +97,17 @@ router.post('/heads/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN')
   }
 });
 
+const { resolveFinancialYearByDate } = require('./financialYears');
+
 // ── EXPENSE ENTRIES ───────────────────────────────────────────────────────
 
 router.get('/entries', authenticate, async (req, res) => {
   try {
-    const { academicYearId, headId, categoryId, partyId, from, to, q, page = 1, limit = 100 } = req.query;
+    const { academicYearId, financialYearId, headId, categoryId, partyId, from, to, q, page = 1, limit = 100 } = req.query;
     const where = {};
-    if (academicYearId) where.academicYearId = parseInt(academicYearId);
+    if (financialYearId) where.financialYearId = parseInt(financialYearId);
+    else if (academicYearId) where.academicYearId = parseInt(academicYearId);
+
     if (headId) where.headId = parseInt(headId);
     if (partyId) where.partyId = parseInt(partyId);
     if (categoryId) where.head = { categoryId: parseInt(categoryId) };
@@ -127,7 +131,7 @@ router.get('/entries', authenticate, async (req, res) => {
     const [entries, total] = await Promise.all([
       prisma.expenseEntry.findMany({
         where,
-        include: { head: { include: { category: true } }, academicYear: true, party: true },
+        include: { head: { include: { category: true } }, academicYear: true, financialYear: true, party: true },
         orderBy: { expenseDateBs: 'desc' },
         skip: (parseInt(page) - 1) * parseInt(limit),
         take: parseInt(limit),
@@ -144,7 +148,7 @@ router.get('/entries', authenticate, async (req, res) => {
 router.get('/entries/:id', authenticate, async (req, res) => {
   const entry = await prisma.expenseEntry.findUnique({
     where: { id: parseInt(req.params.id) },
-    include: { head: { include: { category: true } }, academicYear: true, party: true },
+    include: { head: { include: { category: true } }, academicYear: true, financialYear: true, party: true },
   });
   if (!entry) return res.status(404).json({ success: false, message: 'Not found.' });
   return res.json({ success: true, data: entry });
@@ -152,18 +156,27 @@ router.get('/entries/:id', authenticate, async (req, res) => {
 
 router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const { expenseDateAd, headId, academicYearId, partyId, bankAccountId, amount, ...rest } = req.body;
+    const { expenseDateAd, headId, academicYearId, financialYearId, partyId, bankAccountId, amount, ...rest } = req.body;
+    
+    // Auto resolve Financial Year by expense date if not provided
+    let resolvedFyId = financialYearId ? parseInt(financialYearId) : null;
+    if (!resolvedFyId && rest.expenseDateBs) {
+      const resolved = await resolveFinancialYearByDate(rest.expenseDateBs);
+      if (resolved) resolvedFyId = resolved.id;
+    }
+
     const entry = await prisma.expenseEntry.create({
       data: {
         ...rest,
         amount: parseFloat(amount),
         expenseDateAd: expenseDateAd ? new Date(expenseDateAd) : new Date(),
         headId: parseInt(headId),
-        academicYearId: parseInt(academicYearId),
+        academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
+        financialYearId: resolvedFyId,
         partyId: partyId ? parseInt(partyId) : undefined,
         bankAccountId: bankAccountId ? parseInt(bankAccountId) : undefined,
       },
-      include: { head: { include: { category: true } }, party: true },
+      include: { head: { include: { category: true } }, financialYear: true, party: true },
     });
     return res.status(201).json({ success: true, data: entry, message: 'Expense entry recorded.' });
   } catch (err) {
@@ -173,19 +186,27 @@ router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNT
 
 router.put('/entries/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const { expenseDateAd, headId, academicYearId, partyId, bankAccountId, amount, ...rest } = req.body;
+    const { expenseDateAd, headId, academicYearId, financialYearId, partyId, bankAccountId, amount, ...rest } = req.body;
     const updateData = { ...rest };
     if (amount !== undefined) updateData.amount = parseFloat(amount);
     if (expenseDateAd) updateData.expenseDateAd = new Date(expenseDateAd);
     if (headId) updateData.headId = parseInt(headId);
     if (academicYearId) updateData.academicYearId = parseInt(academicYearId);
+    
+    if (financialYearId !== undefined) {
+      updateData.financialYearId = financialYearId ? parseInt(financialYearId) : null;
+    } else if (rest.expenseDateBs) {
+      const resolved = await resolveFinancialYearByDate(rest.expenseDateBs);
+      if (resolved) updateData.financialYearId = resolved.id;
+    }
+
     if (partyId !== undefined) updateData.partyId = partyId ? parseInt(partyId) : null;
     if (bankAccountId !== undefined) updateData.bankAccountId = bankAccountId ? parseInt(bankAccountId) : null;
 
     const entry = await prisma.expenseEntry.update({
       where: { id: parseInt(req.params.id) },
       data: updateData,
-      include: { head: { include: { category: true } }, party: true },
+      include: { head: { include: { category: true } }, financialYear: true, party: true },
     });
     return res.json({ success: true, data: entry, message: 'Expense entry updated.' });
   } catch (err) {
@@ -215,8 +236,11 @@ router.post('/entries/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN
 
 router.get('/summary', authenticate, async (req, res) => {
   try {
-    const { academicYearId } = req.query;
-    const yrFilter = academicYearId ? { academicYearId: parseInt(academicYearId) } : {};
+    const { academicYearId, financialYearId } = req.query;
+    const yrFilter = {};
+    if (financialYearId) yrFilter.financialYearId = parseInt(financialYearId);
+    else if (academicYearId) yrFilter.academicYearId = parseInt(academicYearId);
+
     const [totalIncome, totalExpense] = await Promise.all([
       prisma.incomeEntry.aggregate({ where: yrFilter, _sum: { amount: true } }),
       prisma.expenseEntry.aggregate({ where: yrFilter, _sum: { amount: true } }),

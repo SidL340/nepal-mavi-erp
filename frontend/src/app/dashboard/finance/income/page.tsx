@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS } from '@/lib/nepali-date';
+import { todayBS, resolveFinancialYear, getFiscalYearFromBS, formatDateInput } from '@/lib/nepali-date';
 import {
   TrendingUp,
   Plus,
@@ -42,6 +42,7 @@ export default function IncomePage() {
 
   // Form State
   const [incomeFormYearId, setIncomeFormYearId] = useState<string>('');
+  const [addReceivedDateBs, setAddReceivedDateBs] = useState<string>(todayBS());
   const [paymentMedium, setPaymentMedium] = useState('CASH');
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [selectedBankAcc, setSelectedBankAcc] = useState('');
@@ -68,6 +69,17 @@ export default function IncomePage() {
     },
   });
   const activeYear = yearsData?.find((y: any) => y.isActive) || yearsData?.[0];
+
+  // Financial Years (साउन–असार)
+  const { data: financialYearsData } = useQuery({
+    queryKey: ['financial-years-all'],
+    queryFn: async () => {
+      const res = await api.get('/financial-years/all');
+      return res.data?.data || [];
+    },
+  });
+  const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
+  const autoResolvedFY = resolveFinancialYear(addReceivedDateBs, financialYearsData || []);
 
   // Resolve current filtered year ID
   const effectiveYearId = selectedYearFilter === 'ALL'
@@ -173,7 +185,8 @@ export default function IncomePage() {
     mutationFn: async (formData: any) => {
       const res = await api.post('/income/entries', {
         ...formData,
-        academicYearId: incomeFormYearId ? parseInt(incomeFormYearId) : (activeYear?.id || 1),
+        academicYearId: activeYear?.id || 1,
+        financialYearId: incomeFormYearId ? parseInt(incomeFormYearId) : (autoResolvedFY?.id || activeFinancialYear?.id),
         receivedDateAd: new Date().toISOString().slice(0, 10),
       });
       return res.data;
@@ -536,14 +549,21 @@ export default function IncomePage() {
             <form onSubmit={handleAddSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">आर्थिक वर्ष (Fiscal Year) *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-gray-700">आर्थिक वर्ष (Fiscal Year) *</label>
+                    {autoResolvedFY && (
+                      <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                        स्वतः: {autoResolvedFY.year}
+                      </span>
+                    )}
+                  </div>
                   <select
-                    value={incomeFormYearId || activeYear?.id || ''}
+                    value={incomeFormYearId || autoResolvedFY?.id || activeFinancialYear?.id || ''}
                     onChange={(e) => setIncomeFormYearId(e.target.value)}
                     className="erp-input font-bold text-[#1e3a5f]"
                     required
                   >
-                    {yearsData?.map((y: any) => (
+                    {financialYearsData?.map((y: any) => (
                       <option key={y.id} value={y.id}>
                         आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
                       </option>
@@ -590,7 +610,14 @@ export default function IncomePage() {
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Received Date in BS *</label>
-                  <input required name="receivedDateBs" type="text" defaultValue={todayBS()} className="erp-input font-mono font-bold" />
+                  <input
+                    required
+                    name="receivedDateBs"
+                    type="text"
+                    value={addReceivedDateBs}
+                    onChange={(e) => setAddReceivedDateBs(formatDateInput(e.target.value))}
+                    className="erp-input font-mono font-bold"
+                  />
                 </div>
               </div>
 

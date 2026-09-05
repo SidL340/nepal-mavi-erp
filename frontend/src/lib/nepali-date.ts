@@ -127,3 +127,51 @@ export function getBSMonthDetails(year: number, month: number) {
   };
 }
 
+// Resolve matching Financial Year object from a list or derive standard FY string
+export interface FinancialYearItem {
+  id: number;
+  year: string;
+  startDateBs: string;
+  endDateBs: string;
+  isActive?: boolean;
+}
+
+export function getFiscalYearFromBS(dateBs: string): string {
+  if (!dateBs) return '';
+  const parts = dateBs.split('-');
+  const y = parseInt(parts[0]);
+  const m = parseInt(parts[1]);
+  if (isNaN(y) || isNaN(m)) return '';
+
+  if (m >= 4) {
+    // Shrawan (4) to Chaitra (12) belongs to y/(y+1)
+    const nextY = (y + 1).toString().slice(-2);
+    return `${y}/${nextY}`;
+  } else {
+    // Baisakh (1) to Ashadh (3) belongs to (y-1)/y
+    const prevY = y - 1;
+    const currY = y.toString().slice(-2);
+    return `${prevY}/${currY}`;
+  }
+}
+
+export function resolveFinancialYear(dateBs: string, fyList: FinancialYearItem[]): FinancialYearItem | null {
+  if (!dateBs || !fyList || fyList.length === 0) return null;
+  const cleanDate = dateBs.trim();
+
+  // 1. Exact range match
+  const matched = fyList.find((fy) => {
+    return fy.startDateBs <= cleanDate && cleanDate <= fy.endDateBs;
+  });
+  if (matched) return matched;
+
+  // 2. Year name match (e.g. 2083/84)
+  const derivedYear = getFiscalYearFromBS(cleanDate);
+  const byDerived = fyList.find((fy) => fy.year === derivedYear || fy.year.replace(/\s+/g, '') === derivedYear);
+  if (byDerived) return byDerived;
+
+  // 3. Fallback to active year or first
+  return fyList.find((fy) => fy.isActive) || fyList[0] || null;
+}
+
+
