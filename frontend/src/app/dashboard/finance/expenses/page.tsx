@@ -258,7 +258,12 @@ export default function ExpensesPage() {
       if (partyObj) data.paidTo = partyObj.name;
     }
 
-    if (selectedBankAcc) {
+    if (paymentMedium === 'CASH') {
+      data.bankAccountId = null;
+      data.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+      data.chequeNo = null;
+      data.chequePayeeName = null;
+    } else if (selectedBankAcc) {
       const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === selectedBankAcc);
       if (bankObj) {
         data.bankAccountId = bankObj.id;
@@ -355,7 +360,13 @@ export default function ExpensesPage() {
       data.paidTo = editPaidTo || null;
     }
 
-    if (editBankAccountId) {
+    if (editPaymentMedium === 'CASH') {
+      data.bankAccountId = null;
+      data.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+      data.chequeNo = null;
+      data.chequeDateBs = null;
+      data.chequePayeeName = null;
+    } else if (editBankAccountId) {
       const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === editBankAccountId);
       if (bankObj) {
         data.bankAccountId = bankObj.id;
@@ -771,17 +782,25 @@ export default function ExpensesPage() {
       approvedBy: 'Principal (प्रधानाध्यापक)',
     };
 
-    if (billBankAccountId && initialPaidNum > 0) {
-      const bObj = bankAccountsData?.find((b: any) => b.id.toString() === billBankAccountId);
-      if (bObj) {
-        payload.bankAccountId = bObj.id;
-        payload.paidFromAccount = `${bObj.bankName} (${bObj.accountNo})`;
+    if (initialPaidNum > 0) {
+      if (billPaymentMedium === 'CASH') {
+        payload.bankAccountId = null;
+        payload.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+        payload.chequeNo = null;
+        payload.chequePayeeName = null;
+      } else {
+        if (billBankAccountId) {
+          const bObj = bankAccountsData?.find((b: any) => b.id.toString() === billBankAccountId);
+          if (bObj) {
+            payload.bankAccountId = bObj.id;
+            payload.paidFromAccount = `${bObj.bankName} (${bObj.accountNo})`;
+          }
+        }
+        if ((billPaymentMedium === 'CHEQUE' || billPaymentMedium === 'BANK_TRANSFER') && billChequeNo) {
+          payload.chequeNo = billChequeNo;
+          payload.chequePayeeName = partyObj ? partyObj.name : null;
+        }
       }
-    }
-
-    if ((billPaymentMedium === 'CHEQUE' || billPaymentMedium === 'BANK_TRANSFER') && billChequeNo && initialPaidNum > 0) {
-      payload.chequeNo = billChequeNo;
-      payload.chequePayeeName = partyObj ? partyObj.name : null;
     }
 
     addExpenseMutation.mutate(payload, {
@@ -824,17 +843,24 @@ export default function ExpensesPage() {
       approvedBy: 'Principal (प्रधानाध्यापक)',
     };
 
-    if (instBankAccountId) {
-      const bObj = bankAccountsData?.find((b: any) => b.id.toString() === instBankAccountId);
-      if (bObj) {
-        payload.bankAccountId = bObj.id;
-        payload.paidFromAccount = `${bObj.bankName} (${bObj.accountNo})`;
+    if (instPaymentMedium === 'CASH') {
+      payload.bankAccountId = null;
+      payload.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+      payload.chequeNo = null;
+      payload.chequePayeeName = null;
+    } else {
+      if (instBankAccountId) {
+        const bObj = bankAccountsData?.find((b: any) => b.id.toString() === instBankAccountId);
+        if (bObj) {
+          payload.bankAccountId = bObj.id;
+          payload.paidFromAccount = `${bObj.bankName} (${bObj.accountNo})`;
+        }
       }
-    }
 
-    if (instPaymentMedium === 'CHEQUE' || instPaymentMedium === 'BANK_TRANSFER') {
-      payload.chequeNo = instChequeNo || null;
-      payload.chequePayeeName = instChequePayeeName || selectedPayableBill.partyName;
+      if (instPaymentMedium === 'CHEQUE' || instPaymentMedium === 'BANK_TRANSFER') {
+        payload.chequeNo = instChequeNo || null;
+        payload.chequePayeeName = instChequePayeeName || selectedPayableBill.partyName;
+      }
     }
 
     addExpenseMutation.mutate(payload, {
@@ -1464,7 +1490,7 @@ export default function ExpensesPage() {
                   Initial Down Payment (पहिलो किस्ता/अग्रिम भुक्तानी - ऐच्छिक):
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-gray-700 mb-1">Initial Paid (रू)</label>
                     <input
@@ -1484,39 +1510,48 @@ export default function ExpensesPage() {
                       onChange={(e) => setBillPaymentMedium(e.target.value)}
                       className="erp-input font-bold"
                     >
+                      <option value="CASH">Cash (नगद भुक्तानी - Cash A/c)</option>
                       <option value="CHEQUE">Cheque (चेक)</option>
                       <option value="BANK_TRANSFER">Bank Transfer</option>
-                      <option value="CASH">Cash (नगद)</option>
                     </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">Cheque No (चेक नं.)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 984124"
-                      value={billChequeNo}
-                      onChange={(e) => setBillChequeNo(e.target.value)}
-                      className="erp-input font-mono font-bold"
-                    />
                   </div>
                 </div>
 
-                {parseFloat(billInitialPaid || '0') > 0 && (
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">School Bank Account</label>
-                    <select
-                      value={billBankAccountId}
-                      onChange={(e) => setBillBankAccountId(e.target.value)}
-                      className="erp-input font-bold"
-                    >
-                      <option value="">-- Select Bank Account --</option>
-                      {bankAccountsData?.map((b: any) => (
-                        <option key={b.id} value={b.id}>
-                          {b.bankName} - {b.accountNo}
-                        </option>
-                      ))}
-                    </select>
+                {parseFloat(billInitialPaid || '0') > 0 && billPaymentMedium === 'CASH' && (
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-2.5 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                    <span>💵</span>
+                    <span>Disbursing From: <strong>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</strong></span>
+                  </div>
+                )}
+
+                {parseFloat(billInitialPaid || '0') > 0 && billPaymentMedium !== 'CASH' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-gray-700 mb-1">School Bank Account *</label>
+                      <select
+                        value={billBankAccountId}
+                        onChange={(e) => setBillBankAccountId(e.target.value)}
+                        className="erp-input font-bold"
+                      >
+                        <option value="">-- Select Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bankName} - {b.accountNo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-gray-700 mb-1">Cheque No (चेक नं.)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 984124"
+                        value={billChequeNo}
+                        onChange={(e) => setBillChequeNo(e.target.value)}
+                        className="erp-input font-mono font-bold"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1619,62 +1654,88 @@ export default function ExpensesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-extrabold text-gray-800 mb-1">
-                    Payment Medium *
-                  </label>
-                  <select
-                    value={instPaymentMedium}
-                    onChange={(e) => setInstPaymentMedium(e.target.value)}
-                    className="erp-input font-bold"
-                  >
-                    <option value="CHEQUE">Cheque (चेक)</option>
-                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                    <option value="CASH">Cash (नगद)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-extrabold text-gray-800 mb-1">
-                    Cheque No (चेक नं.)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 509214"
-                    value={instChequeNo}
-                    onChange={(e) => setInstChequeNo(e.target.value)}
-                    className="erp-input font-mono font-bold text-purple-900"
-                  />
-                </div>
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Payment Medium (भुक्तानी विधि) *
+                </label>
+                <select
+                  value={instPaymentMedium}
+                  onChange={(e) => setInstPaymentMedium(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="CASH">Cash (नगद भुक्तानी - Cash A/c)</option>
+                  <option value="CHEQUE">Cheque (चेक)</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-extrabold text-gray-800 mb-1">
-                    Cheque Payee Name (चेक पाउनेको नाम)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={selectedPayableBill.partyName}
-                    value={instChequePayeeName}
-                    onChange={(e) => setInstChequePayeeName(e.target.value)}
-                    className="erp-input font-bold"
-                  />
+              {instPaymentMedium === 'CASH' ? (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-3 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                  <span className="text-base">💵</span>
+                  <span>Disbursing From: <strong>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</strong></span>
                 </div>
+              ) : (
+                <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-extrabold text-purple-950 mb-1">
+                        School Bank Account *
+                      </label>
+                      <select
+                        value={instBankAccountId}
+                        onChange={(e) => setInstBankAccountId(e.target.value)}
+                        className="erp-input font-bold"
+                        required={instPaymentMedium !== 'CASH'}
+                      >
+                        <option value="">-- Select Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bankName} - {b.accountNo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div>
-                  <label className="block font-extrabold text-gray-800 mb-1">
-                    Custom Voucher No (ऐच्छिक)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Auto Generated if blank"
-                    value={instVoucherNo}
-                    onChange={(e) => setInstVoucherNo(e.target.value)}
-                    className="erp-input font-mono font-bold"
-                  />
+                    <div>
+                      <label className="block font-extrabold text-purple-950 mb-1">
+                        Cheque No (चेक नं.)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 509214"
+                        value={instChequeNo}
+                        onChange={(e) => setInstChequeNo(e.target.value)}
+                        className="erp-input font-mono font-bold text-purple-900 border-purple-300"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-extrabold text-purple-950 mb-1">
+                      Cheque Payee Name (चेक पाउनेको नाम)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={selectedPayableBill.partyName}
+                      value={instChequePayeeName}
+                      onChange={(e) => setInstChequePayeeName(e.target.value)}
+                      className="erp-input font-bold border-purple-300"
+                    />
+                  </div>
                 </div>
+              )}
+
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Custom Voucher No (ऐच्छिक)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Auto Generated if blank"
+                  value={instVoucherNo}
+                  onChange={(e) => setInstVoucherNo(e.target.value)}
+                  className="erp-input font-mono font-bold"
+                />
               </div>
 
               <div>
@@ -1865,25 +1926,34 @@ export default function ExpensesPage() {
                   <label className="block font-extrabold text-gray-800 mb-1">
                     Paid From Account (कुन खाताबाट)
                   </label>
-                  <select
-                    value={selectedBankAcc}
-                    onChange={(e) => setSelectedBankAcc(e.target.value)}
-                    className="erp-input font-bold mb-1"
-                  >
-                    <option value="">-- Select School Bank Account --</option>
-                    {bankAccountsData?.map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {b.bankName} - {b.accountName} ({b.accountNo})
-                      </option>
-                    ))}
-                  </select>
-                  {!selectedBankAcc && (
-                    <input
-                      name="paidFromAccount"
-                      type="text"
-                      defaultValue="School Operational Account"
-                      className="erp-input"
-                    />
+                  {paymentMedium === 'CASH' ? (
+                    <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                      <span>💵</span>
+                      <span>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedBankAcc}
+                        onChange={(e) => setSelectedBankAcc(e.target.value)}
+                        className="erp-input font-bold mb-1"
+                      >
+                        <option value="">-- Select School Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bankName} - {b.accountName} ({b.accountNo})
+                          </option>
+                        ))}
+                      </select>
+                      {!selectedBankAcc && (
+                        <input
+                          name="paidFromAccount"
+                          type="text"
+                          defaultValue="School Operational Account"
+                          className="erp-input"
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -2137,25 +2207,34 @@ export default function ExpensesPage() {
                   <label className="block font-extrabold text-gray-800 mb-1">
                     Paid From Account (कुन खाताबाट)
                   </label>
-                  <select
-                    value={editBankAccountId}
-                    onChange={(e) => setEditBankAccountId(e.target.value)}
-                    className="erp-input font-bold mb-1"
-                  >
-                    <option value="">-- Select School Bank Account --</option>
-                    {bankAccountsData?.map((b: any) => (
-                      <option key={b.id} value={b.id.toString()}>
-                        {b.bankName} - {b.accountName} ({b.accountNo})
-                      </option>
-                    ))}
-                  </select>
-                  {!editBankAccountId && (
-                    <input
-                      type="text"
-                      value={editPaidFromAccount}
-                      onChange={(e) => setEditPaidFromAccount(e.target.value)}
-                      className="erp-input"
-                    />
+                  {editPaymentMedium === 'CASH' ? (
+                    <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                      <span>💵</span>
+                      <span>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={editBankAccountId}
+                        onChange={(e) => setEditBankAccountId(e.target.value)}
+                        className="erp-input font-bold mb-1"
+                      >
+                        <option value="">-- Select School Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id.toString()}>
+                            {b.bankName} - {b.accountName} ({b.accountNo})
+                          </option>
+                        ))}
+                      </select>
+                      {!editBankAccountId && (
+                        <input
+                          type="text"
+                          value={editPaidFromAccount}
+                          onChange={(e) => setEditPaidFromAccount(e.target.value)}
+                          className="erp-input"
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               </div>

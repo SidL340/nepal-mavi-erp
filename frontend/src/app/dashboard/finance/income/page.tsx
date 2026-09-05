@@ -236,7 +236,12 @@ export default function IncomePage() {
       if (partyObj) data.sourceOrg = partyObj.name;
     }
 
-    if (selectedBankAcc) {
+    if (paymentMedium === 'CASH') {
+      data.bankAccountId = null;
+      data.depositedInAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+      data.chequeNo = null;
+      data.chequeDateBs = null;
+    } else if (selectedBankAcc) {
       const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === selectedBankAcc);
       if (bankObj) {
         data.bankAccountId = bankObj.id;
@@ -607,19 +612,28 @@ export default function IncomePage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Deposited In School Bank A/C</label>
-                  <select
-                    value={selectedBankAcc}
-                    onChange={(e) => setSelectedBankAcc(e.target.value)}
-                    className="erp-input font-bold mb-1"
-                  >
-                    <option value="">-- Select Bank Account --</option>
-                    {bankAccountsData?.map((b: any) => (
-                      <option key={b.id} value={b.id}>{b.bankName} - {b.accountName} ({b.accountNo})</option>
-                    ))}
-                  </select>
-                  {!selectedBankAcc && (
-                    <input name="depositedInAccount" type="text" defaultValue="Rastriya Banijya Bank Current A/C" className="erp-input" />
+                  <label className="block font-bold text-gray-700 mb-1">Deposited In Account</label>
+                  {paymentMedium === 'CASH' ? (
+                    <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                      <span>💵</span>
+                      <span>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedBankAcc}
+                        onChange={(e) => setSelectedBankAcc(e.target.value)}
+                        className="erp-input font-bold mb-1"
+                      >
+                        <option value="">-- Select Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id}>{b.bankName} - {b.accountName} ({b.accountNo})</option>
+                        ))}
+                      </select>
+                      {!selectedBankAcc && (
+                        <input name="depositedInAccount" type="text" defaultValue="Rastriya Banijya Bank Current A/C" className="erp-input" />
+                      )}
+                    </>
                   )}
                 </div>
 

@@ -440,7 +440,7 @@ export default function UnifiedFinanceHubPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
                   <CreditCard size={18} className="text-blue-600" />
-                  <span>Active School Bank Accounts (बैंक खाताहरू)</span>
+                  <span>School Cash & Bank Accounts (नगद तथा बैंक खाताहरू)</span>
                 </h2>
                 <button
                   onClick={() => setIsBankModalOpen(true)}
@@ -452,6 +452,29 @@ export default function UnifiedFinanceHubPage() {
               </div>
 
               <div className="space-y-3">
+                {/* Dedicated Cash / Petty Cash Account Card */}
+                <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                      💵
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-extrabold text-xs text-emerald-950">विद्यालय नगद खाता (School Cash A/c)</p>
+                        <span className="bg-emerald-200/80 text-emerald-900 font-extrabold text-[9px] px-1.5 py-0.5 rounded">
+                          CASH IN HAND
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800 font-medium mt-0.5 font-nepali">
+                        नगदमा संकलन भएको शुल्क, नगद अनुदान तथा दैनिक नगदी खर्च (Petty Cash Flow)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs font-black text-emerald-950 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
+                    CASH-ACC
+                  </span>
+                </div>
+
                 {bankAccountsData?.map((bank: any) => (
                   <div key={bank.id} className="p-3.5 rounded-xl border border-gray-200 bg-slate-50/50 flex items-center justify-between">
                     <div>
