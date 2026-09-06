@@ -63,7 +63,17 @@ router.get('/heads', authenticate, async (req, res) => {
 
 router.post('/heads', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const head = await prisma.expenseHead.create({ data: req.body });
+    const { name, nameNepali, code, categoryId, isActive } = req.body;
+    const head = await prisma.expenseHead.create({
+      data: {
+        name,
+        nameNepali: nameNepali || null,
+        code: code ? String(code).trim() : null,
+        categoryId: parseInt(categoryId),
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
+      },
+      include: { category: true },
+    });
     return res.status(201).json({ success: true, data: head, message: 'Expense Head created.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -72,12 +82,25 @@ router.post('/heads', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTAN
 
 router.put('/heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const head = await prisma.expenseHead.update({ where: { id: parseInt(req.params.id) }, data: req.body });
+    const { name, nameNepali, code, categoryId, isActive } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (nameNepali !== undefined) updateData.nameNepali = nameNepali || null;
+    if (code !== undefined) updateData.code = code ? String(code).trim() : null;
+    if (categoryId !== undefined) updateData.categoryId = parseInt(categoryId);
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+
+    const head = await prisma.expenseHead.update({
+      where: { id: parseInt(req.params.id) },
+      data: updateData,
+      include: { category: true },
+    });
     return res.json({ success: true, data: head, message: 'Expense Head updated.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 router.delete('/heads/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {

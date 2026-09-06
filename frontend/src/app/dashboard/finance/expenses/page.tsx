@@ -26,8 +26,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function ExpensesPage() {
+
   const queryClient = useQueryClient();
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedHeadFilter, setSelectedHeadFilter] = useState('');
@@ -2436,19 +2438,18 @@ export default function ExpensesPage() {
                       <span>+ Add Topic (नयाँ शीर्षक)</span>
                     </button>
                   </div>
-                  <select
+                  <SearchableSelect
+                    placeholder="-- Select Expense Topic (शीर्षक छनौट) --"
                     value={addExpenseHeadId}
-                    onChange={(e) => setAddExpenseHeadId(e.target.value)}
+                    onChange={(val) => setAddExpenseHeadId(val)}
                     required
-                    className="erp-input font-bold"
-                  >
-                    <option value="">-- Select Expense Topic (शीर्षक छनौट) --</option>
-                    {headsData?.map((h: any) => (
-                      <option key={h.id} value={h.id.toString()}>
-                        {h.code ? `[${h.code}] ` : ''}{h.name} {h.nameNepali ? `(${h.nameNepali})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    options={(headsData || []).map((h: any) => ({
+                      value: h.id.toString(),
+                      label: h.name,
+                      sublabel: h.nameNepali || h.category?.name,
+                      code: h.code,
+                    }))}
+                  />
                 </div>
 
                 <div>
@@ -2496,25 +2497,23 @@ export default function ExpensesPage() {
                       <span>+ Add Party (नयाँ पाउने पक्ष)</span>
                     </button>
                   </div>
-                  <select
+                  <SearchableSelect
+                    placeholder="-- Select Saved Party / Vendor --"
                     value={selectedPartyId}
-                    onChange={(e) => setSelectedPartyId(e.target.value)}
-                    className="erp-input font-bold mb-1"
-                  >
-                    <option value="">-- Select Saved Party / Vendor --</option>
-                    {partiesData?.map((p: any) => (
-                      <option key={p.id} value={p.id.toString()}>
-                        {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSelectedPartyId(val)}
+                    options={(partiesData || []).map((p: any) => ({
+                      value: p.id.toString(),
+                      label: p.name,
+                      sublabel: p.nameNepali || (p.panNo ? `PAN: ${p.panNo}` : p.partyType),
+                    }))}
+                  />
                   {!selectedPartyId && (
                     <input
                       type="text"
                       placeholder="Or type Recipient / Vendor name manually..."
                       value={addExpensePaidToManual}
                       onChange={(e) => setAddExpensePaidToManual(e.target.value)}
-                      className="erp-input font-medium"
+                      className="erp-input font-medium mt-1"
                     />
                   )}
                 </div>
@@ -2549,20 +2548,18 @@ export default function ExpensesPage() {
                     </div>
                   ) : (
                     <>
-                      <select
+                      <SearchableSelect
+                        placeholder="-- Select School Bank Account --"
                         value={selectedBankAcc}
-                        onChange={(e) => setSelectedBankAcc(e.target.value)}
-                        className="erp-input font-bold mb-1"
-                      >
-                        <option value="">-- Select School Bank Account --</option>
-                        {bankAccountsData?.map((b: any) => (
-                          <option key={b.id} value={b.id.toString()}>
-                            {b.bankName} - {b.accountName} ({b.accountNo})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setSelectedBankAcc(val)}
+                        options={(bankAccountsData || []).map((b: any) => ({
+                          value: b.id.toString(),
+                          label: `${b.bankName} - ${b.accountName}`,
+                          sublabel: `Acc: ${b.accountNo}`,
+                        }))}
+                      />
                       {!selectedBankAcc && (
-                        <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 text-xs text-blue-900 font-medium">
+                        <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 text-xs text-blue-900 font-medium mt-1">
                           School Operational Account
                         </div>
                       )}
@@ -2570,6 +2567,7 @@ export default function ExpensesPage() {
                   )}
                 </div>
               </div>
+
 
               {/* Conditional Cheque Details */}
               {(paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') && (
