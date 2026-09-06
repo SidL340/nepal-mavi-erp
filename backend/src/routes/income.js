@@ -120,16 +120,38 @@ router.get('/heads', authenticate, async (req, res) => {
 router.post('/heads', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const { name, nameNepali, code, categoryId, isActive } = req.body;
-    const head = await prisma.incomeHead.create({
-      data: {
-        name,
-        nameNepali: nameNepali || null,
-        code: code ? String(code).trim() : null,
-        categoryId: parseInt(categoryId),
-        isActive: isActive !== undefined ? Boolean(isActive) : true,
-      },
-      include: { category: true },
-    });
+    let head;
+    try {
+      head = await prisma.incomeHead.create({
+        data: {
+          name,
+          nameNepali: nameNepali || null,
+          code: code ? String(code).trim() : null,
+          categoryId: parseInt(categoryId),
+          isActive: isActive !== undefined ? Boolean(isActive) : true,
+        },
+        include: { category: true },
+      });
+    } catch (createErr) {
+      if (createErr.code === 'P2002' || createErr.message?.includes('id') || createErr.message?.includes('Unique constraint')) {
+        // Heal sequence and retry with max ID + 1
+        const maxRes = await prisma.incomeHead.aggregate({ _max: { id: true } });
+        const nextId = (maxRes._max.id || 0) + 1;
+        head = await prisma.incomeHead.create({
+          data: {
+            id: nextId,
+            name,
+            nameNepali: nameNepali || null,
+            code: code ? String(code).trim() : null,
+            categoryId: parseInt(categoryId),
+            isActive: isActive !== undefined ? Boolean(isActive) : true,
+          },
+          include: { category: true },
+        });
+      } else {
+        throw createErr;
+      }
+    }
     return res.status(201).json({ success: true, data: head, message: 'Income Head created.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

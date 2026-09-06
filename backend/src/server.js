@@ -285,6 +285,27 @@ app.listen(PORT, '0.0.0.0', async () => {
 
     console.log('✅ Auto-seed verified: Super Admin ready (admin@nepalssb.edu.np / #Nepal32016)');
 
+    // Synchronize PostgreSQL auto-increment sequences safely on startup
+    try {
+      const tables = await prisma.$queryRaw`
+        SELECT table_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'id'
+          AND column_default LIKE 'nextval%';
+      `;
+      for (const t of tables) {
+        try {
+          const maxRes = await prisma.$queryRawUnsafe(`SELECT COALESCE(MAX(id), 0) as max_id FROM "${t.table_name}";`);
+          const nextVal = Number(maxRes[0]?.max_id || 0) + 1;
+          const seqRes = await prisma.$queryRawUnsafe(`SELECT pg_get_serial_sequence('"${t.table_name}"', 'id') as seq;`);
+          const seqName = seqRes[0]?.seq || `"${t.table_name}_id_seq"`;
+          await prisma.$queryRawUnsafe(`SELECT setval('${seqName}', ${nextVal}, false);`);
+        } catch (_) {}
+      }
+      console.log('✅ PostgreSQL auto-increment sequences verified & synchronized.');
+    } catch (_) {}
+
     // Initialize Automatic Daily Backup Scheduler
     const { initBackupScheduler } = require('./lib/backupScheduler');
     initBackupScheduler();
