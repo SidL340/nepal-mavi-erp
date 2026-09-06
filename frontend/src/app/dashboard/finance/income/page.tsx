@@ -26,6 +26,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SearchableSelect from '@/components/ui/SearchableSelect';
+
 
 export default function IncomePage() {
   const queryClient = useQueryClient();
@@ -57,8 +59,18 @@ export default function IncomePage() {
 
   // Inline Income Head Modal State
   const [newHeadCode, setNewHeadCode] = useState('');
+  const [newHeadCategoryId, setNewHeadCategoryId] = useState('');
   const [newHeadName, setNewHeadName] = useState('');
   const [newHeadNameNepali, setNewHeadNameNepali] = useState('');
+
+  // Bulk/Legacy Fee Collection Modal
+  const [isLegacyFeeModalOpen, setIsLegacyFeeModalOpen] = useState(false);
+  const [legacyFeeClassName, setLegacyFeeClassName] = useState('');
+  const [legacyFeeStudentCount, setLegacyFeeStudentCount] = useState('');
+  const [legacyFeeAmount, setLegacyFeeAmount] = useState('');
+  const [legacyFeeDate, setLegacyFeeDate] = useState(todayBS());
+  const [legacyFeeRemarks, setLegacyFeeRemarks] = useState('');
+  const [legacyFeePaymentMethod, setLegacyFeePaymentMethod] = useState('CASH');
 
   // Inline Party Modal State
   const [newPartyName, setNewPartyName] = useState('');
@@ -164,6 +176,7 @@ export default function IncomePage() {
       }
       setIsAddHeadModalOpen(false);
       setNewHeadCode('');
+      setNewHeadCategoryId('');
       setNewHeadName('');
       setNewHeadNameNepali('');
     },
@@ -191,6 +204,27 @@ export default function IncomePage() {
       toast.error(err.response?.data?.message || 'Failed to create party.');
     },
   });
+
+  const addLegacyFeeMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/income/entries', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Legacy/Bulk fee collection recorded as Income Entry!');
+      queryClient.invalidateQueries({ queryKey: ['income-entries'] });
+      setIsLegacyFeeModalOpen(false);
+      setLegacyFeeClassName('');
+      setLegacyFeeStudentCount('');
+      setLegacyFeeAmount('');
+      setLegacyFeeRemarks('');
+      setLegacyFeePaymentMethod('CASH');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to record legacy fee collection.');
+    },
+  });
+
 
   const addIncomeMutation = useMutation({
     mutationFn: async (formData: any) => {
@@ -340,13 +374,21 @@ export default function IncomePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setIsAddPartyModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 shadow-2xs transition"
           >
             <Users size={14} className="text-emerald-700" />
             <span>+ Add Party / Donor</span>
+          </button>
+
+          <button
+            onClick={() => setIsLegacyFeeModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 shadow-2xs transition"
+          >
+            <Receipt size={14} className="text-amber-600" />
+            <span>Legacy / Bulk Fee (सामूहिक शुल्क)</span>
           </button>
 
           <button
@@ -357,6 +399,7 @@ export default function IncomePage() {
             <span>Record Income (आम्दानी प्रविष्टि)</span>
           </button>
         </div>
+
       </div>
 
       {/* Summary Cards */}
@@ -652,19 +695,18 @@ export default function IncomePage() {
                       <span>+ Add Topic</span>
                     </button>
                   </div>
-                  <select
+                  <SearchableSelect
+                    placeholder="-- Select Income Topic --"
                     value={addIncomeHeadId}
-                    onChange={(e) => setAddIncomeHeadId(e.target.value)}
-                    className="erp-input font-bold"
+                    onChange={(val) => setAddIncomeHeadId(val)}
                     required
-                  >
-                    <option value="">-- Select Income Topic --</option>
-                    {headsData?.map((h: any) => (
-                      <option key={h.id} value={h.id.toString()}>
-                        {h.code ? `[${h.code}] ` : ''}{h.name} {h.nameNepali ? `(${h.nameNepali})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    options={(headsData || []).map((h: any) => ({
+                      value: h.id.toString(),
+                      label: h.name,
+                      sublabel: h.nameNepali || h.category?.name,
+                      code: h.code,
+                    }))}
+                  />
                 </div>
               </div>
 
@@ -706,23 +748,23 @@ export default function IncomePage() {
                       <span>+ Add Party</span>
                     </button>
                   </div>
-                  <select
+                  <SearchableSelect
+                    placeholder="-- Select Saved Party / Donor --"
                     value={selectedPartyId}
-                    onChange={(e) => setSelectedPartyId(e.target.value)}
-                    className="erp-input font-bold mb-1"
-                  >
-                    <option value="">-- Select Saved Party / Donor --</option>
-                    {partiesData?.map((p: any) => (
-                      <option key={p.id} value={p.id.toString()}>{p.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSelectedPartyId(val)}
+                    options={(partiesData || []).map((p: any) => ({
+                      value: p.id.toString(),
+                      label: p.name,
+                      sublabel: p.nameNepali || p.partyType,
+                    }))}
+                  />
                   {!selectedPartyId && (
                     <input
                       type="text"
                       placeholder="Or type organization name..."
                       value={addIncomeSourceOrg}
                       onChange={(e) => setAddIncomeSourceOrg(e.target.value)}
-                      className="erp-input"
+                      className="erp-input mt-1"
                     />
                   )}
                 </div>
@@ -777,24 +819,25 @@ export default function IncomePage() {
                     </div>
                   ) : (
                     <>
-                      <select
+                      <SearchableSelect
+                        placeholder="-- Select Bank Account --"
                         value={selectedBankAcc}
-                        onChange={(e) => setSelectedBankAcc(e.target.value)}
-                        className="erp-input font-bold mb-1"
-                      >
-                        <option value="">-- Select Bank Account --</option>
-                        {bankAccountsData?.map((b: any) => (
-                          <option key={b.id} value={b.id.toString()}>{b.bankName} - {b.accountName} ({b.accountNo})</option>
-                        ))}
-                      </select>
+                        onChange={(val) => setSelectedBankAcc(val)}
+                        options={(bankAccountsData || []).map((b: any) => ({
+                          value: b.id.toString(),
+                          label: `${b.bankName} - ${b.accountName}`,
+                          sublabel: `Acc: ${b.accountNo}`,
+                        }))}
+                      />
                       {!selectedBankAcc && (
-                        <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 text-xs text-blue-900 font-medium">
+                        <div className="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 text-xs text-blue-900 font-medium mt-1">
                           Rastriya Banijya Bank Current A/C
                         </div>
                       )}
                     </>
                   )}
                 </div>
+
 
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Remarks (कैफियत)</label>
@@ -845,13 +888,39 @@ export default function IncomePage() {
 
             <form onSubmit={(e) => {
               e.preventDefault();
+              const catId = newHeadCategoryId ? parseInt(newHeadCategoryId) : categoriesData?.[0]?.id || 1;
+              if (!catId) {
+                toast.error('कृपया श्रेणी/वर्ग छनौट गर्नुहोस् (Please select a category).');
+                return;
+              }
               createIncomeHeadMutation.mutate({
-                categoryId: categoriesData?.[0]?.id || 1,
+                categoryId: catId,
                 code: newHeadCode.trim() || undefined,
                 name: newHeadName,
                 nameNepali: newHeadNameNepali,
               });
             }} className="space-y-3">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Income Category (श्रेणी/वर्ग) *
+                </label>
+                <select
+                  required
+                  value={newHeadCategoryId}
+                  onChange={(e) => setNewHeadCategoryId(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="">-- Select Income Category --</option>
+                  {categoriesData?.map((cat: any) => (
+                    <option key={cat.id} value={cat.id.toString()}>
+                      {cat.name} {cat.nameNepali ? `(${cat.nameNepali})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-amber-700 mt-0.5 font-bold">
+                  ⚠️ यो श्रेणी नराखे 'Advance Payment' मा स्वतः जान्छ — सही श्रेणी रोज्नुहोस्।
+                </p>
+              </div>
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Accounting Code (कोड न.)</label>
                 <input type="text" placeholder="e.g. 10101, 10201" value={newHeadCode} onChange={(e) => setNewHeadCode(e.target.value)} className="erp-input font-mono font-bold" />
@@ -874,6 +943,7 @@ export default function IncomePage() {
           </div>
         </div>
       )}
+
 
       {/* Add Party Modal */}
       {isAddPartyModalOpen && (
@@ -1095,16 +1165,18 @@ export default function IncomePage() {
                     <option value="CASH">CASH (नगद)</option>
                     <option value="BANK_TRANSFER">BANK TRANSFER (बैंक ट्रान्सफर)</option>
                     <option value="CHEQUE">CHEQUE (चेक)</option>
+                    <option value="QR_CODE">QR CODE (क्युआर)</option>
                     <option value="ONLINE">ONLINE / DIGITAL (डिजिटल)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Cheque No. (Optional)</label>
+                  <label className="block font-bold text-gray-700 mb-1">Cheque No. / Trans Ref</label>
                   <input
                     type="text"
                     value={editChequeNo}
                     onChange={(e) => setEditChequeNo(e.target.value)}
+                    placeholder="CHQ-12345 / Trans Ref"
                     className="erp-input font-mono"
                   />
                 </div>
@@ -1112,16 +1184,53 @@ export default function IncomePage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Deposited In Account</label>
-                  <input
-                    type="text"
-                    value={editDepositedInAccount}
-                    onChange={(e) => setEditDepositedInAccount(e.target.value)}
-                    className="erp-input font-bold"
-                  />
+                  <label className="block font-bold text-gray-700 mb-1">Deposited In Bank Account</label>
+                  {editPaymentMedium === 'CASH' ? (
+                    <div className="p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                      <span>💵</span>
+                      <span>विद्यालय नगद खाता (School Cash)</span>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={editBankAccountId}
+                        onChange={(e) => {
+                          setEditBankAccountId(e.target.value);
+                          const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === e.target.value);
+                          if (bankObj) setEditDepositedInAccount(`${bankObj.bankName} (${bankObj.accountNo})`);
+                        }}
+                        className="erp-input font-bold mb-1"
+                      >
+                        <option value="">-- Select Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id.toString()}>{b.bankName} - {b.accountName} ({b.accountNo})</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={editDepositedInAccount}
+                        onChange={(e) => setEditDepositedInAccount(e.target.value)}
+                        placeholder="Or type account name manually..."
+                        className="erp-input text-xs"
+                      />
+                    </>
+                  )}
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Received By / Voucher No</label>
+                  <label className="block font-bold text-gray-700 mb-1">Voucher No (भौचर नं)</label>
+                  <input
+                    type="text"
+                    value={editVoucherNo}
+                    onChange={(e) => setEditVoucherNo(e.target.value)}
+                    placeholder="VOUCH-2083-001"
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Received By</label>
                   <input
                     type="text"
                     value={editReceivedBy}
@@ -1129,22 +1238,149 @@ export default function IncomePage() {
                     className="erp-input"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Remarks</label>
-                <textarea
-                  rows={2}
-                  value={editRemarks}
-                  onChange={(e) => setEditRemarks(e.target.value)}
-                  className="erp-input"
-                />
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Remarks</label>
+                  <textarea
+                    rows={2}
+                    value={editRemarks}
+                    onChange={(e) => setEditRemarks(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
                 <button type="button" onClick={() => setEditingIncome(null)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
                 <button type="submit" disabled={updateIncomeMutation.isPending} className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-xs">
                   {updateIncomeMutation.isPending ? 'Updating...' : 'Update Income Entry'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Legacy / Bulk Fee Collection Modal */}
+      {isLegacyFeeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <Receipt size={16} className="text-amber-600" />
+                  Legacy / Bulk Fee Collection (पुरानो शुल्क प्रविष्टि)
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  कक्षागत जम्मा शुल्क — विद्यार्थी-वार नभएको सामूहिक शुल्क आम्दानी प्रविष्टि
+                </p>
+              </div>
+              <button onClick={() => setIsLegacyFeeModalOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!legacyFeeAmount || parseFloat(legacyFeeAmount) <= 0) {
+                toast.error('Please enter a valid amount.');
+                return;
+              }
+              // Find the student fee income head (any head with Student Fee category)
+              const studentFeeHead = headsData?.find((h: any) =>
+                h.category?.name?.toLowerCase().includes('student') || h.category?.name?.toLowerCase().includes('fee')
+              ) || headsData?.[0];
+
+              if (!studentFeeHead) {
+                toast.error('No income head found. Please create a Student Fee income head first.');
+                return;
+              }
+
+              addLegacyFeeMutation.mutate({
+                headId: studentFeeHead.id,
+                amount: parseFloat(legacyFeeAmount),
+                receivedDateBs: legacyFeeDate || todayBS(),
+                receivedDateAd: new Date().toISOString().slice(0, 10),
+                sourceLevel: 'Other',
+                sourceOrg: `Class: ${legacyFeeClassName || 'Various Classes'}, Students: ${legacyFeeStudentCount || 'N/A'}`,
+                paymentMedium: legacyFeePaymentMethod,
+                remarks: legacyFeeRemarks
+                  ? `Bulk/Legacy Fee Collection — ${legacyFeeRemarks}`
+                  : `Bulk/Legacy Fee Collection — Class: ${legacyFeeClassName || 'Various'}, ${legacyFeeStudentCount || ''} students`,
+                academicYearId: activeYear?.id || 1,
+                financialYearId: autoResolvedFY?.id || activeFinancialYear?.id,
+              });
+            }} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Class Name (कक्षाको नाम)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Class 11 Science, Grade 9"
+                    value={legacyFeeClassName}
+                    onChange={(e) => setLegacyFeeClassName(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">No. of Students (विद्यार्थी संख्या)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 45"
+                    value={legacyFeeStudentCount}
+                    onChange={(e) => setLegacyFeeStudentCount(e.target.value)}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Total Amount Collected (जम्मा रकम रू) *</label>
+                  <input
+                    required
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 250000"
+                    value={legacyFeeAmount}
+                    onChange={(e) => setLegacyFeeAmount(e.target.value)}
+                    className="erp-input font-mono font-bold text-amber-700 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Collection Date (BS)</label>
+                  <input
+                    type="text"
+                    value={legacyFeeDate}
+                    onChange={(e) => setLegacyFeeDate(formatDateInput(e.target.value))}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Payment Method</label>
+                  <select
+                    value={legacyFeePaymentMethod}
+                    onChange={(e) => setLegacyFeePaymentMethod(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="CASH">CASH (नगद)</option>
+                    <option value="BANK_TRANSFER">BANK TRANSFER</option>
+                    <option value="CHEQUE">CHEQUE</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Remarks (कैफियत)</label>
+                  <input
+                    type="text"
+                    placeholder="Additional notes..."
+                    value={legacyFeeRemarks}
+                    onChange={(e) => setLegacyFeeRemarks(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+                <button type="button" onClick={() => setIsLegacyFeeModalOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
+                <button type="submit" disabled={addLegacyFeeMutation.isPending} className="px-5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow-xs hover:bg-amber-700">
+                  {addLegacyFeeMutation.isPending ? 'Saving...' : 'Record Bulk Fee Collection'}
                 </button>
               </div>
             </form>

@@ -44,6 +44,7 @@ export default function ExpensesPage() {
   // Form State
   const [expenseFormYearId, setExpenseFormYearId] = useState<string>('');
   const [newHeadCode, setNewHeadCode] = useState('');
+  const [newHeadCategoryId, setNewHeadCategoryId] = useState('');
   const [newHeadName, setNewHeadName] = useState('');
   const [newHeadNameNepali, setNewHeadNameNepali] = useState('');
 
@@ -256,6 +257,7 @@ export default function ExpensesPage() {
       }
       setIsAddHeadModalOpen(false);
       setNewHeadCode('');
+      setNewHeadCategoryId('');
       setNewHeadName('');
       setNewHeadNameNepali('');
     },
@@ -3032,8 +3034,13 @@ export default function ExpensesPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                const catId = newHeadCategoryId ? parseInt(newHeadCategoryId) : categoriesData?.[0]?.id || 1;
+                if (!catId) {
+                  toast.error('कृपया खर्च वर्ग छनौट गर्नुहोस् (Please select an expense category).');
+                  return;
+                }
                 createExpenseHeadMutation.mutate({
-                  categoryId: categoriesData?.[0]?.id || 1,
+                  categoryId: catId,
                   code: newHeadCode.trim() || undefined,
                   name: newHeadName,
                   nameNepali: newHeadNameNepali,
@@ -3041,6 +3048,28 @@ export default function ExpensesPage() {
               }}
               className="space-y-3 text-xs"
             >
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  Expense Category (खर्च वर्ग/समूह) *
+                </label>
+                <select
+                  required
+                  value={newHeadCategoryId}
+                  onChange={(e) => setNewHeadCategoryId(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="">-- Select Expense Category --</option>
+                  {categoriesData?.map((cat: any) => (
+                    <option key={cat.id} value={cat.id.toString()}>
+                      {cat.name} {cat.nameNepali ? `(${cat.nameNepali})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-amber-700 mt-0.5 font-bold">
+                  ⚠️ सही खर्च वर्ग छनौट गर्नुहोस् (उदाहरण: शैक्षिक सामग्री, कार्यालय सञ्चालन, तलब, आदि)
+                </p>
+              </div>
+
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Accounting Code (खर्च कोड न.)</label>
                 <input
@@ -3082,6 +3111,7 @@ export default function ExpensesPage() {
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}

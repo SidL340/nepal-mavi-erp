@@ -559,7 +559,7 @@ export default function JournalVoucherPage() {
               <div>Voucher No: <strong style="color: #1e3a5f;">${v.voucherNo || 'VOUCH-001'}</strong></div>
               <div>Date: <strong>${v.dateBs || todayBS()} BS</strong></div>
               <div>Fiscal Year: <strong style="color: #1e3a5f;">आ.व. ${v.financialYear || getFiscalYearFromBS(v.dateBs || todayBS())}</strong></div>
-              <div>Party / Recipient: <strong style="color: #1e3a5f;">${v.recipientName || 'N/A'}</strong></div>
+              <div>${v.type === 'INCOME' || v.type === 'FEE' ? 'स्रोत / दाता (Source / Donor)' : 'भुक्तानी पक्ष (Paid To)'}: <strong style="color: #1e3a5f;">${v.recipientName || 'N/A'}</strong></div>
               <div>Payment Mode: <strong style="text-transform: uppercase;">${v.paymentMedium || 'CASH'}</strong></div>
               <div>Cheque / Ref No: <strong style="color: #b91c1c;">${v.chequeNo || v.paymentRef || 'N/A'}</strong></div>
               <div style="grid-column: span 3;">Accounting Topic: <strong>${v.topic || 'General'}</strong></div>

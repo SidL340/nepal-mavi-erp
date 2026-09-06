@@ -48,8 +48,9 @@ export default function MasterHeadsPage() {
 
   // Form States
   const [feeForm, setFeeForm] = useState({ name: '', nameNepali: '', amount: '', isOptional: false });
-  const [incomeHeadForm, setIncomeHeadForm] = useState({ categoryId: '', name: '', nameNepali: '' });
-  const [expenseHeadForm, setExpenseHeadForm] = useState({ categoryId: '', name: '', nameNepali: '' });
+  const [incomeHeadForm, setIncomeHeadForm] = useState({ categoryId: '', name: '', nameNepali: '', code: '' });
+  const [expenseHeadForm, setExpenseHeadForm] = useState({ categoryId: '', name: '', nameNepali: '', code: '' });
+
 
   // Fetch Fee Heads
   const { data: feeHeads, isLoading: isFeeLoading } = useQuery({
@@ -207,7 +208,7 @@ export default function MasterHeadsPage() {
       toast.success(data.message || 'Income head saved successfully!');
       setIsAddIncomeHeadOpen(false);
       setEditingIncomeHead(null);
-      setIncomeHeadForm({ categoryId: '', name: '', nameNepali: '' });
+      setIncomeHeadForm({ categoryId: '', name: '', nameNepali: '', code: '' });
       queryClient.invalidateQueries({ queryKey: ['income-heads-all'] });
       queryClient.invalidateQueries({ queryKey: ['income-heads'] });
     },
@@ -240,11 +241,12 @@ export default function MasterHeadsPage() {
       toast.success(data.message || 'Expense head saved successfully!');
       setIsAddExpenseHeadOpen(false);
       setEditingExpenseHead(null);
-      setExpenseHeadForm({ categoryId: '', name: '', nameNepali: '' });
+      setExpenseHeadForm({ categoryId: '', name: '', nameNepali: '', code: '' });
       queryClient.invalidateQueries({ queryKey: ['expense-heads-all'] });
       queryClient.invalidateQueries({ queryKey: ['expense-heads'] });
     },
   });
+
 
   const deleteExpenseHeadMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -372,7 +374,7 @@ export default function MasterHeadsPage() {
           <button
             onClick={() => {
               setEditingIncomeHead(null);
-              setIncomeHeadForm({ categoryId: incomeCategories?.[0]?.id || '', name: '', nameNepali: '' });
+              setIncomeHeadForm({ categoryId: incomeCategories?.[0]?.id?.toString() || '', name: '', nameNepali: '', code: '' });
               setIsAddIncomeHeadOpen(true);
             }}
             className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
@@ -386,7 +388,7 @@ export default function MasterHeadsPage() {
           <button
             onClick={() => {
               setEditingExpenseHead(null);
-              setExpenseHeadForm({ categoryId: expenseCategories?.[0]?.id || '', name: '', nameNepali: '' });
+              setExpenseHeadForm({ categoryId: expenseCategories?.[0]?.id?.toString() || '', name: '', nameNepali: '', code: '' });
               setIsAddExpenseHeadOpen(true);
             }}
             className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 shadow-2xs transition"
@@ -395,6 +397,7 @@ export default function MasterHeadsPage() {
             <span>+ Add Expense Head (खर्च शीर्षक)</span>
           </button>
         )}
+
         {activeTab === 'class_matrix' && (
           <button
             onClick={handleSaveAllMatrix}
@@ -715,6 +718,7 @@ export default function MasterHeadsPage() {
                               categoryId: ih.categoryId?.toString() || '',
                               name: ih.name,
                               nameNepali: ih.nameNepali || '',
+                              code: ih.code || '',
                             });
                             setIsAddIncomeHeadOpen(true);
                           }}
@@ -764,7 +768,10 @@ export default function MasterHeadsPage() {
                 filteredExpenseHeads.map((eh: any, idx: number) => (
                   <tr key={eh.id} className="hover:bg-slate-50">
                     <td className="p-3.5 font-mono text-gray-400">{idx + 1}</td>
-                    <td className="p-3.5 font-extrabold text-gray-900">{eh.name}</td>
+                    <td className="p-3.5 font-extrabold text-gray-900">
+                      {eh.code && <span className="font-mono text-rose-700 mr-1.5">[{eh.code}]</span>}
+                      {eh.name}
+                    </td>
                     <td className="p-3.5 font-nepali font-bold text-gray-700">{eh.nameNepali || '—'}</td>
                     <td className="p-3.5">
                       <span className="bg-rose-50 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">
@@ -780,6 +787,7 @@ export default function MasterHeadsPage() {
                               categoryId: eh.categoryId?.toString() || '',
                               name: eh.name,
                               nameNepali: eh.nameNepali || '',
+                              code: eh.code || '',
                             });
                             setIsAddExpenseHeadOpen(true);
                           }}
@@ -899,7 +907,7 @@ export default function MasterHeadsPage() {
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
               <h3 className="font-extrabold text-sm text-[#1e3a5f]">
-                {editingIncomeHead ? 'Edit Income Head' : 'Add New Income Head'}
+                {editingIncomeHead ? 'Edit Income Head (आम्दानी शीर्षक सम्पादन)' : 'Add New Income Head (नयाँ आम्दानी शीर्षक)'}
               </h3>
               <button onClick={() => setIsAddIncomeHeadOpen(false)}><X size={18} /></button>
             </div>
@@ -911,22 +919,37 @@ export default function MasterHeadsPage() {
                   categoryId: parseInt(incomeHeadForm.categoryId),
                   name: incomeHeadForm.name,
                   nameNepali: incomeHeadForm.nameNepali,
+                  code: incomeHeadForm.code.trim() || undefined,
                 });
               }}
               className="space-y-3 text-xs"
             >
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Income Category *</label>
+                <label className="block font-bold text-gray-700 mb-1">Income Category (आम्दानी वर्ग/श्रेणी) *</label>
                 <select
                   value={incomeHeadForm.categoryId}
                   onChange={(e) => setIncomeHeadForm({ ...incomeHeadForm, categoryId: e.target.value })}
                   className="erp-input font-bold"
                   required
                 >
+                  <option value="">-- Select Income Category --</option>
                   {incomeCategories?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id.toString()}>
+                      {c.name} {c.nameNepali ? `(${c.nameNepali})` : ''}
+                    </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Accounting Code (लेखा कोड न.)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 10101, 10201"
+                  value={incomeHeadForm.code}
+                  onChange={(e) => setIncomeHeadForm({ ...incomeHeadForm, code: e.target.value })}
+                  className="erp-input font-mono font-bold"
+                />
               </div>
 
               <div>
@@ -942,19 +965,21 @@ export default function MasterHeadsPage() {
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Title (नेपाली)</label>
+                <label className="block font-bold text-gray-700 mb-1">Title (नेपाली शीर्षक)</label>
                 <input
                   type="text"
                   placeholder="पोखरी ठेक्का आम्दानी"
                   value={incomeHeadForm.nameNepali}
                   onChange={(e) => setIncomeHeadForm({ ...incomeHeadForm, nameNepali: e.target.value })}
-                  className="erp-input font-nepali"
+                  className="erp-input font-nepali font-bold"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
                 <button type="button" onClick={() => setIsAddIncomeHeadOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-[#1e3a5f] text-white font-bold rounded-xl shadow-xs">Save Income Head</button>
+                <button type="submit" disabled={saveIncomeHeadMutation.isPending} className="px-5 py-2 bg-[#1e3a5f] text-white font-bold rounded-xl shadow-xs">
+                  {saveIncomeHeadMutation.isPending ? 'Saving...' : 'Save Income Head'}
+                </button>
               </div>
             </form>
           </div>
@@ -967,7 +992,7 @@ export default function MasterHeadsPage() {
           <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b border-gray-100 pb-2">
               <h3 className="font-extrabold text-sm text-[#1e3a5f]">
-                {editingExpenseHead ? 'Edit Expense Head' : 'Add New Expense Head'}
+                {editingExpenseHead ? 'Edit Expense Head (खर्च शीर्षक सम्पादन)' : 'Add New Expense Head (नयाँ खर्च शीर्षक)'}
               </h3>
               <button onClick={() => setIsAddExpenseHeadOpen(false)}><X size={18} /></button>
             </div>
@@ -979,22 +1004,37 @@ export default function MasterHeadsPage() {
                   categoryId: parseInt(expenseHeadForm.categoryId),
                   name: expenseHeadForm.name,
                   nameNepali: expenseHeadForm.nameNepali,
+                  code: expenseHeadForm.code.trim() || undefined,
                 });
               }}
               className="space-y-3 text-xs"
             >
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Expense Category *</label>
+                <label className="block font-bold text-gray-700 mb-1">Expense Category (खर्च वर्ग/श्रेणी) *</label>
                 <select
                   value={expenseHeadForm.categoryId}
                   onChange={(e) => setExpenseHeadForm({ ...expenseHeadForm, categoryId: e.target.value })}
                   className="erp-input font-bold"
                   required
                 >
+                  <option value="">-- Select Expense Category --</option>
                   {expenseCategories?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id.toString()}>
+                      {c.name} {c.nameNepali ? `(${c.nameNepali})` : ''}
+                    </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Accounting Code (खर्च कोड न.)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 20101, 20201, 30101"
+                  value={expenseHeadForm.code}
+                  onChange={(e) => setExpenseHeadForm({ ...expenseHeadForm, code: e.target.value })}
+                  className="erp-input font-mono font-bold"
+                />
               </div>
 
               <div>
@@ -1010,21 +1050,24 @@ export default function MasterHeadsPage() {
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Title (नेपाली)</label>
+                <label className="block font-bold text-gray-700 mb-1">Title (नेपाली शीर्षक)</label>
                 <input
                   type="text"
                   placeholder="इन्टरनेट खर्च / खाजा तथा अतिथि सत्कार"
                   value={expenseHeadForm.nameNepali}
                   onChange={(e) => setExpenseHeadForm({ ...expenseHeadForm, nameNepali: e.target.value })}
-                  className="erp-input font-nepali"
+                  className="erp-input font-nepali font-bold"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
                 <button type="button" onClick={() => setIsAddExpenseHeadOpen(false)} className="px-4 py-2 border rounded-xl font-bold">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-rose-600 text-white font-bold rounded-xl shadow-xs">Save Expense Head</button>
+                <button type="submit" disabled={saveExpenseHeadMutation.isPending} className="px-5 py-2 bg-rose-600 text-white font-bold rounded-xl shadow-xs">
+                  {saveExpenseHeadMutation.isPending ? 'Saving...' : 'Save Expense Head'}
+                </button>
               </div>
             </form>
+
           </div>
         </div>
       )}

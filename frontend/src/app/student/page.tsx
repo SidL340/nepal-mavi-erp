@@ -637,13 +637,15 @@ export default function StudentPortalPage() {
                   <CalendarCheck size={20} />
                 </div>
               </div>
-              <p className="text-3xl font-black font-mono text-emerald-700 mt-2">{attendancePct || 95}%</p>
+              <p className="text-3xl font-black font-mono text-emerald-700 mt-2">
+                {attendancePct !== undefined && attendancePct !== null ? `${attendancePct}%` : '—'}
+              </p>
               <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2 overflow-hidden">
-                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(attendancePct || 95, 100)}%` }} />
+                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.min(attendancePct || 0, 100)}%` }} />
               </div>
               <p className="text-[11px] text-gray-400 mt-2 flex justify-between">
-                <span>Present: <b>{presentDays || 45}</b> days</span>
-                <span>Absent: <b>{absentDays || 2}</b> days</span>
+                <span>Present: <b>{presentDays ?? '—'}</b> days</span>
+                <span>Absent: <b>{absentDays ?? '—'}</b> days</span>
               </p>
             </div>
 
@@ -659,12 +661,20 @@ export default function StudentPortalPage() {
                 </div>
               </div>
               <p className="text-3xl font-black font-mono text-[#1e3a5f] mt-2">
-                {marksheetData?.gpa !== undefined && marksheetData?.gpa > 0 ? marksheetData.gpa.toFixed(2) : '3.65'}
-                <span className="text-xs font-normal text-gray-400"> / 4.00</span>
+                {marksheetData?.gpa !== undefined && marksheetData?.gpa > 0
+                  ? marksheetData.gpa.toFixed(2)
+                  : '—'}
+                {marksheetData?.gpa !== undefined && marksheetData?.gpa > 0 && (
+                  <span className="text-xs font-normal text-gray-400"> / 4.00</span>
+                )}
               </p>
               <p className="text-[11px] text-blue-700 font-bold mt-2 flex items-center gap-1">
                 <Sparkles size={12} className="text-amber-500" />
-                <span>Grade: {marksheetData?.overallGrade || 'A'} • Click to view Marksheet</span>
+                <span>
+                  {marksheetData?.gpa !== undefined && marksheetData?.gpa > 0
+                    ? `Grade: ${marksheetData?.overallGrade || '—'} • Click to view Marksheet`
+                    : 'No exam result available yet'}
+                </span>
               </p>
             </div>
 
@@ -680,10 +690,10 @@ export default function StudentPortalPage() {
                 </div>
               </div>
               <p className="text-2xl font-black font-mono text-amber-700 mt-2">
-                रू {totalPaidAmount ? totalPaidAmount.toLocaleString() : '3,200'}
+                {totalPaidAmount ? `रू ${totalPaidAmount.toLocaleString()}` : 'रू 0'}
               </p>
               <p className="text-[11px] text-gray-500 mt-2">
-                <b>{feeCollections.length || 3}</b> verified receipts issued
+                <b>{feeCollections.length || 0}</b> verified receipt{feeCollections.length !== 1 ? 's' : ''} issued
               </p>
             </div>
 
@@ -699,13 +709,16 @@ export default function StudentPortalPage() {
                 </div>
               </div>
               <p className="text-3xl font-black font-mono text-purple-700 mt-2">
-                {activeBorrowedBooks.length || 1}
+                {activeBorrowedBooks.length}
               </p>
               <p className="text-[11px] text-purple-600 font-medium mt-2">
-                Currently borrowed books
+                {activeBorrowedBooks.length === 0
+                  ? 'No books currently borrowed'
+                  : 'Currently borrowed books'}
               </p>
             </div>
           </div>
+
 
           {/* Student Profile Overview & Class Info */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -743,13 +756,14 @@ export default function StudentPortalPage() {
 
                 <div className="space-y-1">
                   <span className="text-gray-400 font-bold uppercase text-[10px]">Date of Birth (BS):</span>
-                  <p className="font-mono font-bold text-gray-800">{student?.dateOfBirthBs || '2068-05-12'} BS</p>
+                  <p className="font-mono font-bold text-gray-800">{student?.dateOfBirthBs || '—'} BS</p>
                 </div>
 
                 <div className="space-y-1">
                   <span className="text-gray-400 font-bold uppercase text-[10px]">Blood Group:</span>
-                  <p className="font-bold text-rose-700">{student?.bloodGroup || 'O+ve'}</p>
+                  <p className="font-bold text-rose-700">{student?.bloodGroup || '—'}</p>
                 </div>
+
 
                 <div className="space-y-1">
                   <span className="text-gray-400 font-bold uppercase text-[10px]">Father Name:</span>

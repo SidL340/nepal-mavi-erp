@@ -29,8 +29,10 @@ import {
   KeyRound,
   FileText,
   Layers,
+  Scale,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -82,9 +84,11 @@ const navConfig: (NavItem | NavSection)[] = [
       { label: 'Fee Collection', nepaliLabel: 'शुल्क संकलन', href: '/dashboard/finance/fees', icon: Receipt, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Teacher Payroll', nepaliLabel: 'शिक्षक तलब भत्ता', href: '/dashboard/finance/payroll', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Journal Vouchers', nepaliLabel: 'गोश्वारा भौचर', href: '/dashboard/finance/journal', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Parties / Recipients', nepaliLabel: 'पाउने व्यक्ति/संस्था', href: '/dashboard/finance?tab=parties', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Financial Reports', nepaliLabel: 'वित्तीय प्रतिवेदन (Trial Balance)', href: '/dashboard/finance/reports', icon: Scale, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Parties & Suppliers', nepaliLabel: 'पार्टी तथा सप्लायर', href: '/dashboard/finance?tab=parties', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Masters & Heads', nepaliLabel: 'शीर्षक व्यवस्थापन', href: '/dashboard/finance/heads', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     ],
+
   },
   {
     section: 'STAFF',
