@@ -862,12 +862,14 @@ export default function MasterHeadsPage() {
                 <label className="block font-bold text-gray-700 mb-1">Default Amount (दर रू - optional):</label>
                 <input
                   type="number"
+                  step="any"
                   min={0}
-                  placeholder="0"
+                  placeholder="0.00"
                   value={feeForm.amount}
                   onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })}
                   className="erp-input font-mono font-bold"
                 />
+
               </div>
 
               <label className="flex items-center gap-2 cursor-pointer pt-1">

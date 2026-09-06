@@ -126,6 +126,31 @@ export default function ExpensesPage() {
   const [instChequePayeeName, setInstChequePayeeName] = useState('');
   const [instVoucherNo, setInstVoucherNo] = useState('');
   const [instRemarks, setInstRemarks] = useState('');
+  // Installment Split Payment
+  const [isInstSplitPayment, setIsInstSplitPayment] = useState(false);
+  const [instSplitCashAmount, setInstSplitCashAmount] = useState('');
+  const [instSplitBankAmount, setInstSplitBankAmount] = useState('');
+  const [instSplitBankAccountId, setInstSplitBankAccountId] = useState('');
+  const [instSplitChequeNo, setInstSplitChequeNo] = useState('');
+
+  // Vendor Total Balance Lump-Sum Payment State (पार्टी कुल बक्यौता एकमुष्ट भुक्तानी)
+  const [isPayVendorLumpSumOpen, setIsPayVendorLumpSumOpen] = useState(false);
+  const [lumpSumPartyId, setLumpSumPartyId] = useState('');
+  const [lumpSumHeadId, setLumpSumHeadId] = useState('');
+  const [lumpSumFinancialYearId, setLumpSumFinancialYearId] = useState('');
+  const [lumpSumDateBs, setLumpSumDateBs] = useState(todayBS());
+  const [lumpSumTotalAmount, setLumpSumTotalAmount] = useState('');
+  const [isLumpSumSplit, setIsLumpSumSplit] = useState(false);
+  const [lumpSumPaymentMedium, setLumpSumPaymentMedium] = useState('CHEQUE');
+  const [lumpSumBankAccountId, setLumpSumBankAccountId] = useState('');
+  const [lumpSumChequeNo, setLumpSumChequeNo] = useState('');
+  const [lumpSumChequePayeeName, setLumpSumChequePayeeName] = useState('');
+  const [lumpSumVoucherNo, setLumpSumVoucherNo] = useState('');
+  const [lumpSumRemarks, setLumpSumRemarks] = useState('');
+  const [lumpSumSplitCashAmount, setLumpSumSplitCashAmount] = useState('');
+  const [lumpSumSplitBankAmount, setLumpSumSplitBankAmount] = useState('');
+  const [lumpSumSplitBankAccountId, setLumpSumSplitBankAccountId] = useState('');
+  const [lumpSumSplitChequeNo, setLumpSumSplitChequeNo] = useState('');
 
   // Edit Payable Bill State
   const [editingPayableBill, setEditingPayableBill] = useState<any>(null);
@@ -136,6 +161,7 @@ export default function ExpensesPage() {
   const [editPayBillTotalAmount, setEditPayBillTotalAmount] = useState('');
   const [editPayBillDescription, setEditPayBillDescription] = useState('');
   const [isDeletingBill, setIsDeletingBill] = useState(false);
+
 
   // ── 1. QUERIES ──────────────────────────────────────────────────────────────
   const { data: schoolProfile } = useQuery({
@@ -167,6 +193,8 @@ export default function ExpensesPage() {
   const autoResolvedFY = resolveFinancialYear(addExpenseDateBs, financialYearsData || []);
   const autoResolvedBillFY = resolveFinancialYear(billDateBs, financialYearsData || []);
   const autoResolvedInstFY = resolveFinancialYear(instDateBs, financialYearsData || []);
+  const autoResolvedLumpSumFY = resolveFinancialYear(lumpSumDateBs, financialYearsData || []);
+
 
   // Resolve current filtered financial year ID
   const effectiveFYId = selectedYearFilter === 'ALL'
@@ -1181,7 +1209,7 @@ export default function ExpensesPage() {
     });
   };
 
-  const handlePayInstallmentSubmit = (e: React.FormEvent) => {
+  const handlePayInstallmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPayableBill || !instAmount) {
       toast.error('Please enter installment payment amount.');
@@ -1198,55 +1226,255 @@ export default function ExpensesPage() {
       ? parseInt(instFinancialYearId)
       : (autoResolvedInstFY?.id || activeFinancialYear?.id || 1);
 
-    const payload: any = {
-      financialYearId: resolvedFYId,
-      headId: selectedPayableBill.headId || (headsData?.[0]?.id || 1),
-      amount: instNum,
-      expenseDateBs: instDateBs || todayBS(),
-      billNo: selectedPayableBill.billNo,
-      partyId: selectedPayableBill.partyId || null,
-      paidTo: selectedPayableBill.partyName || 'Vendor / Supplier',
-      paymentMedium: instPaymentMedium,
-      voucherNo: instVoucherNo || undefined,
-      description: `Installment Payment for Bill ${selectedPayableBill.billNo} [Total Bill: Rs. ${selectedPayableBill.totalBillAmount.toLocaleString()}]`,
-      remarks: instRemarks || `Installment payment of Rs. ${instNum.toLocaleString()}`,
-      approvedBy: 'Principal (प्रधानाध्यापक)',
-    };
+    const targetHeadId = selectedPayableBill.headId || (headsData?.[0]?.id || 1);
 
-    if (instPaymentMedium === 'CASH') {
-      payload.bankAccountId = null;
-      payload.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
-      payload.chequeNo = null;
-      payload.chequePayeeName = null;
+    if (isInstSplitPayment) {
+      const cashAmt = parseFloat(instSplitCashAmount || '0');
+      const bankAmt = parseFloat(instSplitBankAmount || '0');
+      if (Math.abs((cashAmt + bankAmt) - instNum) > 0.01) {
+        toast.error(`मिश्रित भुक्तानीको कुल जोड किस्ता रकमसँग मिल्नुपर्छ (Cash Rs. ${cashAmt} + Bank Rs. ${bankAmt} != Total Rs. ${instNum}).`);
+        return;
+      }
+
+      try {
+        if (cashAmt > 0) {
+          await api.post('/expense/entries', {
+            financialYearId: resolvedFYId,
+            headId: targetHeadId,
+            amount: cashAmt,
+            expenseDateBs: instDateBs || todayBS(),
+            expenseDateAd: new Date().toISOString().slice(0, 10),
+            billNo: selectedPayableBill.billNo,
+            partyId: selectedPayableBill.partyId || null,
+            paidTo: selectedPayableBill.partyName || 'Vendor / Supplier',
+            paymentMedium: 'CASH',
+            paidFromAccount: 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)',
+            description: `Installment for Bill ${selectedPayableBill.billNo} [Cash Portion 1/2]`,
+            remarks: instRemarks || `Cash payment of Rs. ${cashAmt.toLocaleString()}`,
+            approvedBy: 'Principal (प्रधानाध्यापक)',
+          });
+        }
+
+        if (bankAmt > 0) {
+          let paidFromAcc = 'School Operational Account';
+          if (instSplitBankAccountId) {
+            const bObj = bankAccountsData?.find((b: any) => b.id.toString() === instSplitBankAccountId);
+            if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
+          }
+
+          await api.post('/expense/entries', {
+            financialYearId: resolvedFYId,
+            headId: targetHeadId,
+            amount: bankAmt,
+            expenseDateBs: instDateBs || todayBS(),
+            expenseDateAd: new Date().toISOString().slice(0, 10),
+            billNo: selectedPayableBill.billNo,
+            partyId: selectedPayableBill.partyId || null,
+            paidTo: selectedPayableBill.partyName || 'Vendor / Supplier',
+            paymentMedium: 'CHEQUE',
+            bankAccountId: instSplitBankAccountId ? parseInt(instSplitBankAccountId) : undefined,
+            paidFromAccount: paidFromAcc,
+            chequeNo: instSplitChequeNo || null,
+            chequePayeeName: instChequePayeeName || selectedPayableBill.partyName,
+            description: `Installment for Bill ${selectedPayableBill.billNo} [Cheque/Bank Portion 2/2]`,
+            remarks: instRemarks || `Bank payment of Rs. ${bankAmt.toLocaleString()}`,
+            approvedBy: 'Principal (प्रधानाध्यापक)',
+          });
+        }
+
+        toast.success(`किस्ता रकम रू ${instNum.toLocaleString()} (नगद + बैंक) भुक्तानी सफल भयो!`);
+        setIsPayInstallmentModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+        setSelectedPayableBill(null);
+        setInstAmount('');
+        setInstSplitCashAmount('');
+        setInstSplitBankAmount('');
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to pay installment');
+      }
     } else {
-      if (instBankAccountId) {
-        const bObj = bankAccountsData?.find((b: any) => b.id.toString() === instBankAccountId);
-        if (bObj) {
-          payload.bankAccountId = bObj.id;
-          payload.paidFromAccount = `${bObj.bankName} (${bObj.accountNo})`;
+      const payload: any = {
+        financialYearId: resolvedFYId,
+        headId: targetHeadId,
+        amount: instNum,
+        expenseDateBs: instDateBs || todayBS(),
+        billNo: selectedPayableBill.billNo,
+        partyId: selectedPayableBill.partyId || null,
+        paidTo: selectedPayableBill.partyName || 'Vendor / Supplier',
+        paymentMedium: instPaymentMedium,
+        voucherNo: instVoucherNo || undefined,
+        description: `Installment Payment for Bill ${selectedPayableBill.billNo} [Total Bill: Rs. ${selectedPayableBill.totalBillAmount.toLocaleString()}]`,
+        remarks: instRemarks || `Installment payment of Rs. ${instNum.toLocaleString()}`,
+        approvedBy: 'Principal (प्रधानाध्यापक)',
+      };
+
+      if (instPaymentMedium === 'CASH') {
+        payload.bankAccountId = null;
+        payload.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+        payload.chequeNo = null;
+        payload.chequePayeeName = null;
+      } else {
+        if (instBankAccountId) {
+          const bObj = bankAccountsData?.find((b: any) => b.id.toString() === instBankAccountId);
+          if (bObj) {
+            payload.bankAccountId = bObj.id;
+            payload.paidFromAccount = `${bObj.bankName} (${bObj.accountNo})`;
+          }
+        }
+
+        if (instPaymentMedium === 'CHEQUE' || instPaymentMedium === 'BANK_TRANSFER') {
+          payload.chequeNo = instChequeNo || null;
+          payload.chequePayeeName = instChequePayeeName || selectedPayableBill.partyName;
         }
       }
 
-      if (instPaymentMedium === 'CHEQUE' || instPaymentMedium === 'BANK_TRANSFER') {
-        payload.chequeNo = instChequeNo || null;
-        payload.chequePayeeName = instChequePayeeName || selectedPayableBill.partyName;
-      }
+      addExpenseMutation.mutate(payload, {
+        onSuccess: () => {
+          toast.success(`Installment of Rs. ${instNum.toLocaleString()} paid!`);
+          setIsPayInstallmentModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+          setSelectedPayableBill(null);
+          setInstAmount('');
+          setInstChequeNo('');
+          setInstChequePayeeName('');
+          setInstVoucherNo('');
+          setInstRemarks('');
+        }
+      });
+    }
+  };
+
+  const handlePayVendorLumpSumSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lumpSumPartyId) {
+      toast.error('कृपया भुक्तानी पाउने पार्टी/सप्लायर छनौट गर्नुहोस् (Please select a vendor/party).');
+      return;
+    }
+    if (!lumpSumTotalAmount || parseFloat(lumpSumTotalAmount) <= 0) {
+      toast.error('कृपया मान्य भुक्तानी रकम प्रविष्टि गर्नुहोस् (Please enter valid payment amount).');
+      return;
     }
 
-    addExpenseMutation.mutate(payload, {
-      onSuccess: () => {
-        toast.success(`Installment of Rs. ${instNum.toLocaleString()} paid!`);
-        setIsPayInstallmentModalOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
-        setSelectedPayableBill(null);
-        setInstAmount('');
-        setInstChequeNo('');
-        setInstChequePayeeName('');
-        setInstVoucherNo('');
-        setInstRemarks('');
+    const partyObj = partiesData?.find((p: any) => p.id.toString() === lumpSumPartyId);
+    const resolvedFYId = lumpSumFinancialYearId
+      ? parseInt(lumpSumFinancialYearId)
+      : (autoResolvedLumpSumFY?.id || activeFinancialYear?.id || 1);
+    const targetHeadId = lumpSumHeadId ? parseInt(lumpSumHeadId) : (headsData?.[0]?.id || 1);
+    const totalPayAmt = parseFloat(lumpSumTotalAmount);
+
+    if (isLumpSumSplit) {
+      const cashAmt = parseFloat(lumpSumSplitCashAmount || '0');
+      const bankAmt = parseFloat(lumpSumSplitBankAmount || '0');
+      if (Math.abs((cashAmt + bankAmt) - totalPayAmt) > 0.01) {
+        toast.error(`मिश्रित भुक्तानीको योगफल कुल रकमसँग मिल्नुपर्छ (Cash Rs. ${cashAmt} + Bank Rs. ${bankAmt} != Total Rs. ${totalPayAmt}).`);
+        return;
       }
-    });
+
+      try {
+        if (cashAmt > 0) {
+          await api.post('/expense/entries', {
+            financialYearId: resolvedFYId,
+            headId: targetHeadId,
+            amount: cashAmt,
+            expenseDateBs: lumpSumDateBs || todayBS(),
+            expenseDateAd: new Date().toISOString().slice(0, 10),
+            partyId: parseInt(lumpSumPartyId),
+            paidTo: partyObj?.name || 'Vendor',
+            paymentMedium: 'CASH',
+            paidFromAccount: 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)',
+            billNo: 'LUMP-SUM-SETTLEMENT',
+            description: `Lump-sum Settlement towards Total Balance (Cash Portion 1/2) — ${partyObj?.name}`,
+            remarks: lumpSumRemarks || `Lump-sum cash payment of Rs. ${cashAmt.toLocaleString()}`,
+            approvedBy: 'Principal (प्रधानाध्यापक)',
+          });
+        }
+
+        if (bankAmt > 0) {
+          let paidFromAcc = 'School Operational Account';
+          if (lumpSumSplitBankAccountId) {
+            const bObj = bankAccountsData?.find((b: any) => b.id.toString() === lumpSumSplitBankAccountId);
+            if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
+          }
+
+          await api.post('/expense/entries', {
+            financialYearId: resolvedFYId,
+            headId: targetHeadId,
+            amount: bankAmt,
+            expenseDateBs: lumpSumDateBs || todayBS(),
+            expenseDateAd: new Date().toISOString().slice(0, 10),
+            partyId: parseInt(lumpSumPartyId),
+            paidTo: partyObj?.name || 'Vendor',
+            paymentMedium: 'CHEQUE',
+            bankAccountId: lumpSumSplitBankAccountId ? parseInt(lumpSumSplitBankAccountId) : undefined,
+            paidFromAccount: paidFromAcc,
+            chequeNo: lumpSumSplitChequeNo || null,
+            chequePayeeName: lumpSumChequePayeeName || partyObj?.name,
+            billNo: 'LUMP-SUM-SETTLEMENT',
+            description: `Lump-sum Settlement towards Total Balance (Bank/Cheque Portion 2/2) — ${partyObj?.name}`,
+            remarks: lumpSumRemarks || `Lump-sum bank payment of Rs. ${bankAmt.toLocaleString()}`,
+            approvedBy: 'Principal (प्रधानाध्यापक)',
+          });
+        }
+
+        toast.success(`पार्टी बक्यौता भुक्तानी रू ${totalPayAmt.toLocaleString()} (नगद + बैंक) सुरक्षित भयो!`);
+        setIsPayVendorLumpSumOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['parties-list'] });
+        setLumpSumTotalAmount('');
+        setLumpSumSplitCashAmount('');
+        setLumpSumSplitBankAmount('');
+        setLumpSumRemarks('');
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to record lump-sum settlement.');
+      }
+    } else {
+      let paidFromAcc = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+      if (lumpSumPaymentMedium !== 'CASH' && lumpSumBankAccountId) {
+        const bObj = bankAccountsData?.find((b: any) => b.id.toString() === lumpSumBankAccountId);
+        if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
+      }
+
+      const payload: any = {
+        financialYearId: resolvedFYId,
+        headId: targetHeadId,
+        amount: totalPayAmt,
+        expenseDateBs: lumpSumDateBs || todayBS(),
+        expenseDateAd: new Date().toISOString().slice(0, 10),
+        partyId: parseInt(lumpSumPartyId),
+        paidTo: partyObj?.name || 'Vendor',
+        paymentMedium: lumpSumPaymentMedium,
+        billNo: 'LUMP-SUM-SETTLEMENT',
+        voucherNo: lumpSumVoucherNo || undefined,
+        description: `Lump-sum Settlement towards Total Balance — ${partyObj?.name}`,
+        remarks: lumpSumRemarks || `Lump-sum payment of Rs. ${totalPayAmt.toLocaleString()}`,
+        approvedBy: 'Principal (प्रधानाध्यापक)',
+      };
+
+      if (lumpSumPaymentMedium === 'CASH') {
+        payload.bankAccountId = null;
+        payload.paidFromAccount = paidFromAcc;
+      } else {
+        payload.bankAccountId = lumpSumBankAccountId ? parseInt(lumpSumBankAccountId) : null;
+        payload.paidFromAccount = paidFromAcc;
+        payload.chequeNo = lumpSumChequeNo || null;
+        payload.chequePayeeName = lumpSumChequePayeeName || partyObj?.name;
+      }
+
+      addExpenseMutation.mutate(payload, {
+        onSuccess: () => {
+          toast.success(`पार्टी बक्यौता भुक्तानी रू ${totalPayAmt.toLocaleString()} सुरक्षित भयो!`);
+          setIsPayVendorLumpSumOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+          queryClient.invalidateQueries({ queryKey: ['parties-list'] });
+          setLumpSumTotalAmount('');
+          setLumpSumRemarks('');
+        }
+      });
+    }
   };
+
 
   const handleOpenEditPayable = (bill: any) => {
     setEditingPayableBill(bill);
@@ -1733,6 +1961,14 @@ export default function ExpensesPage() {
                 >
                   <Printer size={14} className="text-purple-700" />
                   <span>🖨️ तिर्न बाँकी दायित्व प्रतिवेदन (Print Payables Report)</span>
+                </button>
+                <button
+                  onClick={() => setIsPayVendorLumpSumOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-1.5 text-xs shadow-sm transition"
+                  title="Pay against Total Vendor Outstanding Balance (पार्टी कुल बक्यौता एकमुष्ट भुक्तानी)"
+                >
+                  <CreditCard size={14} />
+                  <span>+ Pay Vendor Balance (एकमुष्ट/आंशिक भुक्तानी)</span>
                 </button>
                 <button
                   onClick={() => setIsRecordBillModalOpen(true)}
@@ -2253,38 +2489,76 @@ export default function ExpensesPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block font-extrabold text-gray-800 mb-1">
-                  Payment Medium (भुक्तानी विधि) *
+              {/* Split Mode Toggle */}
+              <div className="flex items-center gap-2 p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="instSplitToggle"
+                  checked={isInstSplitPayment}
+                  onChange={(e) => {
+                    setIsInstSplitPayment(e.target.checked);
+                    if (e.target.checked && instAmount) {
+                      const half = (parseFloat(instAmount) / 2).toFixed(2);
+                      setInstSplitCashAmount(half);
+                      setInstSplitBankAmount((parseFloat(instAmount) - parseFloat(half)).toFixed(2));
+                    }
+                  }}
+                  className="h-4 w-4 rounded text-purple-600 focus:ring-purple-500"
+                />
+                <label htmlFor="instSplitToggle" className="text-xs font-bold text-gray-800 cursor-pointer">
+                  मिश्रित भुक्तानी गर्नुहोस् (Split Payment: केही नगद + केही बैंक/चेक)
                 </label>
-                <select
-                  value={instPaymentMedium}
-                  onChange={(e) => setInstPaymentMedium(e.target.value)}
-                  className="erp-input font-bold"
-                >
-                  <option value="CASH">Cash (नगद भुक्तानी - Cash A/c)</option>
-                  <option value="CHEQUE">Cheque (चेक)</option>
-                  <option value="BANK_TRANSFER">Bank Transfer</option>
-                </select>
               </div>
 
-              {instPaymentMedium === 'CASH' ? (
-                <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-3 text-xs font-bold text-emerald-950 flex items-center gap-2">
-                  <span className="text-base">💵</span>
-                  <span>Disbursing From: <strong>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</strong></span>
-                </div>
-              ) : (
-                <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+              {isInstSplitPayment ? (
+                <div className="space-y-3 bg-purple-50/80 p-3.5 rounded-xl border border-purple-200">
+                  <div className="font-extrabold text-purple-950 text-[11px] uppercase">
+                    Split Breakdown (नगद तथा बैंक रकम विभाजन):
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-extrabold text-purple-950 mb-1">
+                      <label className="block font-bold text-gray-800 mb-1">
+                        💵 नगद भुक्तानी रकम (Cash Portion रू) *
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={instSplitCashAmount}
+                        onChange={(e) => setInstSplitCashAmount(e.target.value)}
+                        className="erp-input font-mono font-bold text-emerald-700"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        🏦 बैंक/चेक भुक्तानी रकम (Bank Portion रू) *
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={instSplitBankAmount}
+                        onChange={(e) => setInstSplitBankAmount(e.target.value)}
+                        className="erp-input font-mono font-bold text-purple-900"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Split Bank Account & Cheque */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
                         School Bank Account *
                       </label>
                       <select
-                        value={instBankAccountId}
-                        onChange={(e) => setInstBankAccountId(e.target.value)}
+                        value={instSplitBankAccountId}
+                        onChange={(e) => setInstSplitBankAccountId(e.target.value)}
                         className="erp-input font-bold"
-                        required={instPaymentMedium !== 'CASH'}
+                        required={parseFloat(instSplitBankAmount || '0') > 0}
                       >
                         <option value="">-- Select Bank Account --</option>
                         {bankAccountsData?.map((b: any) => (
@@ -2296,32 +2570,97 @@ export default function ExpensesPage() {
                     </div>
 
                     <div>
-                      <label className="block font-extrabold text-purple-950 mb-1">
+                      <label className="block font-bold text-gray-800 mb-1">
                         Cheque No (चेक नं.)
                       </label>
                       <input
                         type="text"
                         placeholder="e.g. 509214"
-                        value={instChequeNo}
-                        onChange={(e) => setInstChequeNo(e.target.value)}
-                        className="erp-input font-mono font-bold text-purple-900 border-purple-300"
+                        value={instSplitChequeNo}
+                        onChange={(e) => setInstSplitChequeNo(e.target.value)}
+                        className="erp-input font-mono font-bold text-purple-900"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block font-extrabold text-purple-950 mb-1">
-                      Cheque Payee Name (चेक पाउनेको नाम)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={selectedPayableBill.partyName}
-                      value={instChequePayeeName}
-                      onChange={(e) => setInstChequePayeeName(e.target.value)}
-                      className="erp-input font-bold border-purple-300"
-                    />
+                  <div className="text-[11px] font-bold text-purple-900 bg-white p-2 rounded-lg border border-purple-200 flex justify-between">
+                    <span>कुल जोड (Total): रू {((parseFloat(instSplitCashAmount || '0') + parseFloat(instSplitBankAmount || '0'))).toLocaleString()}</span>
+                    <span>किस्ता रकम (Target): रू {(parseFloat(instAmount || '0')).toLocaleString()}</span>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block font-extrabold text-gray-800 mb-1">
+                      Payment Medium (भुक्तानी विधि) *
+                    </label>
+                    <select
+                      value={instPaymentMedium}
+                      onChange={(e) => setInstPaymentMedium(e.target.value)}
+                      className="erp-input font-bold"
+                    >
+                      <option value="CASH">Cash (नगद भुक्तानी - Cash A/c)</option>
+                      <option value="CHEQUE">Cheque (चेक)</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                    </select>
+                  </div>
+
+                  {instPaymentMedium === 'CASH' ? (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-3 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                      <span className="text-base">💵</span>
+                      <span>Disbursing From: <strong>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</strong></span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-extrabold text-purple-950 mb-1">
+                            School Bank Account *
+                          </label>
+                          <select
+                            value={instBankAccountId}
+                            onChange={(e) => setInstBankAccountId(e.target.value)}
+                            className="erp-input font-bold"
+                            required={instPaymentMedium !== 'CASH'}
+                          >
+                            <option value="">-- Select Bank Account --</option>
+                            {bankAccountsData?.map((b: any) => (
+                              <option key={b.id} value={b.id}>
+                                {b.bankName} - {b.accountNo}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-extrabold text-purple-950 mb-1">
+                            Cheque No (चेक नं.)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 509214"
+                            value={instChequeNo}
+                            onChange={(e) => setInstChequeNo(e.target.value)}
+                            className="erp-input font-mono font-bold text-purple-900 border-purple-300"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-extrabold text-purple-950 mb-1">
+                          Cheque Payee Name (चेक पाउनेको नाम)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={selectedPayableBill.partyName}
+                          value={instChequePayeeName}
+                          onChange={(e) => setInstChequePayeeName(e.target.value)}
+                          className="erp-input font-bold border-purple-300"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               <div>
@@ -2364,6 +2703,393 @@ export default function ExpensesPage() {
                   className="rounded-xl bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 shadow-sm"
                 >
                   {addExpenseMutation.isPending ? 'Processing...' : 'Disburse Installment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 4.5 PAY VENDOR LUMP-SUM / TOTAL BALANCE MODAL ───────────────────────── */}
+      {isPayVendorLumpSumOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <CreditCard size={18} className="text-emerald-600" />
+                  <span>पार्टी कुल बक्यौता एकमुष्ट भुक्तानी (Vendor Lump-Sum Settlement)</span>
+                </h2>
+                <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
+                  सप्लायर/पार्टीको कुल बक्यौता हिसाबबाट एकमुष्ट वा आंशिक भुक्तानी (नगद, बैंक, चेक वा मिश्रित विधि)
+                </p>
+              </div>
+              <button
+                onClick={() => setIsPayVendorLumpSumOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Vendor Selector & Summary */}
+            <div className="space-y-3">
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1 text-xs">
+                  सप्लायर / पार्टी छनौट गर्नुहोस् (Select Vendor / Party) *
+                </label>
+                <SearchableSelect
+                  placeholder="-- Select Vendor / Party --"
+                  value={lumpSumPartyId}
+                  onChange={(val) => setLumpSumPartyId(val)}
+                  required
+                  options={(partiesData || []).map((p: any) => ({
+                    value: p.id.toString(),
+                    label: p.name,
+                    sublabel: p.panNo ? `PAN: ${p.panNo}` : p.contactPerson,
+                    code: p.phone,
+                  }))}
+                />
+              </div>
+
+              {/* Live Party Balance Cards */}
+              {lumpSumPartyId && (() => {
+                const selParty = partiesData?.find((p: any) => p.id.toString() === lumpSumPartyId);
+                const pBills = displayedBills?.filter((b: any) => b.partyId?.toString() === lumpSumPartyId || b.partyName === selParty?.name) || [];
+                const pTotalBills = pBills.reduce((acc: number, b: any) => acc + (b.totalBillAmount || 0), 0);
+                const pTotalPaid = pBills.reduce((acc: number, b: any) => acc + (b.totalPaidAmount || 0), 0);
+                const pNetDue = pBills.reduce((acc: number, b: any) => acc + (b.remainingDue || 0), 0);
+                const payingNow = parseFloat(lumpSumTotalAmount || '0');
+                const newDue = pNetDue - payingNow;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2 bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 text-center">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Total Bills ({pBills.length})</span>
+                        <p className="text-xs sm:text-sm font-extrabold text-gray-900 font-mono">रू {pTotalBills.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Paid So Far</span>
+                        <p className="text-xs sm:text-sm font-extrabold text-emerald-700 font-mono">रू {pTotalPaid.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Current Net Due</span>
+                        <p className="text-xs sm:text-sm font-extrabold text-rose-700 font-mono">रू {pNetDue.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {payingNow > 0 && (
+                      <div className="rounded-xl bg-slate-900 text-white p-2.5 text-xs flex items-center justify-between font-mono">
+                        <span className="text-gray-300">भुक्तानी पछिको बाँकी (New Due):</span>
+                        <span className={`font-extrabold text-sm ${newDue < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                          रू {newDue.toLocaleString()} {newDue < 0 ? '(Advance/अग्रिम)' : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <form onSubmit={handlePayVendorLumpSumSubmit} className="space-y-3.5 text-xs">
+              {/* Fiscal Year & Head */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-extrabold text-[#1e3a5f]">
+                      आर्थिक वर्ष (Fiscal Year) *
+                    </label>
+                    {autoResolvedLumpSumFY && (
+                      <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                        {autoResolvedLumpSumFY.year}
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={lumpSumFinancialYearId || autoResolvedLumpSumFY?.id || activeFinancialYear?.id || ''}
+                    onChange={(e) => setLumpSumFinancialYearId(e.target.value)}
+                    className="erp-input font-bold text-[#1e3a5f]"
+                    required
+                  >
+                    {financialYearsData?.map((y: any) => (
+                      <option key={y.id} value={y.id}>
+                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Expense Topic (खर्च शीर्षक) *
+                  </label>
+                  <select
+                    value={lumpSumHeadId}
+                    onChange={(e) => setLumpSumHeadId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">-- General / Default Topic --</option>
+                    {headsData?.map((h: any) => (
+                      <option key={h.id} value={h.id}>
+                        {h.code ? `[${h.code}] ` : ''}{h.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Amount & Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Amount to Pay (भुक्तानी रकम रू) *
+                  </label>
+                  <input
+                    required
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 45000.50"
+                    value={lumpSumTotalAmount}
+                    onChange={(e) => {
+                      setLumpSumTotalAmount(e.target.value);
+                      if (isLumpSumSplit && e.target.value) {
+                        const half = (parseFloat(e.target.value) / 2).toFixed(2);
+                        setLumpSumSplitCashAmount(half);
+                        setLumpSumSplitBankAmount((parseFloat(e.target.value) - parseFloat(half)).toFixed(2));
+                      }
+                    }}
+                    className="erp-input font-mono font-extrabold text-emerald-700 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-extrabold text-gray-800 mb-1">
+                    Payment Date BS (मिति) *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={lumpSumDateBs}
+                    onChange={(e) => setLumpSumDateBs(formatDateInput(e.target.value))}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Split Mode Checkbox */}
+              <div className="flex items-center gap-2 p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="lumpSumSplitToggle"
+                  checked={isLumpSumSplit}
+                  onChange={(e) => {
+                    setIsLumpSumSplit(e.target.checked);
+                    if (e.target.checked && lumpSumTotalAmount) {
+                      const half = (parseFloat(lumpSumTotalAmount) / 2).toFixed(2);
+                      setLumpSumSplitCashAmount(half);
+                      setLumpSumSplitBankAmount((parseFloat(lumpSumTotalAmount) - parseFloat(half)).toFixed(2));
+                    }
+                  }}
+                  className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                />
+                <label htmlFor="lumpSumSplitToggle" className="text-xs font-bold text-gray-800 cursor-pointer">
+                  मिश्रित भुक्तानी गर्नुहोस् (Split Payment: केही नगद + केही बैंक/चेक)
+                </label>
+              </div>
+
+              {isLumpSumSplit ? (
+                <div className="space-y-3 bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200">
+                  <div className="font-extrabold text-emerald-950 text-[11px] uppercase">
+                    Split Breakdown (नगद तथा बैंक रकम विभाजन):
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        💵 नगद भुक्तानी रकम (Cash Portion रू) *
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={lumpSumSplitCashAmount}
+                        onChange={(e) => setLumpSumSplitCashAmount(e.target.value)}
+                        className="erp-input font-mono font-bold text-emerald-700"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        🏦 बैंक/चेक भुक्तानी रकम (Bank Portion रू) *
+                      </label>
+                      <input
+                        required
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={lumpSumSplitBankAmount}
+                        onChange={(e) => setLumpSumSplitBankAmount(e.target.value)}
+                        className="erp-input font-mono font-bold text-purple-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        School Bank Account *
+                      </label>
+                      <select
+                        value={lumpSumSplitBankAccountId}
+                        onChange={(e) => setLumpSumSplitBankAccountId(e.target.value)}
+                        className="erp-input font-bold"
+                        required={parseFloat(lumpSumSplitBankAmount || '0') > 0}
+                      >
+                        <option value="">-- Select Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bankName} - {b.accountNo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        Cheque No (चेक नं.)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 509214"
+                        value={lumpSumSplitChequeNo}
+                        onChange={(e) => setLumpSumSplitChequeNo(e.target.value)}
+                        className="erp-input font-mono font-bold text-purple-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] font-bold text-emerald-950 bg-white p-2 rounded-lg border border-emerald-200 flex justify-between font-mono">
+                    <span>कुल जोड: रू {((parseFloat(lumpSumSplitCashAmount || '0') + parseFloat(lumpSumSplitBankAmount || '0'))).toLocaleString()}</span>
+                    <span>कुल भुक्तानी रकम: रू {(parseFloat(lumpSumTotalAmount || '0')).toLocaleString()}</span>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block font-extrabold text-gray-800 mb-1">
+                      Payment Medium (भुक्तानी विधि) *
+                    </label>
+                    <select
+                      value={lumpSumPaymentMedium}
+                      onChange={(e) => setLumpSumPaymentMedium(e.target.value)}
+                      className="erp-input font-bold"
+                    >
+                      <option value="CASH">Cash (नगद भुक्तानी - Cash A/c)</option>
+                      <option value="CHEQUE">Cheque (चेक)</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                    </select>
+                  </div>
+
+                  {lumpSumPaymentMedium === 'CASH' ? (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-3 text-xs font-bold text-emerald-950 flex items-center gap-2">
+                      <span className="text-base">💵</span>
+                      <span>Disbursing From: <strong>विद्यालय नगद खाता (School Cash / Petty Cash A/c)</strong></span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-extrabold text-purple-950 mb-1">
+                            School Bank Account *
+                          </label>
+                          <select
+                            value={lumpSumBankAccountId}
+                            onChange={(e) => setLumpSumBankAccountId(e.target.value)}
+                            className="erp-input font-bold"
+                            required={lumpSumPaymentMedium !== 'CASH'}
+                          >
+                            <option value="">-- Select Bank Account --</option>
+                            {bankAccountsData?.map((b: any) => (
+                              <option key={b.id} value={b.id}>
+                                {b.bankName} - {b.accountNo}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-extrabold text-purple-950 mb-1">
+                            Cheque No (चेक नं.)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 509214"
+                            value={lumpSumChequeNo}
+                            onChange={(e) => setLumpSumChequeNo(e.target.value)}
+                            className="erp-input font-mono font-bold text-purple-900 border-purple-300"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-extrabold text-purple-950 mb-1">
+                          Cheque Payee Name (चेक पाउनेको नाम)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Vendor / Payee Name"
+                          value={lumpSumChequePayeeName}
+                          onChange={(e) => setLumpSumChequePayeeName(e.target.value)}
+                          className="erp-input font-bold border-purple-300"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Custom Voucher No (ऐच्छिक)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Auto Generated if blank"
+                  value={lumpSumVoucherNo}
+                  onChange={(e) => setLumpSumVoucherNo(e.target.value)}
+                  className="erp-input font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  Remarks (कैफियत)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Lump-sum partial settlement for stationary & construction materials"
+                  value={lumpSumRemarks}
+                  onChange={(e) => setLumpSumRemarks(e.target.value)}
+                  className="erp-input"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsPayVendorLumpSumOpen(false)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addExpenseMutation.isPending}
+                  className="rounded-xl bg-emerald-600 px-5 py-2 font-bold text-white hover:bg-emerald-700 shadow-sm"
+                >
+                  {addExpenseMutation.isPending ? 'Processing...' : 'Disburse Settlement (भुक्तानी गर्नुहोस्)'}
                 </button>
               </div>
             </form>

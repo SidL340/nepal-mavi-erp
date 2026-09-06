@@ -92,10 +92,11 @@ router.get('/payables-summary', authenticate, async (req, res) => {
 
       if (!payableBillsMap.has(pKey)) {
         let parsedTotal = e.amount || 0;
-        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,]+)\]/i);
+        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
         if (match) {
           parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
         }
+
 
         const billFy = e.financialYear?.year || getFiscalYearFromBS(e.expenseDateBs);
 

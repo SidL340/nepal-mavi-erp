@@ -863,6 +863,7 @@ function FeeCollectionPortalContent() {
                     </label>
                     <input
                       type="number"
+                      step="any"
                       placeholder="0.00"
                       value={totalFeeAmount}
                       onChange={(e) => setTotalFeeAmount(e.target.value)}
@@ -877,6 +878,7 @@ function FeeCollectionPortalContent() {
                     <label className="block text-xs font-bold text-gray-700 mb-1">Discount / Waiver (छुट रकम)</label>
                     <input
                       type="number"
+                      step="any"
                       placeholder="0"
                       value={discountAmount}
                       onChange={(e) => setDiscountAmount(e.target.value)}
@@ -891,11 +893,13 @@ function FeeCollectionPortalContent() {
                     </label>
                     <input
                       type="number"
+                      step="any"
                       placeholder="0.00"
                       value={payingAmount}
                       onChange={(e) => setPayingAmount(e.target.value)}
                       className="w-full rounded-lg border border-emerald-400 bg-white p-2 text-xs font-mono font-black text-emerald-800 focus:ring-2 focus:ring-emerald-500"
                     />
+
                     <div className="flex items-center justify-between mt-1 text-[10px] font-bold">
                       <span className="text-gray-500">Remaining Due (बाँकी):</span>
                       <span className={liveRemainingDue > 0 ? 'text-amber-700 font-mono font-black' : 'text-emerald-700 font-mono font-black'}>
@@ -1306,6 +1310,7 @@ function FeeCollectionPortalContent() {
                 </label>
                 <input
                   type="number"
+                  step="any"
                   placeholder="0.00"
                   value={duePayAmount}
                   onChange={(e) => setDuePayAmount(e.target.value)}

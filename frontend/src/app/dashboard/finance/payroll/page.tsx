@@ -640,6 +640,7 @@ export default function PayrollPage() {
                     <label className="block text-xs font-bold text-gray-700 mb-1">Mool Talab (मूल तलब)</label>
                     <input
                       type="number"
+                      step="any"
                       value={moolTalab}
                       onChange={(e) => setMoolTalab(Number(e.target.value))}
                       className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono font-bold"
@@ -650,6 +651,7 @@ export default function PayrollPage() {
                     <div className="flex gap-1">
                       <input
                         type="number"
+                        step="any"
                         placeholder="No"
                         value={gradeNo}
                         onChange={(e) => setGradeNo(Number(e.target.value))}
@@ -657,6 +659,7 @@ export default function PayrollPage() {
                       />
                       <input
                         type="number"
+                        step="any"
                         placeholder="Amt"
                         value={gradeAmount}
                         onChange={(e) => setGradeAmount(Number(e.target.value))}
@@ -676,6 +679,7 @@ export default function PayrollPage() {
                       <label className="text-[11px] text-gray-600">Mahangi Bhata (महँगी)</label>
                       <input
                         type="number"
+                        step="any"
                         value={mahangiGhata}
                         onChange={(e) => setMahangiGhata(Number(e.target.value))}
                         className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
@@ -685,6 +689,7 @@ export default function PayrollPage() {
                       <label className="text-[11px] text-gray-600">Pra-A Bhata (प्र.अ.)</label>
                       <input
                         type="number"
+                        step="any"
                         value={praABhata}
                         onChange={(e) => setPraABhata(Number(e.target.value))}
                         className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
@@ -694,6 +699,7 @@ export default function PayrollPage() {
                       <label className="text-[11px] text-gray-600">Incharge Bhata</label>
                       <input
                         type="number"
+                        step="any"
                         value={prabiInchargeBhata}
                         onChange={(e) => setPrabiInchargeBhata(Number(e.target.value))}
                         className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
@@ -712,6 +718,7 @@ export default function PayrollPage() {
                       <label className="text-[11px] text-gray-600">Kosh Sapati (सापती)</label>
                       <input
                         type="number"
+                        step="any"
                         value={karmachariKoshSapati}
                         onChange={(e) => setKarmachariKoshSapati(Number(e.target.value))}
                         className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
@@ -721,6 +728,7 @@ export default function PayrollPage() {
                       <label className="text-[11px] text-gray-600">Bima Katti (बीमा)</label>
                       <input
                         type="number"
+                        step="any"
                         value={bimaKati}
                         onChange={(e) => setBimaKati(Number(e.target.value))}
                         className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
@@ -730,6 +738,7 @@ export default function PayrollPage() {
                       <label className="text-[11px] text-gray-600">Peshki Katti (पेश्की)</label>
                       <input
                         type="number"
+                        step="any"
                         value={peshkiKati}
                         onChange={(e) => setPeshkiKati(Number(e.target.value))}
                         className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
