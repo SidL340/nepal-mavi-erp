@@ -317,17 +317,202 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   }
 });
 
-// ── DELETE (DEACTIVATE) PARTY ────────────────────────────────────────────────
-router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+// ── SETTLE LUMP-SUM / MULTI-BILL PAYMENT FOR A PARTY ─────────────────────────
+router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    await prisma.party.update({
-      where: { id: parseInt(req.params.id) },
-      data: { isActive: false },
+    const partyId = parseInt(req.params.id);
+    const party = await prisma.party.findUnique({ where: { id: partyId } });
+    if (!party) return res.status(404).json({ success: false, message: 'Party not found.' });
+
+    const {
+      amount,
+      financialYearId,
+      academicYearId,
+      expenseDateBs,
+      paymentMedium,
+      bankAccountId,
+      chequeNo,
+      chequePayeeName,
+      voucherNo,
+      remarks,
+      isSplit,
+      cashAmount,
+      bankAmount,
+      splitBankAccountId,
+      splitChequeNo,
+      billKeys,
+    } = req.body;
+
+    const totalPayAmt = parseFloat(amount);
+    if (!totalPayAmt || totalPayAmt <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid payment amount is required.' });
+    }
+
+    // Auto resolve Financial Year by expense date if not provided
+    let resolvedFyId = financialYearId ? parseInt(financialYearId) : null;
+    if (!resolvedFyId && expenseDateBs) {
+      const { resolveFinancialYearByDate } = require('./financialYears');
+      const resolved = await resolveFinancialYearByDate(expenseDateBs);
+      if (resolved) resolvedFyId = resolved.id;
+    }
+
+    // Fetch all entries for this party to find open bills
+    const allEntries = await prisma.expenseEntry.findMany({
+      where: { partyId },
+      include: { head: true, financialYear: true },
+      orderBy: { id: 'asc' },
     });
-    return res.json({ success: true, message: 'Party deactivated.' });
+
+    const openBillsMap = new Map();
+    for (const e of allEntries) {
+      if (!e.billNo || !e.billNo.trim() || e.billNo === 'LUMP-SUM-SETTLEMENT') continue;
+      const cleanBill = e.billNo.trim();
+      const pKey = `${partyId}_${cleanBill}`;
+      if (!openBillsMap.has(pKey)) {
+        let parsedTotal = e.amount || 0;
+        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
+        if (match) parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+        openBillsMap.set(pKey, {
+          billNo: cleanBill,
+          headId: e.headId,
+          totalBillAmount: parsedTotal,
+          totalPaidAmount: 0,
+          entries: [],
+        });
+      }
+      const b = openBillsMap.get(pKey);
+      b.totalPaidAmount += (e.amount || 0);
+      b.entries.push(e);
+    }
+
+    let openBills = Array.from(openBillsMap.values())
+      .map(b => ({
+        ...b,
+        remainingDue: Math.max(0, b.totalBillAmount - b.totalPaidAmount),
+      }))
+      .filter(b => b.remainingDue > 0);
+
+    if (billKeys && Array.isArray(billKeys) && billKeys.length > 0) {
+      openBills = openBills.filter(b => billKeys.includes(b.billNo));
+    }
+
+    if (openBills.length === 0) {
+      return res.status(400).json({ success: false, message: 'यो पार्टीको कुनै पनि बक्यौता बिल फेला परेन (No outstanding bills found for this party).' });
+    }
+
+    let remainingPayment = totalPayAmt;
+    const createdEntries = [];
+
+    // Resolve Bank details
+    let paidFromAcc = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+    let bObj = null;
+    if (bankAccountId) {
+      bObj = await prisma.bankAccount.findUnique({ where: { id: parseInt(bankAccountId) } });
+      if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
+    }
+
+    let splitBObj = null;
+    if (splitBankAccountId) {
+      splitBObj = await prisma.bankAccount.findUnique({ where: { id: parseInt(splitBankAccountId) } });
+    }
+
+    for (const b of openBills) {
+      if (remainingPayment <= 0.001) break;
+
+      const payForBill = Math.min(b.remainingDue, remainingPayment);
+
+      if (isSplit) {
+        const cashRatio = parseFloat(cashAmount || 0) / totalPayAmt;
+        const bankRatio = parseFloat(bankAmount || 0) / totalPayAmt;
+        const billCash = Math.round(payForBill * cashRatio * 100) / 100;
+        const billBank = Math.round((payForBill - billCash) * 100) / 100;
+
+        if (billCash > 0) {
+          const cashEntry = await prisma.expenseEntry.create({
+            data: {
+              financialYearId: resolvedFyId,
+              academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
+              headId: b.headId,
+              partyId: partyId,
+              amount: billCash,
+              expenseDateBs: expenseDateBs,
+              expenseDateAd: new Date(),
+              paidTo: party.name,
+              paymentMedium: 'CASH',
+              paidFromAccount: 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)',
+              billNo: b.billNo,
+              voucherNo: voucherNo || undefined,
+              description: `Settlement payment for Bill ${b.billNo} [Cash Portion 1/2]`,
+              remarks: remarks || `Lump-sum cash settlement for Bill ${b.billNo}`,
+              approvedBy: 'Principal (प्रधानाध्यापक)',
+            }
+          });
+          createdEntries.push(cashEntry);
+        }
+
+        if (billBank > 0) {
+          const bankEntry = await prisma.expenseEntry.create({
+            data: {
+              financialYearId: resolvedFyId,
+              academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
+              headId: b.headId,
+              partyId: partyId,
+              amount: billBank,
+              expenseDateBs: expenseDateBs,
+              expenseDateAd: new Date(),
+              paidTo: party.name,
+              paymentMedium: 'CHEQUE',
+              paidFromAccount: splitBObj ? `${splitBObj.bankName} (${splitBObj.accountNo})` : 'School Bank Account',
+              bankAccountId: splitBankAccountId ? parseInt(splitBankAccountId) : undefined,
+              chequeNo: splitChequeNo || null,
+              chequePayeeName: chequePayeeName || party.name,
+              billNo: b.billNo,
+              voucherNo: voucherNo || undefined,
+              description: `Settlement payment for Bill ${b.billNo} [Cheque/Bank Portion 2/2]`,
+              remarks: remarks || `Lump-sum bank settlement for Bill ${b.billNo}`,
+              approvedBy: 'Principal (प्रधानाध्यापक)',
+            }
+          });
+          createdEntries.push(bankEntry);
+        }
+      } else {
+        const entry = await prisma.expenseEntry.create({
+          data: {
+            financialYearId: resolvedFyId,
+            academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
+            headId: b.headId,
+            partyId: partyId,
+            amount: payForBill,
+            expenseDateBs: expenseDateBs,
+            expenseDateAd: new Date(),
+            paidTo: party.name,
+            paymentMedium: paymentMedium || 'CHEQUE',
+            paidFromAccount: paymentMedium === 'CASH' ? 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)' : paidFromAcc,
+            bankAccountId: paymentMedium !== 'CASH' && bankAccountId ? parseInt(bankAccountId) : undefined,
+            chequeNo: chequeNo || null,
+            chequePayeeName: chequePayeeName || party.name,
+            voucherNo: voucherNo || undefined,
+            billNo: b.billNo,
+            description: `Settlement payment for Bill ${b.billNo} [Total Bill: Rs. ${b.totalBillAmount.toLocaleString()}]`,
+            remarks: remarks || `Lump-sum settlement payment for Bill ${b.billNo}`,
+            approvedBy: 'Principal (प्रधानाध्यापक)',
+          }
+        });
+        createdEntries.push(entry);
+      }
+
+      remainingPayment -= payForBill;
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: createdEntries,
+      message: `पार्टी बक्यौता रकम रू ${totalPayAmt.toLocaleString()} सम्बन्धित ${openBills.length} वटा बिलहरूमा सफलतापूर्वक चुक्ता भयो!`,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 });
 
 module.exports = router;
+

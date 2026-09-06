@@ -1451,7 +1451,6 @@ export default function ExpensesPage() {
     const resolvedFYId = lumpSumFinancialYearId
       ? parseInt(lumpSumFinancialYearId)
       : (autoResolvedLumpSumFY?.id || activeFinancialYear?.id || 1);
-    const targetHeadId = lumpSumHeadId ? parseInt(lumpSumHeadId) : (headsData?.[0]?.id || 1);
     const totalPayAmt = parseFloat(lumpSumTotalAmount);
 
     if (isLumpSumSplit) {
@@ -1461,108 +1460,49 @@ export default function ExpensesPage() {
         toast.error(`मिश्रित भुक्तानीको योगफल कुल रकमसँग मिल्नुपर्छ (Cash Rs. ${cashAmt} + Bank Rs. ${bankAmt} != Total Rs. ${totalPayAmt}).`);
         return;
       }
+    }
 
-      try {
-        if (cashAmt > 0) {
-          await api.post('/expense/entries', {
-            financialYearId: resolvedFYId,
-            headId: targetHeadId,
-            amount: cashAmt,
-            expenseDateBs: lumpSumDateBs || todayBS(),
-            expenseDateAd: new Date().toISOString().slice(0, 10),
-            partyId: parseInt(lumpSumPartyId),
-            paidTo: partyObj?.name || 'Vendor',
-            paymentMedium: 'CASH',
-            paidFromAccount: 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)',
-            billNo: 'LUMP-SUM-SETTLEMENT',
-            description: `Lump-sum Settlement towards Total Balance (Cash Portion 1/2) — ${partyObj?.name}`,
-            remarks: lumpSumRemarks || `Lump-sum cash payment of Rs. ${cashAmt.toLocaleString()}`,
-            approvedBy: 'Principal (प्रधानाध्यापक)',
-          });
-        }
-
-        if (bankAmt > 0) {
-          let paidFromAcc = 'School Operational Account';
-          if (lumpSumSplitBankAccountId) {
-            const bObj = bankAccountsData?.find((b: any) => b.id.toString() === lumpSumSplitBankAccountId);
-            if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
-          }
-
-          await api.post('/expense/entries', {
-            financialYearId: resolvedFYId,
-            headId: targetHeadId,
-            amount: bankAmt,
-            expenseDateBs: lumpSumDateBs || todayBS(),
-            expenseDateAd: new Date().toISOString().slice(0, 10),
-            partyId: parseInt(lumpSumPartyId),
-            paidTo: partyObj?.name || 'Vendor',
-            paymentMedium: 'CHEQUE',
-            bankAccountId: lumpSumSplitBankAccountId ? parseInt(lumpSumSplitBankAccountId) : undefined,
-            paidFromAccount: paidFromAcc,
-            chequeNo: lumpSumSplitChequeNo || null,
-            chequePayeeName: lumpSumChequePayeeName || partyObj?.name,
-            billNo: 'LUMP-SUM-SETTLEMENT',
-            description: `Lump-sum Settlement towards Total Balance (Bank/Cheque Portion 2/2) — ${partyObj?.name}`,
-            remarks: lumpSumRemarks || `Lump-sum bank payment of Rs. ${bankAmt.toLocaleString()}`,
-            approvedBy: 'Principal (प्रधानाध्यापक)',
-          });
-        }
-
-        toast.success(`पार्टी बक्यौता भुक्तानी रू ${totalPayAmt.toLocaleString()} (नगद + बैंक) सुरक्षित भयो!`);
-        setIsPayVendorLumpSumOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
-        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
-        queryClient.invalidateQueries({ queryKey: ['parties-list'] });
-        setLumpSumTotalAmount('');
-        setLumpSumSplitCashAmount('');
-        setLumpSumSplitBankAmount('');
-        setLumpSumRemarks('');
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || 'Failed to record lump-sum settlement.');
-      }
-    } else {
-      let paidFromAcc = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
-      if (lumpSumPaymentMedium !== 'CASH' && lumpSumBankAccountId) {
-        const bObj = bankAccountsData?.find((b: any) => b.id.toString() === lumpSumBankAccountId);
-        if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
-      }
-
+    try {
       const payload: any = {
-        financialYearId: resolvedFYId,
-        headId: targetHeadId,
         amount: totalPayAmt,
+        financialYearId: resolvedFYId,
         expenseDateBs: lumpSumDateBs || todayBS(),
-        expenseDateAd: new Date().toISOString().slice(0, 10),
-        partyId: parseInt(lumpSumPartyId),
-        paidTo: partyObj?.name || 'Vendor',
-        paymentMedium: lumpSumPaymentMedium,
-        billNo: 'LUMP-SUM-SETTLEMENT',
+        remarks: lumpSumRemarks || `Lump-sum settlement payment for ${partyObj?.name}`,
         voucherNo: lumpSumVoucherNo || undefined,
-        description: `Lump-sum Settlement towards Total Balance — ${partyObj?.name}`,
-        remarks: lumpSumRemarks || `Lump-sum payment of Rs. ${totalPayAmt.toLocaleString()}`,
-        approvedBy: 'Principal (प्रधानाध्यापक)',
+        isSplit: isLumpSumSplit,
       };
 
-      if (lumpSumPaymentMedium === 'CASH') {
-        payload.bankAccountId = null;
-        payload.paidFromAccount = paidFromAcc;
-      } else {
-        payload.bankAccountId = lumpSumBankAccountId ? parseInt(lumpSumBankAccountId) : null;
-        payload.paidFromAccount = paidFromAcc;
-        payload.chequeNo = lumpSumChequeNo || null;
+      if (isLumpSumSplit) {
+        payload.cashAmount = parseFloat(lumpSumSplitCashAmount || '0');
+        payload.bankAmount = parseFloat(lumpSumSplitBankAmount || '0');
+        payload.splitBankAccountId = lumpSumSplitBankAccountId ? parseInt(lumpSumSplitBankAccountId) : undefined;
+        payload.splitChequeNo = lumpSumSplitChequeNo || undefined;
         payload.chequePayeeName = lumpSumChequePayeeName || partyObj?.name;
+      } else {
+        payload.paymentMedium = lumpSumPaymentMedium;
+        if (lumpSumPaymentMedium !== 'CASH') {
+          payload.bankAccountId = lumpSumBankAccountId ? parseInt(lumpSumBankAccountId) : undefined;
+          payload.chequeNo = lumpSumChequeNo || undefined;
+          payload.chequePayeeName = lumpSumChequePayeeName || partyObj?.name;
+        }
       }
 
-      addExpenseMutation.mutate(payload, {
-        onSuccess: () => {
-          toast.success(`पार्टी बक्यौता भुक्तानी रू ${totalPayAmt.toLocaleString()} सुरक्षित भयो!`);
-          setIsPayVendorLumpSumOpen(false);
-          queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
-          queryClient.invalidateQueries({ queryKey: ['parties-list'] });
-          setLumpSumTotalAmount('');
-          setLumpSumRemarks('');
-        }
-      });
+      const res = await api.post(`/parties/${lumpSumPartyId}/settle-lump-sum`, payload);
+
+      toast.success(res.data?.message || `पार्टी बक्यौता भुक्तानी रू ${totalPayAmt.toLocaleString()} सुरक्षित भयो!`);
+      setIsPayVendorLumpSumOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['parties-list'] });
+      queryClient.invalidateQueries({ queryKey: ['parties-all'] });
+      setLumpSumTotalAmount('');
+      setLumpSumSplitCashAmount('');
+      setLumpSumSplitBankAmount('');
+      setLumpSumRemarks('');
+      setLumpSumChequeNo('');
+      setLumpSumSplitChequeNo('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to record lump-sum settlement.');
     }
   };
 

@@ -172,34 +172,74 @@ export default function JournalVoucherPage() {
     });
   });
 
-  // 2. Expense Vouchers
+  // 2. Expense Vouchers (Double-Entry Balanced)
   (expenseData || []).forEach((exp: any) => {
     const rName = exp.party?.name || exp.paidTo || 'Vendor / Supplier';
     const topicTitle = exp.head ? `${exp.head.code ? `[${exp.head.code}] ` : ''}${exp.head.name}` : 'Operating Expense';
     const fyYear = exp.financialYear?.year || getFiscalYearFromBS(exp.expenseDateBs);
-    allVouchers.push({
-      id: `EXP-${exp.id}`,
-      originalId: exp.id,
-      voucherNo: exp.voucherNo || `JV-EXP-${new Date().getFullYear()}-${String(exp.id).padStart(4, '0')}`,
-      type: 'EXPENSE',
-      typeLabel: 'खर्च गोश्वारा भौचर (Expense JV)',
-      topic: topicTitle,
-      financialYear: fyYear,
-      recipientName: rName,
-      partyId: exp.partyId || exp.party?.id,
-      dateBs: exp.expenseDateBs,
-      dateAd: exp.expenseDateAd,
-      particulars: `${exp.head?.name || 'Expense'} (Paid to: ${rName})`,
-      debitAccount: `खर्च शीर्षक: ${topicTitle}`,
-      creditAccount: exp.paidFromAccount || (exp.paymentMedium === 'CASH' ? 'नगद हिसाब (Cash A/c)' : 'बैंक हिसाब (Bank Current A/c)'),
-      debitAmount: exp.amount || 0,
-      creditAmount: exp.amount || 0,
-      paymentMedium: exp.paymentMedium || 'CASH',
-      paymentRef: exp.paymentRef || exp.chequeNo || exp.billNo || 'N/A',
-      chequeNo: exp.chequeNo,
-      preparedBy: exp.approvedBy || 'Accountant',
-      remarks: exp.description || exp.remarks || `Expense payment for ${exp.head?.name}`,
-    });
+    
+    // Check if this is a credit purchase registration (amount = 0)
+    if (exp.amount === 0) {
+      const match = (exp.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || (exp.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
+      const parsedBillTotal = match ? parseFloat(match[1].replace(/,/g, '')) : 0;
+      
+      allVouchers.push({
+        id: `EXP-${exp.id}`,
+        originalId: exp.id,
+        voucherNo: exp.voucherNo || `JV-BILL-${new Date().getFullYear()}-${String(exp.id).padStart(4, '0')}`,
+        type: 'EXPENSE',
+        typeLabel: 'उधारो बिल दर्ता भौचर (Credit Purchase JV)',
+        topic: topicTitle,
+        financialYear: fyYear,
+        recipientName: rName,
+        partyId: exp.partyId || exp.party?.id,
+        dateBs: exp.expenseDateBs,
+        dateAd: exp.expenseDateAd,
+        particulars: `Credit Bill #${exp.billNo || exp.id} Registered: ${topicTitle} (${rName})`,
+        debitAccount: `खर्च शीर्षक: ${topicTitle}`,
+        creditAccount: `साहु/दायित्व हिसाब: ${rName} (Accounts Payable A/c)`,
+        debitAmount: parsedBillTotal,
+        creditAmount: parsedBillTotal,
+        paymentMedium: 'CREDIT (उधारो)',
+        paymentRef: exp.billNo ? `Bill No: ${exp.billNo}` : 'Credit Bill',
+        chequeNo: null,
+        preparedBy: exp.approvedBy || 'Accountant',
+        remarks: exp.description || exp.remarks || `Credit purchase bill registered from ${rName}`,
+      });
+    } else {
+      // Payment / Disbursement entry
+      const isBillPayment = Boolean(exp.billNo) || (exp.description || '').includes('Installment') || (exp.description || '').includes('Settlement');
+      const debitAcc = isBillPayment
+        ? `साहु/दायित्व हिसाब: ${rName} (Accounts Payable A/c)`
+        : `खर्च शीर्षक: ${topicTitle}`;
+      const creditAcc = exp.paidFromAccount || (exp.paymentMedium === 'CASH' ? 'विद्यालय नगद खाता (School Cash A/c)' : 'बैंक हिसाब (Bank Current A/c)');
+
+      allVouchers.push({
+        id: `EXP-${exp.id}`,
+        originalId: exp.id,
+        voucherNo: exp.voucherNo || `JV-EXP-${new Date().getFullYear()}-${String(exp.id).padStart(4, '0')}`,
+        type: 'EXPENSE',
+        typeLabel: isBillPayment ? 'बिल भुक्तानी गोश्वारा भौचर (Bill Payment JV)' : 'खर्च गोश्वारा भौचर (Expense JV)',
+        topic: topicTitle,
+        financialYear: fyYear,
+        recipientName: rName,
+        partyId: exp.partyId || exp.party?.id,
+        dateBs: exp.expenseDateBs,
+        dateAd: exp.expenseDateAd,
+        particulars: isBillPayment
+          ? `Bill #${exp.billNo || ''} Settlement: ${rName} (${topicTitle})`
+          : `${exp.head?.name || 'Expense'} (Paid to: ${rName})`,
+        debitAccount: debitAcc,
+        creditAccount: creditAcc,
+        debitAmount: exp.amount || 0,
+        creditAmount: exp.amount || 0,
+        paymentMedium: exp.paymentMedium || 'CASH',
+        paymentRef: exp.paymentRef || exp.chequeNo || exp.billNo || 'N/A',
+        chequeNo: exp.chequeNo,
+        preparedBy: exp.approvedBy || 'Accountant',
+        remarks: exp.description || exp.remarks || `Payment of Rs. ${exp.amount} for ${exp.head?.name}`,
+      });
+    }
   });
 
   // 3. Student Fee Receipts Vouchers
