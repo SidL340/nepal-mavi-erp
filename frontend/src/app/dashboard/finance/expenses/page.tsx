@@ -73,6 +73,14 @@ export default function ExpensesPage() {
   const [addExpenseDescription, setAddExpenseDescription] = useState('');
   const [addExpenseRemarks, setAddExpenseRemarks] = useState('');
 
+  // Split Expense Payment State (खर्च मिश्रित भुक्तानी: नगद + बैंक/चेक)
+  const [isAddExpenseSplit, setIsAddExpenseSplit] = useState(false);
+  const [addExpenseSplitCashAmount, setAddExpenseSplitCashAmount] = useState('');
+  const [addExpenseSplitBankAmount, setAddExpenseSplitBankAmount] = useState('');
+  const [addExpenseSplitBankAccountId, setAddExpenseSplitBankAccountId] = useState('');
+  const [addExpenseSplitChequeNo, setAddExpenseSplitChequeNo] = useState('');
+  const [addExpenseSplitPayeeName, setAddExpenseSplitPayeeName] = useState('');
+
   // Date States with Auto Formatting
   const [addExpenseDateBs, setAddExpenseDateBs] = useState(todayBS());
   const [addChequeDateBs, setAddChequeDateBs] = useState(todayBS());
@@ -347,7 +355,7 @@ export default function ExpensesPage() {
     },
   });
 
-  const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!addExpenseHeadId) {
       toast.error('कृपया खर्च शीर्षक छनौट गर्नुहोस् (Please select an Expense Topic).');
@@ -358,50 +366,133 @@ export default function ExpensesPage() {
       return;
     }
 
-    const data: any = {
-      headId: parseInt(addExpenseHeadId),
-      amount: parseFloat(addExpenseAmount),
-      expenseDateBs: addExpenseDateBs || todayBS(),
-      paymentMedium,
-      billNo: addExpenseBillNo.trim() || null,
-      description: addExpenseDescription.trim() || null,
-      remarks: addExpenseRemarks.trim() || null,
-    };
+    const totalAmt = parseFloat(addExpenseAmount);
+    const resolvedFYId = expenseFormYearId ? parseInt(expenseFormYearId) : (autoResolvedFY?.id || activeFinancialYear?.id || 1);
+    const targetHeadId = parseInt(addExpenseHeadId);
+    const finalApprovedBy = approvedByOption === 'CUSTOM' ? customApprovedBy : approvedByOption;
 
+    let resolvedPaidTo = addExpensePaidToManual.trim() || undefined;
     if (selectedPartyId) {
-      data.partyId = parseInt(selectedPartyId);
       const partyObj = partiesData?.find((p: any) => p.id.toString() === selectedPartyId);
-      if (partyObj) data.paidTo = partyObj.name;
-    } else if (addExpensePaidToManual) {
-      data.paidTo = addExpensePaidToManual.trim();
+      if (partyObj) resolvedPaidTo = partyObj.name;
     }
 
-    if (paymentMedium === 'CASH') {
-      data.bankAccountId = null;
-      data.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
-      data.chequeNo = null;
-      data.chequeDateBs = null;
-      data.chequePayeeName = null;
-    } else if (selectedBankAcc) {
-      const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === selectedBankAcc);
-      if (bankObj) {
-        data.bankAccountId = bankObj.id;
-        data.paidFromAccount = `${bankObj.bankName} (${bankObj.accountNo})`;
+    if (isAddExpenseSplit) {
+      const cashAmt = parseFloat(addExpenseSplitCashAmount || '0');
+      const bankAmt = parseFloat(addExpenseSplitBankAmount || '0');
+      if (Math.abs((cashAmt + bankAmt) - totalAmt) > 0.01) {
+        toast.error(`मिश्रित खर्चको योगफल कुल रकमसँग मिल्नुपर्छ (Cash Rs. ${cashAmt} + Bank Rs. ${bankAmt} != Total Rs. ${totalAmt}).`);
+        return;
+      }
+
+      try {
+        if (cashAmt > 0) {
+          await api.post('/expense/entries', {
+            academicYearId: activeYear?.id || 1,
+            financialYearId: resolvedFYId,
+            headId: targetHeadId,
+            amount: cashAmt,
+            expenseDateBs: addExpenseDateBs || todayBS(),
+            expenseDateAd: new Date().toISOString().slice(0, 10),
+            partyId: selectedPartyId ? parseInt(selectedPartyId) : undefined,
+            paidTo: resolvedPaidTo,
+            paymentMedium: 'CASH',
+            paidFromAccount: 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)',
+            billNo: addExpenseBillNo.trim() || undefined,
+            description: addExpenseDescription.trim() ? `${addExpenseDescription.trim()} [Cash Portion 1/2]` : undefined,
+            remarks: addExpenseRemarks.trim() ? `${addExpenseRemarks.trim()} [Cash Portion 1/2]` : 'Cash Expense (1/2)',
+            approvedBy: finalApprovedBy || 'Principal (प्रधानाध्यापक)',
+          });
+        }
+
+        if (bankAmt > 0) {
+          let paidFromAcc = 'School Operational Account';
+          if (addExpenseSplitBankAccountId) {
+            const bObj = bankAccountsData?.find((b: any) => b.id.toString() === addExpenseSplitBankAccountId);
+            if (bObj) paidFromAcc = `${bObj.bankName} (${bObj.accountNo})`;
+          }
+
+          await api.post('/expense/entries', {
+            academicYearId: activeYear?.id || 1,
+            financialYearId: resolvedFYId,
+            headId: targetHeadId,
+            amount: bankAmt,
+            expenseDateBs: addExpenseDateBs || todayBS(),
+            expenseDateAd: new Date().toISOString().slice(0, 10),
+            partyId: selectedPartyId ? parseInt(selectedPartyId) : undefined,
+            paidTo: resolvedPaidTo,
+            paymentMedium: 'CHEQUE',
+            bankAccountId: addExpenseSplitBankAccountId ? parseInt(addExpenseSplitBankAccountId) : undefined,
+            paidFromAccount: paidFromAcc,
+            chequeNo: addExpenseSplitChequeNo.trim() || undefined,
+            chequePayeeName: addExpenseSplitPayeeName.trim() || resolvedPaidTo,
+            billNo: addExpenseBillNo.trim() || undefined,
+            description: addExpenseDescription.trim() ? `${addExpenseDescription.trim()} [Bank/Cheque Portion 2/2]` : undefined,
+            remarks: addExpenseRemarks.trim() ? `${addExpenseRemarks.trim()} [Bank/Cheque Portion 2/2]` : 'Bank/Cheque Expense (2/2)',
+            approvedBy: finalApprovedBy || 'Principal (प्रधानाध्यापक)',
+          });
+        }
+
+        toast.success(`मिश्रित खर्च प्रविष्टि रू ${totalAmt.toLocaleString()} (नगद + बैंक) सुरक्षित भयो!`);
+        queryClient.invalidateQueries({ queryKey: ['expense-entries'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+        setAddExpenseAmount('');
+        setAddExpenseSplitCashAmount('');
+        setAddExpenseSplitBankAmount('');
+        setAddExpenseBillNo('');
+        setAddExpenseChequeNo('');
+        setAddExpenseChequePayeeName('');
+        setAddExpenseDescription('');
+        setAddExpenseRemarks('');
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to record split expense.');
       }
     } else {
-      data.paidFromAccount = 'School Operational Account';
+      const data: any = {
+        headId: targetHeadId,
+        amount: totalAmt,
+        expenseDateBs: addExpenseDateBs || todayBS(),
+        paymentMedium,
+        billNo: addExpenseBillNo.trim() || null,
+        description: addExpenseDescription.trim() || null,
+        remarks: addExpenseRemarks.trim() || null,
+      };
+
+      if (selectedPartyId) {
+        data.partyId = parseInt(selectedPartyId);
+        const partyObj = partiesData?.find((p: any) => p.id.toString() === selectedPartyId);
+        if (partyObj) data.paidTo = partyObj.name;
+      } else if (addExpensePaidToManual) {
+        data.paidTo = addExpensePaidToManual.trim();
+      }
+
+      if (paymentMedium === 'CASH') {
+        data.bankAccountId = null;
+        data.paidFromAccount = 'विद्यालय नगद खाता (School Cash / Petty Cash A/c)';
+        data.chequeNo = null;
+        data.chequeDateBs = null;
+        data.chequePayeeName = null;
+      } else if (selectedBankAcc) {
+        const bankObj = bankAccountsData?.find((b: any) => b.id.toString() === selectedBankAcc);
+        if (bankObj) {
+          data.bankAccountId = bankObj.id;
+          data.paidFromAccount = `${bankObj.bankName} (${bankObj.accountNo})`;
+        }
+      } else {
+        data.paidFromAccount = 'School Operational Account';
+      }
+
+      if (paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') {
+        data.chequeNo = addExpenseChequeNo.trim() || null;
+        data.chequeDateBs = addChequeDateBs || null;
+        data.chequePayeeName = addExpenseChequePayeeName.trim() || null;
+      }
+
+      if (finalApprovedBy) data.approvedBy = finalApprovedBy;
+
+      addExpenseMutation.mutate(data);
     }
-
-    if (paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') {
-      data.chequeNo = addExpenseChequeNo.trim() || null;
-      data.chequeDateBs = addChequeDateBs || null;
-      data.chequePayeeName = addExpenseChequePayeeName.trim() || null;
-    }
-
-    const finalApprovedBy = approvedByOption === 'CUSTOM' ? customApprovedBy : approvedByOption;
-    if (finalApprovedBy) data.approvedBy = finalApprovedBy;
-
-    addExpenseMutation.mutate(data);
   };
 
   const updateExpenseMutation = useMutation({
@@ -3294,51 +3385,164 @@ export default function ExpensesPage() {
                 </div>
               </div>
 
+              {/* Split Mode Toggle */}
+              <div className="flex items-center gap-2 p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="addExpenseSplitToggle"
+                  checked={isAddExpenseSplit}
+                  onChange={(e) => {
+                    setIsAddExpenseSplit(e.target.checked);
+                    if (e.target.checked && addExpenseAmount) {
+                      const half = (parseFloat(addExpenseAmount) / 2).toFixed(2);
+                      setAddExpenseSplitCashAmount(half);
+                      setAddExpenseSplitBankAmount((parseFloat(addExpenseAmount) - parseFloat(half)).toFixed(2));
+                    }
+                  }}
+                  className="h-4 w-4 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <label htmlFor="addExpenseSplitToggle" className="text-xs font-bold text-gray-800 cursor-pointer">
+                  मिश्रित भुक्तानी गर्नुहोस् (Split Payment: केही नगद + केही बैंक/चेक)
+                </label>
+              </div>
 
-              {/* Conditional Cheque Details */}
-              {(paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') && (
-                <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {isAddExpenseSplit ? (
+                <div className="space-y-3 bg-rose-50/70 p-3.5 rounded-xl border border-rose-200">
+                  <div className="font-extrabold text-rose-950 text-[11px] uppercase">
+                    Split Breakdown (नगद तथा बैंक रकम विभाजन):
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-extrabold text-purple-950 mb-1">
-                        Cheque / Trans Ref No. (चेक नम्बर) *
+                      <label className="block font-bold text-gray-800 mb-1">
+                        💵 नगद भुक्तानी रकम (Cash Portion रू) *
                       </label>
                       <input
-                        type="text"
-                        placeholder="e.g. CHQ-98765432"
-                        value={addExpenseChequeNo}
-                        onChange={(e) => setAddExpenseChequeNo(e.target.value)}
-                        className="erp-input font-mono font-bold border-purple-300"
+                        required
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={addExpenseSplitCashAmount}
+                        onChange={(e) => setAddExpenseSplitCashAmount(e.target.value)}
+                        className="erp-input font-mono font-bold text-emerald-700"
                       />
                     </div>
+
                     <div>
-                      <label className="block font-extrabold text-purple-950 mb-1">
-                        Cheque Date in BS (चेक मिति)
+                      <label className="block font-bold text-gray-800 mb-1">
+                        🏦 बैंक/चेक भुक्तानी रकम (Bank Portion रू) *
                       </label>
                       <input
-                        type="text"
-                        value={addChequeDateBs}
-                        onChange={(e) => setAddChequeDateBs(formatDateInput(e.target.value))}
-                        className="erp-input font-mono font-bold border-purple-300"
+                        required
+                        type="number"
+                        step="any"
+                        placeholder="0.00"
+                        value={addExpenseSplitBankAmount}
+                        onChange={(e) => setAddExpenseSplitBankAmount(e.target.value)}
+                        className="erp-input font-mono font-bold text-rose-900"
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        School Bank Account *
+                      </label>
+                      <select
+                        value={addExpenseSplitBankAccountId}
+                        onChange={(e) => setAddExpenseSplitBankAccountId(e.target.value)}
+                        className="erp-input font-bold"
+                        required={parseFloat(addExpenseSplitBankAmount || '0') > 0}
+                      >
+                        <option value="">-- Select Bank Account --</option>
+                        {bankAccountsData?.map((b: any) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bankName} - {b.accountNo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        Cheque No (चेक नं.)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 509214"
+                        value={addExpenseSplitChequeNo}
+                        onChange={(e) => setAddExpenseSplitChequeNo(e.target.value)}
+                        className="erp-input font-mono font-bold text-rose-900"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block font-extrabold text-purple-950 mb-1">
-                      Cheque Issued To / Payee Name (चेक कसको नाममा जारी गरियो - Account Holder)
+                    <label className="block font-bold text-gray-800 mb-1">
+                      Cheque Issued To / Payee Name (चेक पाउनेको नाम)
                     </label>
                     <input
                       type="text"
-                      placeholder="Specify Account Holder Name if different from Shop/Firm Name (e.g. Ram Kumar Sharma)"
-                      value={addExpenseChequePayeeName}
-                      onChange={(e) => setAddExpenseChequePayeeName(e.target.value)}
-                      className="erp-input font-bold border-purple-300"
+                      placeholder="Account holder name if different from party"
+                      value={addExpenseSplitPayeeName}
+                      onChange={(e) => setAddExpenseSplitPayeeName(e.target.value)}
+                      className="erp-input font-bold"
                     />
-                    <span className="text-[10px] text-purple-700 font-medium block mt-0.5">
-                      💡 Use this if the shop/vendor name is different from the personal account owner receiving the cheque/transfer.
-                    </span>
+                  </div>
+
+                  <div className="text-[11px] font-bold text-rose-950 bg-white p-2 rounded-lg border border-rose-200 flex justify-between font-mono">
+                    <span>कुल जोड (Total): रू {((parseFloat(addExpenseSplitCashAmount || '0') + parseFloat(addExpenseSplitBankAmount || '0'))).toLocaleString()}</span>
+                    <span>कुल खर्च (Target): रू {(parseFloat(addExpenseAmount || '0')).toLocaleString()}</span>
                   </div>
                 </div>
+              ) : (
+                <>
+                  {(paymentMedium === 'CHEQUE' || paymentMedium === 'BANK_TRANSFER') && (
+                    <div className="space-y-3 bg-purple-50/70 p-3.5 rounded-xl border border-purple-200">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="block font-extrabold text-purple-950 mb-1">
+                            Cheque / Trans Ref No. (चेक नम्बर) *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. CHQ-98765432"
+                            value={addExpenseChequeNo}
+                            onChange={(e) => setAddExpenseChequeNo(e.target.value)}
+                            className="erp-input font-mono font-bold border-purple-300"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-extrabold text-purple-950 mb-1">
+                            Cheque Date in BS (चेक मिति)
+                          </label>
+                          <input
+                            type="text"
+                            value={addChequeDateBs}
+                            onChange={(e) => setAddChequeDateBs(formatDateInput(e.target.value))}
+                            className="erp-input font-mono font-bold border-purple-300"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block font-extrabold text-purple-950 mb-1">
+                          Cheque Issued To / Payee Name (चेक कसको नाममा जारी गरियो - Account Holder)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Specify Account Holder Name if different from Shop/Firm Name (e.g. Ram Kumar Sharma)"
+                          value={addExpenseChequePayeeName}
+                          onChange={(e) => setAddExpenseChequePayeeName(e.target.value)}
+                          className="erp-input font-bold border-purple-300"
+                        />
+                        <span className="text-[10px] text-purple-700 font-medium block mt-0.5">
+                          💡 Use this if the shop/vendor name is different from the personal account owner receiving the cheque/transfer.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Row 4: Bill No & Approved By */}
