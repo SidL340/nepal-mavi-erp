@@ -72,7 +72,36 @@ router.get('/categories', authenticate, async (req, res) => {
 
 router.post('/categories', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const cat = await prisma.incomeCategory.create({ data: req.body });
+    const { name, nameNepali, type, description, isActive } = req.body;
+    let cat;
+    try {
+      cat = await prisma.incomeCategory.create({
+        data: {
+          name: name ? String(name).trim() : '',
+          nameNepali: nameNepali ? String(nameNepali).trim() : null,
+          type: type || 'OWN_SOURCE',
+          description: description ? String(description).trim() : null,
+          isActive: isActive !== undefined ? Boolean(isActive) : true,
+        },
+      });
+    } catch (createErr) {
+      if (createErr.code === 'P2002' || createErr.message?.includes('id') || createErr.message?.includes('Unique constraint')) {
+        const maxRes = await prisma.incomeCategory.aggregate({ _max: { id: true } });
+        const nextId = (maxRes._max.id || 0) + 1;
+        cat = await prisma.incomeCategory.create({
+          data: {
+            id: nextId,
+            name: name ? String(name).trim() : '',
+            nameNepali: nameNepali ? String(nameNepali).trim() : null,
+            type: type || 'OWN_SOURCE',
+            description: description ? String(description).trim() : null,
+            isActive: isActive !== undefined ? Boolean(isActive) : true,
+          },
+        });
+      } else {
+        throw createErr;
+      }
+    }
     return res.status(201).json({ success: true, data: cat, message: 'Income Category created.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -81,7 +110,18 @@ router.post('/categories', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCO
 
 router.put('/categories/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    const cat = await prisma.incomeCategory.update({ where: { id: parseInt(req.params.id) }, data: req.body });
+    const { name, nameNepali, type, description, isActive } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name ? String(name).trim() : '';
+    if (nameNepali !== undefined) updateData.nameNepali = nameNepali ? String(nameNepali).trim() : null;
+    if (type !== undefined) updateData.type = type;
+    if (description !== undefined) updateData.description = description ? String(description).trim() : null;
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+
+    const cat = await prisma.incomeCategory.update({
+      where: { id: parseInt(req.params.id) },
+      data: updateData,
+    });
     return res.json({ success: true, data: cat, message: 'Category updated.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

@@ -1088,11 +1088,14 @@ export default function MasterHeadsPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                saveCatMutation.mutate({
-                  name: catForm.name,
-                  nameNepali: catForm.nameNepali,
-                  type: 'OWN_SOURCE',
-                });
+                const payload: any = {
+                  name: catForm.name.trim(),
+                  nameNepali: catForm.nameNepali.trim() || undefined,
+                };
+                if (catForm.module === 'INCOME') {
+                  payload.type = 'OWN_SOURCE';
+                }
+                saveCatMutation.mutate(payload);
               }}
               className="space-y-3 text-xs"
             >
