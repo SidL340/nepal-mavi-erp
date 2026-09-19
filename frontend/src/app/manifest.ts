@@ -13,12 +13,6 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#1e3a5f',
     icons: [
       {
-        src: '/school_logo.png',
-        sizes: '192x192 512x512',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
         src: '/icon-192.png',
         sizes: '192x192',
         type: 'image/png',
@@ -46,6 +40,7 @@ export default function manifest(): MetadataRoute.Manifest {
         src: '/apple-touch-icon.png',
         sizes: '180x180',
         type: 'image/png',
+        purpose: 'any',
       },
     ],
   };
