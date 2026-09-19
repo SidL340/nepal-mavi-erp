@@ -14,14 +14,25 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Nepal Secondary School ERP | श्री नेपाल मा.वि. विश्रामपुर',
   description: 'Shree Nepal Secondary School Bishrampur Rautahat Mobile & Web ERP System',
+  applicationName: 'Nepal Ma.Vi. ERP',
+  appleWebApp: {
+    capable: true,
+    title: 'Nepal Ma.Vi. ERP',
+    statusBarStyle: 'default',
+  },
   manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/school_logo.png', sizes: 'any', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
+    shortcut: ['/school_logo.png'],
     apple: [
       { url: '/school_logo.png', sizes: '180x180', type: 'image/png' },
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
   },
 };
