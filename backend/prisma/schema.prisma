@@ -47,6 +47,7 @@ model AcademicYear {
   expenseEntries  ExpenseEntry[]
   feeCollections  FeeCollection[]
   payrolls        Payroll[]
+  routines        ClassRoutine[]
 }
 
 model FinancialYear {
@@ -61,6 +62,7 @@ model FinancialYear {
   expenseEntries  ExpenseEntry[]
   feeCollections  FeeCollection[]
   payrolls        Payroll[]
+  budgets         Budget[]
 }
 
 // ─── AUTH / USERS ────────────────────────────────────────────────────────────
@@ -118,6 +120,7 @@ model Teacher {
   payrolls            Payroll[]
   attendanceEntries   Attendance[]
   markEntries         MarkEntry[]
+  routines            ClassRoutine[]
 }
 
 // ─── STUDENTS ────────────────────────────────────────────────────────────────
@@ -147,6 +150,16 @@ model Student {
   disability      String?
   admissionDateBs String?
   emisId          String?
+  status          String   @default("ACTIVE") // ACTIVE, GRADUATED, TRANSFERRED, DROPPED
+  transferSchoolName String?
+  transferEmisCode String?
+  transferAddress String?
+  transferDateBs  String?
+  transferReason  String?
+  tcNumber        String?
+  batchYear       String?
+  admissionAcademicYearId Int?
+  collectedDocs   String?  // JSON stringified array of document keys
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -159,6 +172,7 @@ model Student {
   notices         Notice[]         @relation("StudentNotices")
   certificates    Certificate[]
   feeDues         StudentFeeDue[]
+  seatPlans       ExamSeatPlan[]
 }
 
 // ─── CLASS & SECTION ────────────────────────────────────────────────────────
@@ -181,6 +195,7 @@ model Class {
   exams           ExamClass[]
   notices         Notice[]         @relation("ClassNotices")
   feeStructures   ClassFeeStructure[]
+  routines        ClassRoutine[]
 }
 
 model ClassEnrollment {
@@ -209,6 +224,7 @@ model Subject {
   classSubjects   ClassSubject[]
   teacherSubjects TeacherSubject[]
   examSubjects    ExamSubject[]
+  routines        ClassRoutine[]
 }
 
 model ClassSubject {
@@ -250,6 +266,7 @@ model Exam {
 
   examClasses     ExamClass[]
   examSubjects    ExamSubject[]
+  seatPlans       ExamSeatPlan[]
 }
 
 model ExamClass {
@@ -747,5 +764,120 @@ model Event {
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ─── OFFICIAL SCHOOL LETTERPAD / MEMO SYSTEM ──────────────────────────────────
+
+model SchoolLetter {
+  id                Int      @id @default(autoincrement())
+  chalaniNo         String?  // चलानी नं. / Dispatch reference number
+  patraSankhya      String?  // पत्र संख्या / Letter No
+  letterDateBs      String
+  letterDateAd      DateTime @default(now())
+  subject           String
+  recipient         String   // To Whom / Organization / Person
+  recipientAddress  String?
+  body              String   @db.Text
+  salutation        String?  @default("महोदय / श्रीमान्,")
+  signatoryName     String?
+  signatoryPost     String?  // e.g. प्रधानाध्यापक
+  headerType        String   @default("OFFICIAL") // OFFICIAL, PLAIN
+  status            String   @default("DRAFT") // DRAFT, ISSUED, ARCHIVED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ─── CUSTOMIZABLE CERTIFICATE TEMPLATES ────────────────────────────────────────
+
+model CertificateTemplate {
+  id              Int      @id @default(autoincrement())
+  name            String   // "Character Certificate", "Transfer Certificate", "Bonafide"
+  nameNepali      String?
+  type            String   @unique // CHARACTER, TRANSFER, BONAFIDE, APPRECIATION, RECOMMENDATION, CUSTOM
+  titleText       String   // Header text in certificate
+  bodyTemplate    String   @db.Text // Rich template with placeholders
+  borderStyle     String   @default("CLASSIC_GOLD") // CLASSIC_GOLD, MODERN_BLUE, ORNATE, ROYAL_RED
+  watermarkEnabled Boolean  @default(true)
+  showQrCode      Boolean  @default(true)
+  signatory1Title String?  @default("Class Teacher / कक्षा शिक्षक")
+  signatory2Title String?  @default("Examination Controller")
+  signatory3Title String?  @default("Headmaster / प्रधानाध्यापक")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── ACADEMIC ROUTINE & TIMETABLE ─────────────────────────────────────────────
+
+model ClassRoutine {
+  id              Int          @id @default(autoincrement())
+  classId         Int
+  class           Class        @relation(fields: [classId], references: [id])
+  dayOfWeek       Int          // 1: Sunday, 2: Monday, ..., 6: Friday
+  periodNo        Int          // 1, 2, 3, 4, 5, 6, 7, 8
+  startTime       String       // e.g. "10:00 AM"
+  endTime         String       // e.g. "10:45 AM"
+  isBreak         Boolean      @default(false)
+  breakTitle      String?      // "Tiffin Break / खाजा समय"
+  subjectId       Int?
+  subject         Subject?     @relation(fields: [subjectId], references: [id])
+  teacherId       Int?
+  teacher         Teacher?     @relation(fields: [teacherId], references: [id])
+  roomNo          String?
+  academicYearId  Int
+  academicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([classId, dayOfWeek, periodNo, academicYearId])
+}
+
+// ─── EXAM ROOM SETUP & AUTOMATED SEAT PLANNING ────────────────────────────────
+
+model ExamRoom {
+  id              Int            @id @default(autoincrement())
+  roomNo          String         // e.g. "Hall A", "Room 101"
+  building        String?
+  totalBenches    Int            // Number of benches/desks
+  seatsPerBench   Int            @default(2) // 2 students per desk
+  totalCapacity   Int            // totalBenches * seatsPerBench
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+
+  seatPlans       ExamSeatPlan[]
+}
+
+model ExamSeatPlan {
+  id              Int      @id @default(autoincrement())
+  examId          Int
+  exam            Exam     @relation(fields: [examId], references: [id])
+  roomId          Int
+  room            ExamRoom @relation(fields: [roomId], references: [id])
+  benchNo         Int      // Bench 1, 2, 3...
+  seatPosition    String   // "LEFT" | "RIGHT" | "MIDDLE"
+  studentId       Int
+  student         Student  @relation(fields: [studentId], references: [id])
+  classId         Int
+  rollNo          Int?
+  seatNo          String   // e.g. "R101-B1-L"
+  createdAt       DateTime @default(now())
+
+  @@unique([examId, roomId, benchNo, seatPosition])
+}
+
+// ─── BUDGET MANAGEMENT (MONTHLY & YEARLY) ────────────────────────────────────
+
+model Budget {
+  id              Int            @id @default(autoincrement())
+  financialYearId Int
+  financialYear   FinancialYear  @relation(fields: [financialYearId], references: [id])
+  type            String         // "INCOME" | "EXPENSE"
+  headId          Int?           // IncomeHead ID or ExpenseHead ID
+  headName        String
+  yearlyEstimated Float          @default(0)
+  monthlyEstimates String?       // JSON: { "1": 10000, "2": 10000, ... "12": 10000 }
+  remarks         String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 

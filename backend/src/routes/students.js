@@ -470,6 +470,478 @@ router.get('/credentials/export', authenticate, authorize('SUPER_ADMIN', 'ADMIN'
   }
 });
 
+// GET /api/students/analytics — detailed demographics, status & birthday counts
+router.get('/analytics', authenticate, async (req, res) => {
+  try {
+    const allStudents = await prisma.student.findMany({
+      include: {
+        classEnrollment: { where: { isActive: true }, include: { class: true } },
+        user: { select: { id: true, username: true, isActive: true, createdAt: true } },
+      },
+    });
+
+    const totalStudents = allStudents.length;
+    let activeCount = 0;
+    let graduatedCount = 0;
+    let transferredCount = 0;
+    let droppedCount = 0;
+
+    const genderMap = { MALE: 0, FEMALE: 0, OTHER: 0, UNKNOWN: 0 };
+    const classMap = new Map();
+    const ageMap = { 'Below 6': 0, '6 - 10': 0, '11 - 15': 0, '16 - 18': 0, 'Above 18': 0, 'Unknown': 0 };
+
+    const todayDate = new Date();
+    const todayMonth = todayDate.getMonth() + 1;
+    const todayDay = todayDate.getDate();
+
+    const todayBirthdays = [];
+    const upcomingBirthdays = [];
+
+    // Helper to calculate approximate age from BS or AD
+    const currentBsYear = 2081; // or 2082 approximate
+
+    for (const s of allStudents) {
+      const st = s.status || (s.isActive ? 'ACTIVE' : 'TRANSFERRED');
+      if (st === 'ACTIVE') activeCount++;
+      else if (st === 'GRADUATED') graduatedCount++;
+      else if (st === 'TRANSFERRED') transferredCount++;
+      else if (st === 'DROPPED') droppedCount++;
+      else if (s.isActive) activeCount++;
+
+      // Gender count
+      const g = (s.gender || '').toUpperCase();
+      if (g.startsWith('M') || g.startsWith('BOY') || g.startsWith('पुरुष') || g.startsWith('छात्र')) genderMap.MALE++;
+      else if (g.startsWith('F') || g.startsWith('GIRL') || g.startsWith('महिला') || g.startsWith('छात्रा')) genderMap.FEMALE++;
+      else if (g.startsWith('O') || g.startsWith('अन्य')) genderMap.OTHER++;
+      else genderMap.UNKNOWN++;
+
+      // Class count
+      if (s.isActive && s.classEnrollment?.length > 0) {
+        const cls = s.classEnrollment[0].class;
+        if (cls) {
+          const cName = cls.name + (cls.section ? ` (${cls.section})` : '');
+          const existing = classMap.get(cls.id) || { id: cls.id, name: cName, orderIndex: cls.orderIndex || 0, boys: 0, girls: 0, total: 0 };
+          existing.total++;
+          if (g.startsWith('F') || g.startsWith('GIRL') || g.startsWith('महिला') || g.startsWith('छात्रा')) existing.girls++;
+          else existing.boys++;
+          classMap.set(cls.id, existing);
+        }
+      }
+
+      // Age calculation
+      let age = null;
+      if (s.dateOfBirthBs && s.dateOfBirthBs.includes('-')) {
+        const bsYr = parseInt(s.dateOfBirthBs.split('-')[0]);
+        if (bsYr > 2000 && bsYr < 2100) {
+          age = Math.max(0, currentBsYear - bsYr);
+        }
+      } else if (s.dateOfBirthAd) {
+        const adYr = new Date(s.dateOfBirthAd).getFullYear();
+        if (adYr > 1990) age = Math.max(0, todayDate.getFullYear() - adYr);
+      }
+
+      if (age !== null) {
+        if (age < 6) ageMap['Below 6']++;
+        else if (age <= 10) ageMap['6 - 10']++;
+        else if (age <= 15) ageMap['11 - 15']++;
+        else if (age <= 18) ageMap['16 - 18']++;
+        else ageMap['Above 18']++;
+      } else {
+        ageMap['Unknown']++;
+      }
+
+      // Birthday check
+      if (s.isActive && s.dateOfBirthAd) {
+        const bDate = new Date(s.dateOfBirthAd);
+        const bMonth = bDate.getMonth() + 1;
+        const bDay = bDate.getDate();
+        if (bMonth === todayMonth && bDay === todayDay) {
+          todayBirthdays.push({ id: s.id, name: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateBs: s.dateOfBirthBs });
+        } else if (bMonth === todayMonth && bDay > todayDay && bDay <= todayDay + 7) {
+          upcomingBirthdays.push({ id: s.id, name: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateBs: s.dateOfBirthBs, day: bDay });
+        }
+      }
+    }
+
+    const classWiseList = Array.from(classMap.values()).sort((a, b) => a.orderIndex - b.orderIndex);
+
+    // Active login accounts
+    const studentUsersCount = await prisma.user.count({ where: { role: 'STUDENT', isActive: true } });
+
+    return res.json({
+      success: true,
+      data: {
+        summary: {
+          total: totalStudents,
+          active: activeCount,
+          graduated: graduatedCount,
+          transferred: transferredCount,
+          dropped: droppedCount,
+          studentLogins: studentUsersCount,
+        },
+        genderDistribution: genderMap,
+        ageDistribution: ageMap,
+        classWise: classWiseList,
+        birthdays: {
+          today: todayBirthdays,
+          upcoming: upcomingBirthdays,
+        },
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// GET /api/students/transferred — list transferred students
+router.get('/transferred', authenticate, async (req, res) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        OR: [
+          { status: 'TRANSFERRED' },
+          { transferSchoolName: { not: null } },
+        ],
+      },
+      include: {
+        classEnrollment: { include: { class: true } },
+        user: { select: { username: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return res.json({ success: true, data: students });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
+// POST /api/students/:id/transfer — transfer a student out to another school
+router.post('/:id/transfer', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    const {
+      transferSchoolName,
+      transferEmisCode,
+      transferAddress,
+      transferDateBs,
+      transferReason,
+      tcNumber,
+    } = req.body;
+
+    const student = await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        status: 'TRANSFERRED',
+        isActive: false,
+        transferSchoolName: transferSchoolName ? String(transferSchoolName).trim() : null,
+        transferEmisCode: transferEmisCode ? String(transferEmisCode).trim() : null,
+        transferAddress: transferAddress ? String(transferAddress).trim() : null,
+        transferDateBs: transferDateBs ? String(transferDateBs).trim() : null,
+        transferReason: transferReason ? String(transferReason).trim() : null,
+        tcNumber: tcNumber ? String(tcNumber).trim() : null,
+      },
+    });
+
+    // Deactivate active class enrollment
+    await prisma.classEnrollment.updateMany({
+      where: { studentId, isActive: true },
+      data: { isActive: false },
+    });
+
+    return res.json({
+      success: true,
+      data: student,
+      message: `${student.fullName} विद्यार्थी सफलतापूर्वक अन्य विद्यालयमा स्थानान्तरण (Transferred) गरियो!`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/students/:id/graduate — mark student as graduated
+router.post('/:id/graduate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    const student = await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        status: 'GRADUATED',
+        isActive: false,
+      },
+    });
+    await prisma.classEnrollment.updateMany({
+      where: { studentId, isActive: true },
+      data: { isActive: false },
+    });
+    return res.json({ success: true, data: student, message: `${student.fullName} विद्यार्थी उत्तीर्ण (Graduated) सूचीमा सुरक्षित गरियो!` });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/students/:id/reactivate — reactivate student to active status
+router.post('/:id/reactivate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    const { targetClassId } = req.body;
+    const student = await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        status: 'ACTIVE',
+        isActive: true,
+      },
+    });
+
+    if (targetClassId) {
+      await prisma.classEnrollment.upsert({
+        where: { studentId_classId: { studentId, classId: parseInt(targetClassId) } },
+        update: { isActive: true },
+        create: { studentId, classId: parseInt(targetClassId), isActive: true },
+      });
+    }
+
+    return res.json({ success: true, data: student, message: `${student.fullName} विद्यार्थीलाई पुनः सक्रिय (Active) गरियो!` });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/students/admission — complete admission with document checklist
+router.post('/admission', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const {
+      fullName,
+      fullNameNepali,
+      studentId: customStudentId,
+      emisId,
+      classId,
+      rollNo,
+      gender,
+      dateOfBirthBs,
+      dateOfBirthAd,
+      admissionDateBs,
+      batchYear,
+      address,
+      phone,
+      fatherName,
+      motherName,
+      guardianName,
+      guardianContact,
+      guardianRelation,
+      previousSchool,
+      bloodGroup,
+      religion,
+      ethnicity,
+      disability,
+      collectedDocs, // Array of strings e.g. ["BIRTH_CERT", "TC", "MARKSHEET", "PHOTOS", "CITIZENSHIP"]
+    } = req.body;
+
+    if (!fullName || !String(fullName).trim()) {
+      return res.status(400).json({ success: false, message: 'विद्यार्थीको पूरा नाम अनिवार्य छ (Full Name is required).' });
+    }
+
+    // Generate or use studentId
+    let finalStudentId = customStudentId ? String(customStudentId).trim() : null;
+    if (!finalStudentId) {
+      const count = await prisma.student.count();
+      const currentYear = admissionDateBs ? admissionDateBs.slice(0, 4) : '2081';
+      finalStudentId = `STU-${currentYear}-${String(count + 1).padStart(4, '0')}`;
+    }
+
+    // Check unique username / studentId
+    const existingUser = await prisma.user.findUnique({ where: { username: finalStudentId } });
+    if (existingUser) {
+      finalStudentId = `${finalStudentId}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    const defaultPassword = generatePassword(8);
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        username: finalStudentId,
+        passwordHash,
+        role: 'STUDENT',
+        isActive: true,
+      },
+    });
+
+    const student = await prisma.student.create({
+      data: {
+        userId: user.id,
+        studentId: finalStudentId,
+        fullName: String(fullName).trim(),
+        fullNameNepali: fullNameNepali ? String(fullNameNepali).trim() : null,
+        emisId: emisId ? String(emisId).trim() : null,
+        gender: gender || null,
+        dateOfBirthBs: dateOfBirthBs || null,
+        dateOfBirthAd: dateOfBirthAd ? new Date(dateOfBirthAd) : null,
+        admissionDateBs: admissionDateBs || null,
+        batchYear: batchYear || (admissionDateBs ? admissionDateBs.slice(0, 4) : null),
+        address: address ? String(address).trim() : null,
+        phone: phone ? String(phone).trim() : null,
+        fatherName: fatherName ? String(fatherName).trim() : null,
+        motherName: motherName ? String(motherName).trim() : null,
+        guardianName: guardianName ? String(guardianName).trim() : null,
+        guardianContact: guardianContact ? String(guardianContact).trim() : null,
+        guardianRelation: guardianRelation ? String(guardianRelation).trim() : null,
+        previousSchool: previousSchool ? String(previousSchool).trim() : null,
+        bloodGroup: bloodGroup || null,
+        religion: religion || null,
+        ethnicity: ethnicity || null,
+        disability: disability || null,
+        status: 'ACTIVE',
+        isActive: true,
+        collectedDocs: collectedDocs ? JSON.stringify(collectedDocs) : null,
+      },
+    });
+
+    if (classId) {
+      await prisma.classEnrollment.create({
+        data: {
+          studentId: student.id,
+          classId: parseInt(classId),
+          rollNo: rollNo ? parseInt(rollNo) : null,
+          isActive: true,
+        },
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        ...student,
+        generatedPassword: defaultPassword,
+      },
+      message: `नयाँ विद्यार्थी भर्ना (Admission) सफलतापूर्वक सम्पन्न भयो! (Login ID: ${finalStudentId})`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/students/bulk-roll-setup — configure / re-sequence roll numbers for a class
+router.post('/bulk-roll-setup', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const { classId, mode, students } = req.body;
+    if (!classId) return res.status(400).json({ success: false, message: 'Class ID is required.' });
+
+    if (mode === 'ALPHABETICAL') {
+      const enrollments = await prisma.classEnrollment.findMany({
+        where: { classId: parseInt(classId), isActive: true },
+        include: { student: { select: { fullName: true, emisId: true } } },
+      });
+      enrollments.sort((a, b) => {
+        const nameA = (a.student?.fullName || '').trim().toLowerCase();
+        const nameB = (b.student?.fullName || '').trim().toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      for (let i = 0; i < enrollments.length; i++) {
+        await prisma.classEnrollment.update({
+          where: { id: enrollments[i].id },
+          data: { rollNo: i + 1 },
+        });
+      }
+      return res.json({ success: true, message: `कक्षाको रोल नम्बर वर्णानुक्रम अनुसार (1 देखि ${enrollments.length} सम्म) मिलाइयो!` });
+    }
+
+    if (Array.isArray(students)) {
+      for (const item of students) {
+        if (item.enrollmentId && item.rollNo !== undefined) {
+          await prisma.classEnrollment.update({
+            where: { id: parseInt(item.enrollmentId) },
+            data: { rollNo: parseInt(item.rollNo) || null },
+          });
+        }
+      }
+      return res.json({ success: true, message: 'रोल नम्बर सफलतापूर्वक अद्यावधिक गरियो!' });
+    }
+
+    return res.status(400).json({ success: false, message: 'Invalid roll setup payload.' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/students/bulk-edit — bulk edit student details
+router.post('/bulk-edit', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const { studentIds, updateData, targetClassId } = req.body;
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Select at least one student.' });
+    }
+
+    const cleanUpdate = {};
+    if (updateData?.address) cleanUpdate.address = String(updateData.address).trim();
+    if (updateData?.bloodGroup) cleanUpdate.bloodGroup = updateData.bloodGroup;
+    if (updateData?.status) cleanUpdate.status = updateData.status;
+
+    if (Object.keys(cleanUpdate).length > 0) {
+      await prisma.student.updateMany({
+        where: { id: { in: studentIds.map(id => parseInt(id)) } },
+        data: cleanUpdate,
+      });
+    }
+
+    if (targetClassId) {
+      for (const sId of studentIds) {
+        await prisma.classEnrollment.updateMany({
+          where: { studentId: parseInt(sId), isActive: true },
+          data: { isActive: false },
+        });
+        await prisma.classEnrollment.create({
+          data: {
+            studentId: parseInt(sId),
+            classId: parseInt(targetClassId),
+            isActive: true,
+          },
+        });
+      }
+    }
+
+    return res.json({ success: true, message: `${studentIds.length} जना विद्यार्थीहरूको विवरण एकमुष्ट अद्यावधिक भयो!` });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/students/:id/reset-password — instant password update/reset
+router.post('/:id/reset-password', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const student = await prisma.student.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: { user: true },
+    });
+    if (!student || !student.user) return res.status(404).json({ success: false, message: 'Student user not found.' });
+
+    const newPassword = req.body.newPassword || generatePassword(8);
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: student.userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
+
+    return res.json({
+      success: true,
+      message: `विद्यार्थी (${student.fullName}) को पासवर्ड सफलतापूर्वक परिवर्तन भयो!`,
+      newPassword,
+      username: student.user.username,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // PUT /api/students/:id
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
@@ -496,3 +968,4 @@ router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (re
 });
 
 module.exports = router;
+

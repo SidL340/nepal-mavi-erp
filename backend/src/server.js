@@ -40,6 +40,12 @@ app.use('/api/users',      require('./routes/users'));
 app.use('/api/events',     require('./routes/events'));
 app.use('/api/parties',    require('./routes/parties'));
 app.use('/api/financial-years', require('./routes/financialYears').router);
+app.use('/api/certificates', require('./routes/certificates'));
+app.use('/api/letters',     require('./routes/letters'));
+app.use('/api/routine',     require('./routes/routine'));
+app.use('/api/seat-plans',  require('./routes/seatPlans'));
+app.use('/api/budget',      require('./routes/budget'));
+app.use('/api/finance-reports', require('./routes/financeReports'));
 
 // ── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

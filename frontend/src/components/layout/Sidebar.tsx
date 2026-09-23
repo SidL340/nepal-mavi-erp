@@ -29,6 +29,8 @@ import {
   KeyRound,
   FileText,
   Layers,
+  Clock,
+  Grid,
   Scale,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -67,10 +69,13 @@ const navConfig: (NavItem | NavSection)[] = [
     roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'],
     items: [
       { label: 'Students', nepaliLabel: 'विद्यार्थीहरू', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Classes', nepaliLabel: 'कक्षा र विषय', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Classes & Routine', nepaliLabel: 'कक्षा र विषय', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Class Routine', nepaliLabel: 'दैनिक समय तालिका', href: '/dashboard/classes/routine', icon: Clock, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Attendance', nepaliLabel: 'हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Exams & Marks', nepaliLabel: 'परीक्षा र लब्धाङ्क', href: '/dashboard/exams', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+      { label: 'Seat Planning', nepaliLabel: 'परीक्षा सिट योजना', href: '/dashboard/exams/seat-planning', icon: Grid, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Certificates', nepaliLabel: 'प्रमाणपत्र (CC/TC)', href: '/dashboard/certificates', icon: Award, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ],
   },
   {
@@ -79,10 +84,11 @@ const navConfig: (NavItem | NavSection)[] = [
     roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     items: [
       { label: 'Finance Portal Hub', nepaliLabel: 'वित्तीय हब पोर्टल', href: '/dashboard/finance', icon: Building2, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Income / Budget', nepaliLabel: 'आम्दानी / बजेट', href: '/dashboard/finance/income', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Income / Grants', nepaliLabel: 'आम्दानी तथा अनुदान', href: '/dashboard/finance/income', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Expenses', nepaliLabel: 'खर्च', href: '/dashboard/finance/expenses', icon: TrendingDown, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Fee Collection', nepaliLabel: 'शुल्क संकलन', href: '/dashboard/finance/fees', icon: Receipt, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Teacher Payroll', nepaliLabel: 'शिक्षक तलब भत्ता', href: '/dashboard/finance/payroll', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Budget & Variance', nepaliLabel: 'बजेट विनियोजन', href: '/dashboard/finance/budget', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Journal Vouchers', nepaliLabel: 'गोश्वारा भौचर', href: '/dashboard/finance/journal', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Financial Reports', nepaliLabel: 'वित्तीय प्रतिवेदन (Trial Balance)', href: '/dashboard/finance/reports', icon: Scale, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Parties & Suppliers', nepaliLabel: 'पार्टी तथा सप्लायर', href: '/dashboard/finance?tab=parties', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },

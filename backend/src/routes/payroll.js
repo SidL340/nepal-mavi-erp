@@ -1,7 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { authenticate, authorize } = require('../middleware/auth');
-const { resolveFinancialYearByDate } = require('./financialYears');
+const { resolveFinancialYearByDate, resolveAcademicYearForFinance } = require('./financialYears');
 
 const router = express.Router();
 
@@ -274,6 +274,137 @@ router.delete('/salary-scales/:id', authenticate, authorize('SUPER_ADMIN', 'ADMI
     return res.json({ success: true, message: 'Salary scale deleted successfully.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/payroll/disburse-bank-bulk — bulk disburse teacher salaries from school bank account
+router.post('/disburse-bank-bulk', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const {
+      payrollIds,
+      bankAccountId,
+      paymentDateBs,
+      chequeNo,
+      chequePayeeName,
+      voucherNo,
+      remarks,
+    } = req.body;
+
+    if (!Array.isArray(payrollIds) || payrollIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'Select at least one teacher payroll record.' });
+    }
+    if (!bankAccountId) {
+      return res.status(400).json({ success: false, message: 'Select school bank account for salary allotment.' });
+    }
+
+    const parsedIds = payrollIds.map(id => parseInt(id));
+    const bankAccount = await prisma.bankAccount.findUnique({ where: { id: parseInt(bankAccountId) } });
+    if (!bankAccount) return res.status(404).json({ success: false, message: 'Bank account not found.' });
+
+    // Fetch the payroll records
+    const payrolls = await prisma.payroll.findMany({
+      where: { id: { in: parsedIds } },
+      include: { teacher: true },
+    });
+
+    if (payrolls.length === 0) {
+      return res.status(404).json({ success: false, message: 'No valid payrolls found.' });
+    }
+
+    // Calculate total net payable sum
+    let totalSalarySum = 0;
+    for (const p of payrolls) {
+      totalSalarySum += (p.khudPaaunuParne || p.kulRakam || 0);
+    }
+    totalSalarySum = Math.round(totalSalarySum * 100) / 100;
+
+    // Resolve Financial Year & Academic Year
+    let fyId = payrolls[0].financialYearId;
+    if (!fyId && paymentDateBs) {
+      const resolved = await resolveFinancialYearByDate(paymentDateBs);
+      if (resolved) fyId = resolved.id;
+    }
+
+    const ayId = await resolveAcademicYearForFinance({
+      academicYearId: payrolls[0].academicYearId,
+      financialYearId: fyId,
+      dateBs: paymentDateBs,
+    });
+
+    // Find or create "Teacher Salary / शिक्षक तलब" Expense Head
+    let salaryHead = await prisma.expenseHead.findFirst({
+      where: {
+        OR: [
+          { name: { contains: 'Salary' } },
+          { name: { contains: 'तलब' } },
+          { nameNepali: { contains: 'तलब' } },
+        ],
+        isActive: true,
+      },
+    });
+
+    if (!salaryHead) {
+      let defaultCat = await prisma.expenseCategory.findFirst({ where: { isActive: true } });
+      if (!defaultCat) {
+        defaultCat = await prisma.expenseCategory.create({ data: { name: 'Administrative / Salary', nameNepali: 'प्रशासनिक तथा तलब' } });
+      }
+      salaryHead = await prisma.expenseHead.create({
+        data: {
+          categoryId: defaultCat.id,
+          name: 'Teacher & Staff Salary (शिक्षक तथा कर्मचारी तलब)',
+          nameNepali: 'शिक्षक तथा कर्मचारी तलब',
+          code: '21111',
+          isActive: true,
+        },
+      });
+    }
+
+    const teacherNames = payrolls.map(p => p.teacher?.fullName || `Teacher #${p.teacherId}`).join(', ');
+    const descText = `Bulk Bank Salary Allotment (${payrolls.length} Teachers: ${teacherNames.slice(0, 100)}${teacherNames.length > 100 ? '...' : ''})`;
+
+    // Create single unified Expense Entry for the bank transaction
+    const expenseEntry = await prisma.expenseEntry.create({
+      data: {
+        headId: salaryHead.id,
+        financialYearId: fyId,
+        academicYearId: ayId,
+        amount: totalSalarySum,
+        expenseDateBs: paymentDateBs || '2081-01-01',
+        expenseDateAd: new Date(),
+        paidTo: chequePayeeName || `${payrolls.length} Teachers (Staff Salary Batch)`,
+        paymentMedium: 'CHEQUE',
+        paidFromAccount: `${bankAccount.bankName} (${bankAccount.accountNo})`,
+        bankAccountId: bankAccount.id,
+        chequeNo: chequeNo || null,
+        chequePayeeName: chequePayeeName || 'Teacher Salary Disbursement',
+        voucherNo: voucherNo || undefined,
+        description: descText,
+        remarks: remarks || `Bulk teacher salary allotment disbursed via bank [${payrolls.length} staff records]`,
+        approvedBy: 'Principal (प्रधानाध्यापक)',
+      },
+    });
+
+    // Update all payroll records as PAID
+    await prisma.payroll.updateMany({
+      where: { id: { in: parsedIds } },
+      data: {
+        status: 'PAID',
+        remarks: `Disbursed via Bank ${bankAccount.bankName} (Exp Entry #${expenseEntry.id}) on ${paymentDateBs || 'Today'}`,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        expenseEntry,
+        totalDisbursed: totalSalarySum,
+        payrollsCount: payrolls.length,
+      },
+      message: `${payrolls.length} जना शिक्षकहरूको कुल तलब रकम रू ${totalSalarySum.toLocaleString()} बैंक खाताबाट एकमुष्ट निकासा (Disbursed) भयो!`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
   }
 });
 
