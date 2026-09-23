@@ -54,6 +54,65 @@ async function resolveFinancialYearByDate(dateBs) {
   return activeYear || null;
 }
 
+/**
+ * Helper to reliably resolve a valid AcademicYear ID for finance transactions.
+ * Guarantees to return a real, existing AcademicYear ID to avoid foreign key violations.
+ */
+async function resolveAcademicYearForFinance({ academicYearId, financialYearId, dateBs } = {}) {
+  const allAcademicYears = await prisma.academicYear.findMany({ orderBy: { id: 'desc' } });
+  if (allAcademicYears.length === 0) {
+    const created = await prisma.academicYear.create({
+      data: {
+        year: '2081-82',
+        startDateBs: '2081-04-01',
+        endDateBs: '2082-03-31',
+        isActive: true,
+      }
+    });
+    return created.id;
+  }
+
+  // 1. If explicit academicYearId passed, check if it actually exists in AcademicYear table
+  if (academicYearId) {
+    const directMatch = allAcademicYears.find(ay => ay.id === parseInt(academicYearId));
+    if (directMatch) return directMatch.id;
+  }
+
+  // 2. If financialYearId passed or known, find matching AcademicYear with same year format
+  if (financialYearId) {
+    const fy = await prisma.financialYear.findUnique({ where: { id: parseInt(financialYearId) } });
+    if (fy && fy.year) {
+      const fyClean = fy.year.replace('/', '-').replace(/\s+/g, '').trim(); // e.g. "2079/80" -> "2079-80"
+      const match = allAcademicYears.find(ay => {
+        const ayClean = ay.year.replace('/', '-').replace(/\s+/g, '').trim();
+        return ayClean === fyClean || ayClean.startsWith(fyClean.slice(0, 4));
+      });
+      if (match) return match.id;
+    }
+  }
+
+  // 3. If dateBs passed (e.g. "2079-10-29"), match range or BS fiscal year calculation
+  if (dateBs && typeof dateBs === 'string') {
+    const cleanDate = dateBs.trim();
+    for (const ay of allAcademicYears) {
+      if (ay.startDateBs && ay.endDateBs) {
+        if (cleanDate >= ay.startDateBs && cleanDate <= ay.endDateBs) {
+          return ay.id;
+        }
+      }
+    }
+    const yearPrefix = cleanDate.split('-')[0];
+    if (yearPrefix) {
+      const prefixMatch = allAcademicYears.find(ay => ay.year.startsWith(yearPrefix));
+      if (prefixMatch) return prefixMatch.id;
+    }
+  }
+
+  // 4. Fallback: Active Academic Year or first available Academic Year
+  const activeAy = allAcademicYears.find(ay => ay.isActive) || allAcademicYears[0];
+  return activeAy.id;
+}
+
 // ── 1. GET ALL FINANCIAL YEARS ───────────────────────────────────────────────
 router.get('/all', authenticate, async (req, res) => {
   try {
@@ -630,5 +689,6 @@ router.get('/report/:id', authenticate, async (req, res) => {
 module.exports = {
   router,
   resolveFinancialYearByDate,
+  resolveAcademicYearForFinance,
   getFiscalYearFromBS,
 };

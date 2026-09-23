@@ -1,7 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { authenticate, authorize } = require('../middleware/auth');
-const { resolveFinancialYearByDate } = require('./financialYears');
+const { resolveFinancialYearByDate, resolveAcademicYearForFinance } = require('./financialYears');
 
 const router = express.Router();
 
@@ -812,13 +812,19 @@ router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNT
       if (resolved) resolvedFyId = resolved.id;
     }
 
+    const resolvedAyId = await resolveAcademicYearForFinance({
+      academicYearId,
+      financialYearId: resolvedFyId,
+      dateBs: rest.receivedDateBs,
+    });
+
     const entry = await prisma.incomeEntry.create({
       data: {
         ...rest,
         amount: parseFloat(amount),
         receivedDateAd: receivedDateAd ? new Date(receivedDateAd) : new Date(),
         headId: parseInt(headId),
-        academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
+        academicYearId: resolvedAyId,
         financialYearId: resolvedFyId,
         partyId: partyId ? parseInt(partyId) : undefined,
         bankAccountId: bankAccountId ? parseInt(bankAccountId) : undefined,

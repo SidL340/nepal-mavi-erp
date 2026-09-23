@@ -176,7 +176,7 @@ router.post('/heads/:id/delete', authenticate, authorize('SUPER_ADMIN', 'ADMIN')
   }
 });
 
-const { resolveFinancialYearByDate } = require('./financialYears');
+const { resolveFinancialYearByDate, resolveAcademicYearForFinance } = require('./financialYears');
 
 // ── EXPENSE ENTRIES ───────────────────────────────────────────────────────
 
@@ -244,13 +244,19 @@ router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNT
       if (resolved) resolvedFyId = resolved.id;
     }
 
+    const resolvedAyId = await resolveAcademicYearForFinance({
+      academicYearId,
+      financialYearId: resolvedFyId,
+      dateBs: rest.expenseDateBs,
+    });
+
     const entry = await prisma.expenseEntry.create({
       data: {
         ...rest,
         amount: parseFloat(amount),
         expenseDateAd: expenseDateAd ? new Date(expenseDateAd) : new Date(),
         headId: parseInt(headId),
-        academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
+        academicYearId: resolvedAyId,
         financialYearId: resolvedFyId,
         partyId: partyId ? parseInt(partyId) : undefined,
         bankAccountId: bankAccountId ? parseInt(bankAccountId) : undefined,

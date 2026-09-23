@@ -328,6 +328,7 @@ router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMI
       amount,
       financialYearId,
       academicYearId,
+      headId,
       expenseDateBs,
       paymentMedium,
       bankAccountId,
@@ -348,13 +349,23 @@ router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMI
       return res.status(400).json({ success: false, message: 'Valid payment amount is required.' });
     }
 
-    // Auto resolve Financial Year by expense date if not provided
+    // Auto resolve Financial Year & Academic Year for the transaction
+    const { resolveFinancialYearByDate, resolveAcademicYearForFinance } = require('./financialYears');
     let resolvedFyId = financialYearId ? parseInt(financialYearId) : null;
     if (!resolvedFyId && expenseDateBs) {
-      const { resolveFinancialYearByDate } = require('./financialYears');
       const resolved = await resolveFinancialYearByDate(expenseDateBs);
       if (resolved) resolvedFyId = resolved.id;
     }
+
+    const resolvedAyId = await resolveAcademicYearForFinance({
+      academicYearId,
+      financialYearId: resolvedFyId,
+      dateBs: expenseDateBs,
+    });
+
+    // Default active expense head if bill has none
+    const defaultHead = await prisma.expenseHead.findFirst({ where: { isActive: true }, orderBy: { id: 'asc' } });
+    const fallbackHeadId = defaultHead ? defaultHead.id : 1;
 
     // Fetch all entries for this party to find open bills
     const allEntries = await prisma.expenseEntry.findMany({
@@ -420,6 +431,7 @@ router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMI
       if (remainingPayment <= 0.001) break;
 
       const payForBill = Math.min(b.remainingDue, remainingPayment);
+      const entryHeadId = headId ? parseInt(headId) : (b.headId || fallbackHeadId);
 
       if (isSplit) {
         const cashRatio = parseFloat(cashAmount || 0) / totalPayAmt;
@@ -431,8 +443,8 @@ router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMI
           const cashEntry = await prisma.expenseEntry.create({
             data: {
               financialYearId: resolvedFyId,
-              academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
-              headId: b.headId,
+              academicYearId: resolvedAyId,
+              headId: entryHeadId,
               partyId: partyId,
               amount: billCash,
               expenseDateBs: expenseDateBs,
@@ -454,8 +466,8 @@ router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMI
           const bankEntry = await prisma.expenseEntry.create({
             data: {
               financialYearId: resolvedFyId,
-              academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
-              headId: b.headId,
+              academicYearId: resolvedAyId,
+              headId: entryHeadId,
               partyId: partyId,
               amount: billBank,
               expenseDateBs: expenseDateBs,
@@ -479,8 +491,8 @@ router.post('/:id/settle-lump-sum', authenticate, authorize('SUPER_ADMIN', 'ADMI
         const entry = await prisma.expenseEntry.create({
           data: {
             financialYearId: resolvedFyId,
-            academicYearId: academicYearId ? parseInt(academicYearId) : (resolvedFyId || 1),
-            headId: b.headId,
+            academicYearId: resolvedAyId,
+            headId: entryHeadId,
             partyId: partyId,
             amount: payForBill,
             expenseDateBs: expenseDateBs,

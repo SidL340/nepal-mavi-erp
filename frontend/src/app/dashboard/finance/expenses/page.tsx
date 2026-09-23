@@ -1466,6 +1466,7 @@ export default function ExpensesPage() {
       const payload: any = {
         amount: totalPayAmt,
         financialYearId: resolvedFYId,
+        headId: lumpSumHeadId ? parseInt(lumpSumHeadId) : undefined,
         expenseDateBs: lumpSumDateBs || todayBS(),
         remarks: lumpSumRemarks || `Lump-sum settlement payment for ${partyObj?.name}`,
         voucherNo: lumpSumVoucherNo || undefined,
