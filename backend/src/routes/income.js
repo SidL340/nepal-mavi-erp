@@ -742,7 +742,7 @@ router.post('/online-pay', authenticate, async (req, res) => {
         studentId: parseInt(studentId),
         feeHeadId: parseInt(feeHeadId),
         amount: parseFloat(amount),
-        paidDateBs: todayBS(),
+        paidDateBs: req.body.paidDateBs || `${new Date().getFullYear() + 57}-01-01`,
         paidDateAd: new Date(),
         receiptNo,
         collectedBy: 'Online Portal / Student',

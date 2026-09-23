@@ -64,7 +64,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
     const {
       fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
       panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
-      type, taha, shreni, post, designation,
+      type, taha, shreni, post, designation, photoUrl,
       dateOfJoiningBs, dateOfRetirementBs, subjectIds
     } = req.body;
 
@@ -80,7 +80,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
         data: {
           userId: user.id, fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
           panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
-          type: type || 'RASTRIYA', taha, shreni, post, designation,
+          type: type || 'RASTRIYA', taha, shreni, post, designation, photoUrl: photoUrl || null,
           dateOfJoiningBs, dateOfRetirementBs,
           subjects: subjectIds ? {
             create: subjectIds.map(sid => ({ subjectId: sid }))

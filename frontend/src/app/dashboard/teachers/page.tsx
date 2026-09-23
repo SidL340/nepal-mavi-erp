@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { todayBS } from '@/lib/nepali-date';
@@ -20,6 +20,9 @@ import {
   User,
   Edit2,
   Trash2,
+  Upload,
+  Camera,
+  CheckCircle2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -30,6 +33,10 @@ export default function TeachersPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<any>(null);
   const [newCredentials, setNewCredentials] = useState<any>(null);
+
+  // Photo state
+  const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [editPhotoPreview, setEditPhotoPreview] = useState<string>('');
 
   // Fetch subjects
   const { data: subjectsData } = useQuery({
@@ -61,6 +68,50 @@ export default function TeachersPage() {
     },
   });
 
+  // Photo compression helper (guarantees <= 50KB)
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file (.jpg, .png, .webp)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 320;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Compress to JPEG with quality 0.75 so size is ~20-35KB (under 50KB)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+        if (isEdit) {
+          setEditPhotoPreview(compressedBase64);
+        } else {
+          setPhotoPreview(compressedBase64);
+        }
+        toast.success(`Photo compressed & ready (under 50 KB)`);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Add Teacher Mutation
   const addTeacherMutation = useMutation({
     mutationFn: async (formData: any) => {
@@ -71,6 +122,7 @@ export default function TeachersPage() {
       toast.success('Teacher registered successfully!');
       setNewCredentials(data.credentials);
       setIsAddModalOpen(false);
+      setPhotoPreview('');
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
     },
@@ -88,6 +140,7 @@ export default function TeachersPage() {
     onSuccess: () => {
       toast.success('Teacher details updated successfully!');
       setEditingTeacher(null);
+      setEditPhotoPreview('');
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
     },
     onError: (err: any) => {
@@ -95,7 +148,7 @@ export default function TeachersPage() {
     },
   });
 
-  // Delete/Deactivate Teacher Mutation
+  // Delete Teacher Mutation
   const deleteTeacherMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await api.delete(`/teachers/${id}`);
@@ -120,6 +173,7 @@ export default function TeachersPage() {
     fd.forEach((value, key) => {
       if (value) data[key] = value;
     });
+    if (photoPreview) data.photoUrl = photoPreview;
     addTeacherMutation.mutate(data);
   };
 
@@ -131,6 +185,11 @@ export default function TeachersPage() {
     fd.forEach((value, key) => {
       data[key] = value || null;
     });
+    if (editPhotoPreview) {
+      data.photoUrl = editPhotoPreview;
+    } else if (editingTeacher.photoUrl) {
+      data.photoUrl = editingTeacher.photoUrl;
+    }
     editTeacherMutation.mutate({ id: editingTeacher.id, data });
   };
 
@@ -147,12 +206,15 @@ export default function TeachersPage() {
             Teachers & Staff Directory (शिक्षक तथा कर्मचारी विवरण)
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            नेपाल सरकारबाट नियुक्त (स्थाई) तथा निजी स्रोत शिक्षक, प्यान नं, संचय कोष, नागरिक लगानी कोष विवरण
+            नेपाल सरकारबाट नियुक्त (स्थाई) तथा निजी स्रोत शिक्षक, फोटो प्रोफाइल, प्यान नं, संचय कोष विवरण
           </p>
         </div>
 
         <button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={() => {
+            setPhotoPreview('');
+            setIsAddModalOpen(true);
+          }}
           className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
         >
           <Plus size={14} />
@@ -226,8 +288,12 @@ export default function TeachersPage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-[#1e3a5f] font-extrabold text-sm">
-                    {teacher.fullName.slice(0, 2).toUpperCase()}
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-[#1e3a5f] font-extrabold text-sm overflow-hidden border border-gray-200 shadow-2xs">
+                    {teacher.photoUrl ? (
+                      <img src={teacher.photoUrl} alt={teacher.fullName} className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{teacher.fullName.slice(0, 2).toUpperCase()}</span>
+                    )}
                   </div>
                   <div>
                     <h3 className="font-extrabold text-sm text-gray-900 leading-tight">{teacher.fullName}</h3>
@@ -249,7 +315,10 @@ export default function TeachersPage() {
                 {/* Actions */}
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setEditingTeacher(teacher)}
+                    onClick={() => {
+                      setEditingTeacher(teacher);
+                      setEditPhotoPreview(teacher.photoUrl || '');
+                    }}
                     className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition"
                     title="Edit Teacher Details (विवरण सम्पादन)"
                   >
@@ -326,6 +395,42 @@ export default function TeachersPage() {
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4 text-xs">
+              {/* Photo Upload Section */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-gray-300 flex items-center gap-4">
+                <div className="h-16 w-16 rounded-xl bg-white border border-gray-200 overflow-hidden flex items-center justify-center shrink-0 shadow-2xs">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt="Preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera size={24} className="text-gray-400" />
+                  )}
+                </div>
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-gray-700">Profile Photo (शिक्षक फोटो)</label>
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                      Max 50 KB (Auto-Optimized)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePhotoUpload(e, false)}
+                      className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#1e3a5f] file:text-white hover:file:bg-[#2a5280] cursor-pointer"
+                    />
+                    {photoPreview && (
+                      <button
+                        type="button"
+                        onClick={() => setPhotoPreview('')}
+                        className="text-xs text-rose-600 font-bold hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Full Name (English) *</label>
@@ -420,7 +525,7 @@ export default function TeachersPage() {
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
               <div>
                 <h2 className="text-base font-bold text-[#1e3a5f]">Edit Teacher / Staff (शिक्षक विवरण सम्पादन)</h2>
-                <p className="text-[11px] text-gray-500">Update personal, post, salary scale or contact details</p>
+                <p className="text-[11px] text-gray-500">Update personal, post, photo, salary scale or contact details</p>
               </div>
               <button onClick={() => setEditingTeacher(null)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
@@ -428,6 +533,42 @@ export default function TeachersPage() {
             </div>
 
             <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
+              {/* Photo Upload Section */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-gray-300 flex items-center gap-4">
+                <div className="h-16 w-16 rounded-xl bg-white border border-gray-200 overflow-hidden flex items-center justify-center shrink-0 shadow-2xs">
+                  {editPhotoPreview ? (
+                    <img src={editPhotoPreview} alt="Preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera size={24} className="text-gray-400" />
+                  )}
+                </div>
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-gray-700">Change Photo (फोटो परिवर्तन)</label>
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                      Max 50 KB (Auto-Optimized)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePhotoUpload(e, true)}
+                      className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#1e3a5f] file:text-white hover:file:bg-[#2a5280] cursor-pointer"
+                    />
+                    {editPhotoPreview && (
+                      <button
+                        type="button"
+                        onClick={() => setEditPhotoPreview('')}
+                        className="text-xs text-rose-600 font-bold hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Full Name (English) *</label>

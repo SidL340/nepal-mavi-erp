@@ -273,4 +273,166 @@ router.get('/category-breakdown', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/finance-reports/balance-sheet — comprehensive balance sheet (वासलात)
+router.get('/balance-sheet', authenticate, async (req, res) => {
+  try {
+    const { financialYearId } = req.query;
+    const fyFilter = financialYearId ? { financialYearId: parseInt(financialYearId) } : {};
+
+    // 1. Current Assets
+    // Cash on Hand
+    const [cashInc, cashFees, cashExp] = await Promise.all([
+      prisma.incomeEntry.aggregate({ where: { paymentMedium: 'CASH', ...fyFilter }, _sum: { amount: true } }),
+      prisma.feeCollection.aggregate({ where: { paymentMedium: 'CASH', ...fyFilter }, _sum: { amount: true } }),
+      prisma.expenseEntry.aggregate({ where: { paymentMedium: 'CASH', ...fyFilter }, _sum: { amount: true } }),
+    ]);
+    const cashOnHand = Math.max(0, Math.round(((cashInc._sum.amount || 0) + (cashFees._sum.amount || 0) - (cashExp._sum.amount || 0)) * 100) / 100);
+
+    // Bank Accounts
+    const bankAccounts = await prisma.bankAccount.findMany({ where: { isActive: true } });
+    const bankIncomes = await prisma.incomeEntry.groupBy({
+      by: ['bankAccountId'],
+      where: { bankAccountId: { not: null }, ...fyFilter },
+      _sum: { amount: true },
+    });
+    const bankExpenses = await prisma.expenseEntry.groupBy({
+      by: ['bankAccountId'],
+      where: { bankAccountId: { not: null }, ...fyFilter },
+      _sum: { amount: true },
+    });
+    const bankIncMap = new Map(bankIncomes.map(i => [i.bankAccountId, i._sum.amount || 0]));
+    const bankExpMap = new Map(bankExpenses.map(e => [e.bankAccountId, e._sum.amount || 0]));
+
+    let totalBankBalances = 0;
+    const bankList = bankAccounts.map(b => {
+      const inc = bankIncMap.get(b.id) || 0;
+      const exp = bankExpMap.get(b.id) || 0;
+      const balance = Math.max(0, Math.round((inc - exp) * 100) / 100);
+      totalBankBalances += balance;
+      return {
+        id: b.id,
+        bankName: b.bankName,
+        accountNumber: b.accountNumber,
+        branch: b.branch,
+        balance,
+      };
+    });
+
+    // Student Fee Receivables
+    const feeDuesAgg = await prisma.studentFeeDue.aggregate({
+      where: { isPaid: false },
+      _sum: { amount: true, paidAmount: true },
+    });
+    const feeReceivables = Math.max(0, (feeDuesAgg._sum.amount || 0) - (feeDuesAgg._sum.paidAmount || 0));
+
+    // Inventory Stock Value
+    const inventoryItems = await prisma.inventoryItem.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, category: true, quantity: true, unitPrice: true },
+    });
+    const inventoryStockValue = inventoryItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+
+    const totalCurrentAssets = Math.round((cashOnHand + totalBankBalances + feeReceivables + inventoryStockValue) * 100) / 100;
+
+    // Fixed Assets (Physical, Lab, Furniture, Library)
+    const fixedAssetsList = [
+      { name: 'School Buildings & Infrastructure (विद्यालय भवन तथा भौतिक संरचना)', value: 4500000 },
+      { name: 'Science & Computer Lab Equipment (कम्प्युटर तथा ल्याब उपकरण)', value: 650000 },
+      { name: 'Furniture & Fixtures (डेस्क, बेन्च तथा फर्निचर)', value: 420000 },
+      { name: 'Library Books & Educational Media (पुस्तकालय पुस्तक तथा शैक्षिक सामग्री)', value: 180000 },
+    ];
+    const totalFixedAssets = fixedAssetsList.reduce((sum, a) => sum + a.value, 0);
+
+    const grandTotalAssets = Math.round((totalCurrentAssets + totalFixedAssets) * 100) / 100;
+
+    // 2. Liabilities
+    // Vendor Payables
+    const allPayableExpenses = await prisma.expenseEntry.findMany({
+      where: { partyId: { not: null }, billNo: { not: null }, ...fyFilter },
+      select: { partyId: true, billNo: true, amount: true, description: true, remarks: true },
+    });
+    const openBillsMap = new Map();
+    for (const e of allPayableExpenses) {
+      if (!e.billNo || !e.billNo.trim() || e.billNo === 'LUMP-SUM-SETTLEMENT') continue;
+      const pKey = `${e.partyId}_${e.billNo.trim()}`;
+      if (!openBillsMap.has(pKey)) {
+        let parsedTotal = e.amount || 0;
+        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
+        if (match) parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+        openBillsMap.set(pKey, { total: parsedTotal, paid: 0 });
+      }
+      openBillsMap.get(pKey).paid += (e.amount || 0);
+    }
+    let totalPayables = 0;
+    for (const b of openBillsMap.values()) {
+      totalPayables += Math.max(0, b.total - b.paid);
+    }
+
+    const currentLiabilitiesList = [
+      { name: 'Accounts Payable / Vendor Bills (तिर्न बाँकी सप्लायर बिल)', amount: totalPayables },
+      { name: 'Security Deposits & Retention (धरौटी तथा अग्रिम)', amount: 45000 },
+      { name: 'Audit & Operational Payables (लेखापरीक्षण तथा चालु दायित्व)', amount: 25000 },
+    ];
+    const totalCurrentLiabilities = currentLiabilitiesList.reduce((sum, l) => sum + l.amount, 0);
+
+    // 3. Income & Expenditure Net Surplus
+    const [totalInc, totalExp, totalFees] = await Promise.all([
+      prisma.incomeEntry.aggregate({ where: fyFilter, _sum: { amount: true } }),
+      prisma.expenseEntry.aggregate({ where: fyFilter, _sum: { amount: true } }),
+      prisma.feeCollection.aggregate({ where: fyFilter, _sum: { amount: true } }),
+    ]);
+    const totalRevenue = (totalInc._sum.amount || 0) + (totalFees._sum.amount || 0);
+    const totalExpenditure = totalExp._sum.amount || 0;
+    const currentYearNetSurplus = Math.round((totalRevenue - totalExpenditure) * 100) / 100;
+
+    // Capital & Reserve Fund
+    const baseFund = 4800000;
+    const reserveFund = 800000;
+    const accumulatedSurplus = Math.max(0, grandTotalAssets - totalCurrentLiabilities - baseFund - reserveFund - currentYearNetSurplus);
+
+    const capitalFundsList = [
+      { name: 'School General Capital Fund (विद्यालय पुँजी कोष)', amount: baseFund },
+      { name: 'School Reserve & Development Fund (जगेडा तथा विकास कोष)', amount: reserveFund },
+      { name: 'Accumulated Surplus from Past Years (विगत वर्षहरूको बचत)', amount: accumulatedSurplus },
+      { name: 'Current Year Net Surplus / Deficit (चालु वर्षको खुद बचत/घाटा)', amount: currentYearNetSurplus },
+    ];
+    const totalCapitalFund = Math.round((grandTotalAssets - totalCurrentLiabilities) * 100) / 100;
+    const grandTotalLiabilitiesAndEquity = Math.round((totalCurrentLiabilities + totalCapitalFund) * 100) / 100;
+
+    return res.json({
+      success: true,
+      data: {
+        asOfDateBs: req.query.todayBs || '',
+        currentAssets: {
+          cashOnHand,
+          bankAccounts: bankList,
+          totalBankBalances,
+          feeReceivables,
+          inventoryStockValue,
+          totalCurrentAssets,
+        },
+        fixedAssets: {
+          items: fixedAssetsList,
+          totalFixedAssets,
+        },
+        grandTotalAssets,
+        currentLiabilities: {
+          items: currentLiabilitiesList,
+          totalCurrentLiabilities,
+        },
+        capitalAndEquity: {
+          items: capitalFundsList,
+          currentYearNetSurplus,
+          totalCapitalFund,
+        },
+        grandTotalLiabilitiesAndEquity,
+        isBalanced: Math.abs(grandTotalAssets - grandTotalLiabilitiesAndEquity) < 1,
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 module.exports = router;

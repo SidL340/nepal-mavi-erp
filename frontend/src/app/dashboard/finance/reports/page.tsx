@@ -24,7 +24,7 @@ import {
 import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function FinancialReportsPage() {
-  const [activeTab, setActiveTab] = useState<'trial_balance' | 'income_expense' | 'ledger' | 'party_ledger'>('trial_balance');
+  const [activeTab, setActiveTab] = useState<'trial_balance' | 'income_expense' | 'balance_sheet' | 'ledger' | 'party_ledger'>('trial_balance');
   const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
 
   // Ledger Tab State
@@ -138,6 +138,18 @@ export default function FinancialReportsPage() {
       params.append('limit', '1000');
       const res = await api.get(`/income/fee-collections?${params.toString()}`);
       return res.data?.data || [];
+    },
+  });
+
+  // Fetch Balance Sheet Report
+  const { data: balanceSheetData, isLoading: isBalanceSheetLoading } = useQuery({
+    queryKey: ['balance-sheet-report', effectiveFYId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (effectiveFYId) params.append('financialYearId', effectiveFYId);
+      params.append('todayBs', todayBS());
+      const res = await api.get(`/finance-reports/balance-sheet?${params.toString()}`);
+      return res.data?.data || null;
     },
   });
 
@@ -388,6 +400,18 @@ export default function FinancialReportsPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab('balance_sheet')}
+          className={`border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${
+            activeTab === 'balance_sheet'
+              ? 'border-indigo-600 text-indigo-900 font-extrabold'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Landmark size={14} />
+          <span>3. Balance Sheet (वासलात)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('ledger')}
           className={`border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${
             activeTab === 'ledger'
@@ -396,7 +420,7 @@ export default function FinancialReportsPage() {
           }`}
         >
           <Layers size={14} />
-          <span>3. Account Head Ledger (खातागत लेजर)</span>
+          <span>4. Account Head Ledger (खातागत लेजर)</span>
         </button>
 
         <button
@@ -408,7 +432,7 @@ export default function FinancialReportsPage() {
           }`}
         >
           <Users size={14} />
-          <span>4. Party / Vendor Ledger (पार्टी/सप्लायर खाता)</span>
+          <span>5. Party / Vendor Ledger (पार्टी/सप्लायर खाता)</span>
         </button>
       </div>
 
@@ -423,6 +447,7 @@ export default function FinancialReportsPage() {
         <div className="mt-2 inline-block bg-slate-100 border border-slate-300 px-3 py-0.5 rounded text-xs font-extrabold uppercase text-[#1e3a5f]">
           {activeTab === 'trial_balance' && 'TRIAL BALANCE STATEMENT (दोहोरो लेखा परीक्षण विवरण)'}
           {activeTab === 'income_expense' && 'INCOME & EXPENDITURE STATEMENT (आय-व्यय विवरण)'}
+          {activeTab === 'balance_sheet' && 'BALANCE SHEET STATEMENT (वासलात विवरण)'}
           {activeTab === 'ledger' && 'ACCOUNT HEAD GENERAL LEDGER (खाता लेजर)'}
           {activeTab === 'party_ledger' && `PARTY LEDGER — ${selectedPartyObj?.name || 'ALL PARTIES'}`}
         </div>
@@ -669,7 +694,258 @@ export default function FinancialReportsPage() {
         </div>
       )}
 
-      {/* ────────────────── TAB 3: ACCOUNT HEAD LEDGER ───────────────────── */}
+      {/* ────────────────── TAB 3: BALANCE SHEET (वासलात) ────────────────── */}
+      {activeTab === 'balance_sheet' && (
+        <div className="space-y-6">
+          {/* Summary Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 no-print">
+            <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-indigo-800">Total Assets (कुल सम्पत्ति)</span>
+              <p className="text-2xl font-black text-indigo-950 font-mono mt-1">
+                रू {(balanceSheetData?.grandTotalAssets || 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Current & Fixed Assets combined</p>
+            </div>
+
+            <div className="rounded-2xl border border-rose-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-rose-800">Current Liabilities (चालु दायित्व)</span>
+              <p className="text-2xl font-black text-rose-900 font-mono mt-1">
+                रू {(balanceSheetData?.currentLiabilities?.totalCurrentLiabilities || 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Payables & Retention Deposits</p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-emerald-800">Capital & Reserves (पुँजी तथा कोष)</span>
+              <p className="text-2xl font-black text-emerald-800 font-mono mt-1">
+                रू {(balanceSheetData?.capitalAndEquity?.totalCapitalFund || 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">General + Reserve + Net Surplus</p>
+            </div>
+
+            <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-blue-800">Balance Status (सन्तुलन अवस्था)</span>
+              <div className="mt-1.5 flex items-center gap-2">
+                <CheckCircle2 size={22} className="text-emerald-600 shrink-0" />
+                <span className="text-sm font-black text-emerald-700">
+                  {balanceSheetData?.isBalanced !== false ? 'Balanced (सन्तुलित)' : 'Unbalanced'}
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1 font-mono">Assets = Liabilities + Equity</p>
+            </div>
+          </div>
+
+          {/* Balance Sheet Statement Layout (Two Columns) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            {/* ── LEFT COLUMN: ASSETS (सम्पत्ति खाता) ── */}
+            <div className="rounded-2xl border border-blue-200 bg-white shadow-2xs overflow-hidden">
+              <div className="bg-[#1e3a5f] px-4 py-3 text-white flex items-center justify-between">
+                <h3 className="font-extrabold text-sm flex items-center gap-2">
+                  <Landmark size={16} className="text-amber-400" />
+                  <span>ASSETS (सम्पत्ति विवरण)</span>
+                </h3>
+                <span className="text-xs font-mono font-black bg-blue-900/80 px-2.5 py-0.5 rounded text-amber-300">
+                  रू {(balanceSheetData?.grandTotalAssets || 0).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="p-4 space-y-5 text-xs">
+                {/* 1. Current Assets */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-blue-100 pb-1.5">
+                    <span className="font-black text-[#1e3a5f] uppercase tracking-wide text-[11px]">
+                      1. Current Assets (चालु सम्पत्ति)
+                    </span>
+                    <span className="font-mono font-bold text-blue-900">
+                      रू {(balanceSheetData?.currentAssets?.totalCurrentAssets || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 pl-2">
+                    {/* Cash */}
+                    <div className="flex items-center justify-between text-gray-700 py-1 border-b border-gray-50">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        Cash on Hand (नगद मौज्दात)
+                      </span>
+                      <span className="font-mono font-bold text-gray-900">
+                        रू {(balanceSheetData?.currentAssets?.cashOnHand || 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Bank Accounts */}
+                    <div className="space-y-1.5 py-1 border-b border-gray-50">
+                      <div className="flex items-center justify-between text-gray-700 font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                          Bank Accounts & Deposits (बैंक मौज्दात)
+                        </span>
+                        <span className="font-mono text-blue-900">
+                          रू {(balanceSheetData?.currentAssets?.totalBankBalances || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      {balanceSheetData?.currentAssets?.bankAccounts?.map((b: any) => (
+                        <div key={b.id} className="pl-4 flex items-center justify-between text-gray-500 text-[11px]">
+                          <span>
+                            • {b.bankName} <span className="font-mono text-[10px]">({b.accountNumber})</span>
+                          </span>
+                          <span className="font-mono text-gray-700">रू {(b.balance || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Student Receivables */}
+                    <div className="flex items-center justify-between text-gray-700 py-1 border-b border-gray-50">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        Student Fee Receivables (उठ्न बाँकी शुल्क)
+                      </span>
+                      <span className="font-mono font-bold text-amber-900">
+                        रू {(balanceSheetData?.currentAssets?.feeReceivables || 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Inventory Stock */}
+                    <div className="flex items-center justify-between text-gray-700 py-1">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                        Inventory Stock Valuation (जिन्सी मौज्दात)
+                      </span>
+                      <span className="font-mono font-bold text-gray-900">
+                        रू {(balanceSheetData?.currentAssets?.inventoryStockValue || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Fixed Assets */}
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between border-b border-blue-100 pb-1.5">
+                    <span className="font-black text-[#1e3a5f] uppercase tracking-wide text-[11px]">
+                      2. Fixed Assets (स्थिर सम्पत्ति)
+                    </span>
+                    <span className="font-mono font-bold text-blue-900">
+                      रू {(balanceSheetData?.fixedAssets?.totalFixedAssets || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 pl-2">
+                    {balanceSheetData?.fixedAssets?.items?.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-gray-700 py-1 border-b border-gray-50 last:border-0">
+                        <span>• {item.name}</span>
+                        <span className="font-mono font-bold text-gray-900">रू {(item.value || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Assets Bar */}
+              <div className="bg-blue-50 border-t-2 border-[#1e3a5f] p-3.5 px-4 flex items-center justify-between font-black text-sm">
+                <span className="text-[#1e3a5f] uppercase tracking-wider text-xs">
+                  Grand Total Assets (कुल सम्पत्ति):
+                </span>
+                <span className="font-mono text-base text-[#1e3a5f]">
+                  रू {(balanceSheetData?.grandTotalAssets || 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* ── RIGHT COLUMN: LIABILITIES & CAPITAL FUND (दायित्व तथा पुँजी कोष) ── */}
+            <div className="rounded-2xl border border-emerald-200 bg-white shadow-2xs overflow-hidden">
+              <div className="bg-[#1e3a5f] px-4 py-3 text-white flex items-center justify-between">
+                <h3 className="font-extrabold text-sm flex items-center gap-2">
+                  <Scale size={16} className="text-emerald-400" />
+                  <span>LIABILITIES & CAPITAL (दायित्व तथा पुँजी कोष)</span>
+                </h3>
+                <span className="text-xs font-mono font-black bg-blue-900/80 px-2.5 py-0.5 rounded text-emerald-300">
+                  रू {(balanceSheetData?.grandTotalLiabilitiesAndEquity || 0).toLocaleString()}
+                </span>
+              </div>
+
+              <div className="p-4 space-y-5 text-xs">
+                {/* 1. Current Liabilities */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-rose-100 pb-1.5">
+                    <span className="font-black text-rose-950 uppercase tracking-wide text-[11px]">
+                      1. Current Liabilities (चालु दायित्व)
+                    </span>
+                    <span className="font-mono font-bold text-rose-900">
+                      रू {(balanceSheetData?.currentLiabilities?.totalCurrentLiabilities || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 pl-2">
+                    {balanceSheetData?.currentLiabilities?.items?.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-gray-700 py-1 border-b border-gray-50 last:border-0">
+                        <span>• {item.name}</span>
+                        <span className="font-mono font-bold text-rose-800">रू {(item.amount || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Capital & Reserve Funds */}
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between border-b border-emerald-100 pb-1.5">
+                    <span className="font-black text-emerald-950 uppercase tracking-wide text-[11px]">
+                      2. Capital Fund & Reserves (पुँजी कोष तथा बचत)
+                    </span>
+                    <span className="font-mono font-bold text-emerald-900">
+                      रू {(balanceSheetData?.capitalAndEquity?.totalCapitalFund || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 pl-2">
+                    {balanceSheetData?.capitalAndEquity?.items?.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-gray-700 py-1 border-b border-gray-50 last:border-0">
+                        <span className={item.name.includes('Current Year') ? 'font-bold text-emerald-900' : ''}>
+                          • {item.name}
+                        </span>
+                        <span className={`font-mono font-bold ${item.name.includes('Current Year') ? 'text-emerald-700' : 'text-gray-900'}`}>
+                          रू {(item.amount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Liabilities & Capital Bar */}
+              <div className="bg-emerald-50 border-t-2 border-[#1e3a5f] p-3.5 px-4 flex items-center justify-between font-black text-sm">
+                <span className="text-emerald-950 uppercase tracking-wider text-xs">
+                  Grand Total Liabilities & Capital (कुल दायित्व तथा पुँजी):
+                </span>
+                <span className="font-mono text-base text-emerald-900">
+                  रू {(balanceSheetData?.grandTotalLiabilitiesAndEquity || 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Statement Verification Footer Bar */}
+          <div className="rounded-2xl bg-slate-900 text-white p-4 px-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 size={24} className="text-emerald-400 shrink-0" />
+              <div>
+                <h4 className="font-extrabold text-sm text-white">
+                  Balance Sheet Verification (दोहोरो लेखा परीक्षण प्रमाणिकरण)
+                </h4>
+                <p className="text-[11px] text-gray-300">
+                  सम्पत्ति र दायित्व पक्ष बराबर भएको (Assets = Liabilities + Equity) प्रमाणित गर्दछ ।
+                </p>
+              </div>
+            </div>
+            <div className="text-right font-mono text-xs text-slate-300">
+              <span>Financial Year: <b>{currentFYName}</b></span>
+              <span className="mx-2">•</span>
+              <span>As of: <b>{balanceSheetData?.asOfDateBs || todayBS()} BS</b></span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────── TAB 4: ACCOUNT HEAD LEDGER ───────────────────── */}
       {activeTab === 'ledger' && (
         <div className="space-y-4">
           {/* Head Selector Controls */}
