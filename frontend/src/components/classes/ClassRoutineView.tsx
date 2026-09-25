@@ -920,45 +920,14 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
               </span>
             </div>
 
-            {/* Quick Count Pills: 5, 6, 7, 8 */}
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 gap-1">
-              {[5, 6, 7, 8].map((cnt) => (
-                <button
-                  key={cnt}
-                  type="button"
-                  onClick={() => handleSetPeriodCount(cnt)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
-                    periods.length === cnt
-                      ? 'bg-[#1e3a5f] text-white shadow-xs'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                  title={`${cnt} घण्टीको तालिका बनाउनुहोस्`}
-                >
-                  {cnt} घण्टी
-                </button>
-              ))}
-            </div>
-
-            {/* Auto-set from Class Subjects Count */}
-            {classSubjects.length > 0 && classSubjects.length !== periods.length && (
-              <button
-                type="button"
-                onClick={() => handleSetPeriodCount(classSubjects.length)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold hover:bg-indigo-100 transition cursor-pointer"
-                title={`यस कक्षामा ${classSubjects.length} विषय दर्ता छन्`}
-              >
-                <Sparkles size={13} className="text-indigo-600" />
-                <span>💡 {classSubjects.length} विषय अनुसार सेट</span>
-              </button>
-            )}
-
+            {/* Dynamic Period Add / Remove Controls */}
             <button
               type="button"
               onClick={handleAddPeriod}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
               title="Add another period for this class"
             >
-              <Plus size={13} />
+              <Plus size={14} />
               <span>+ घण्टी थप्नुहोस्</span>
             </button>
 
@@ -966,10 +935,10 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
               type="button"
               onClick={handleRemovePeriod}
               disabled={periods.length <= 1}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold hover:bg-rose-100 transition cursor-pointer disabled:opacity-40"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold hover:bg-rose-100 transition cursor-pointer disabled:opacity-40"
               title="Remove last period"
             >
-              <Trash2 size={13} />
+              <Trash2 size={14} />
               <span>- घटाउनुहोस्</span>
             </button>
           </div>
