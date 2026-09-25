@@ -91,7 +91,7 @@ app.listen(PORT, '0.0.0.0', async () => {
         province: 'मधेश प्रदेश',
         emisCode: '320160005',
         phone: '9855040000',
-        email: 'nepalmavi@gmail.com',
+        email: 'nepalsecondaryschool.bdn@gmail.com',
         level: 'Secondary',
         type: 'Community',
         estYear: '2007',

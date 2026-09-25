@@ -138,7 +138,7 @@ export default function SchoolEmailPage() {
                 School Official Webmail (विद्यालय इमेल केन्द्र)
               </h1>
               <p className="text-xs text-gray-500">
-                nepalmavibrindawan@gmail.com — आधिकारिक पत्राचार, सूचना तथा पत्राचार व्यवस्थापन
+                nepalsecondaryschool.bdn@gmail.com — आधिकारिक पत्राचार, सूचना तथा पत्राचार व्यवस्थापन
               </p>
             </div>
           </div>
@@ -535,7 +535,7 @@ export default function SchoolEmailPage() {
               <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                 <span className="text-[11px] text-gray-400 flex items-center gap-1">
                   <Paperclip size={13} />
-                  <span>Sender: nepalmavibrindawan@gmail.com</span>
+                  <span>Sender: nepalsecondaryschool.bdn@gmail.com</span>
                 </span>
 
                 <div className="flex items-center gap-2">

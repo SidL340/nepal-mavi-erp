@@ -14,7 +14,7 @@ async function seedDefaultEmailsIfEmpty() {
           folder: 'INBOX',
           fromAddress: 'info@doe.gov.np',
           fromName: 'शिक्षा तथा मानव स्रोत विकास केन्द्र (CEHRD / DoE)',
-          toAddress: 'nepalmavibrindawan@gmail.com',
+          toAddress: 'nepalsecondaryschool.bdn@gmail.com',
           toName: 'श्री नेपाल मा.वि. विश्रामपुर',
           subject: 'शैक्षिक सत्र २०८३/८४ को वार्षिक कार्यतालिका तथा छात्रवृत्ति कोटा विवरण सम्बन्धमा',
           body: `श्री प्रधानाध्यापक ज्यू,
@@ -35,7 +35,7 @@ async function seedDefaultEmailsIfEmpty() {
           folder: 'INBOX',
           fromAddress: 'education@brindawanmun.gov.np',
           fromName: 'वृन्दावन नगरपालिका - शिक्षा, युवा तथा खेलकुद शाखा',
-          toAddress: 'nepalmavibrindawan@gmail.com',
+          toAddress: 'nepalsecondaryschool.bdn@gmail.com',
           toName: 'श्री नेपाल माध्यमिक विद्यालय',
           subject: 'मासिक शिक्षक हाजिरी प्रतिवेदन तथा दिवा खाजा कार्यक्रमको निकासा सम्बन्धमा',
           body: `श्री प्रधानाध्यापक ज्यू,
@@ -53,7 +53,7 @@ async function seedDefaultEmailsIfEmpty() {
         },
         {
           folder: 'SENT',
-          fromAddress: 'nepalmavibrindawan@gmail.com',
+          fromAddress: 'nepalsecondaryschool.bdn@gmail.com',
           fromName: 'श्री नेपाल मा.वि. विश्रामपुर, रौतहट',
           toAddress: 'education@brindawanmun.gov.np',
           toName: 'वृन्दावन नगरपालिका शिक्षा शाखा',
@@ -155,7 +155,7 @@ router.post('/send', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
     }
 
     const school = await prisma.school.findFirst();
-    const fromAddress = school?.email || 'nepalmavibrindawan@gmail.com';
+    const fromAddress = school?.email || 'nepalsecondaryschool.bdn@gmail.com';
     const fromName = school?.name || 'श्री नेपाल माध्यमिक विद्यालय विश्रामपुर';
 
     const sentEmail = await prisma.schoolEmail.create({

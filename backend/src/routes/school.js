@@ -12,6 +12,7 @@ router.get('/profile', authenticate, async (req, res) => {
       if (!school.estYear) school.estYear = '2007';
       if (!school.principalName) school.principalName = 'प्रेमलाल प्रसाद राउत';
       if (!school.address) school.address = 'वृन्दावन न.पा.-२, विश्रामपुर, रौतहट';
+      if (!school.email) school.email = 'nepalsecondaryschool.bdn@gmail.com';
     }
     return res.json({ success: true, data: school });
   } catch (err) {

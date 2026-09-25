@@ -31,7 +31,8 @@ import {
   Layers,
   Clock,
   Grid,
-  Scale,
+  Mail,
+  UserCheck,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -64,18 +65,19 @@ const navConfig: (NavItem | NavSection)[] = [
     roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER', 'LIBRARIAN', 'STUDENT'],
   },
   {
-    section: 'STUDENTS',
-    nepaliSection: 'विद्यार्थी',
+    section: 'STUDENTS & ACADEMICS',
+    nepaliSection: 'विद्यार्थी तथा शैक्षिक',
     roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'],
     items: [
       { label: 'Students', nepaliLabel: 'विद्यार्थीहरू', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Classes & Routine', nepaliLabel: 'कक्षा र विषय', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Class Routine', nepaliLabel: 'दैनिक समय तालिका', href: '/dashboard/classes/routine', icon: Clock, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Attendance', nepaliLabel: 'हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+      { label: 'Leave Approvals', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Exams & Marks', nepaliLabel: 'परीक्षा र लब्धाङ्क', href: '/dashboard/exams', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Seat Planning', nepaliLabel: 'परीक्षा सिट योजना', href: '/dashboard/exams/seat-planning', icon: Grid, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Certificates', nepaliLabel: 'प्रमाणपत्र (CC/TC)', href: '/dashboard/certificates', icon: Award, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     ],
   },
   {
@@ -99,16 +101,18 @@ const navConfig: (NavItem | NavSection)[] = [
   {
     section: 'STAFF',
     nepaliSection: 'शिक्षक तथा कर्मचारी',
-    roles: ['SUPER_ADMIN', 'ADMIN'],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
     items: [
-      { label: 'Teachers', nepaliLabel: 'शिक्षक विवरण', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Teachers & Staff', nepaliLabel: 'शिक्षक कर्मचारी विवरण', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Leave Approvals', nepaliLabel: 'कर्मचारी बिदा स्वीकृति', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     ],
   },
   {
-    section: 'SERVICES',
-    nepaliSection: 'सेवा तथा प्रशासन',
+    section: 'SERVICES & COMMUNICATION',
+    nepaliSection: 'सेवा तथा सञ्चार',
     roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN', 'TEACHER', 'ACCOUNTANT'],
     items: [
+      { label: 'Official Webmail', nepaliLabel: 'इमेल केन्द्र (Webmail)', href: '/dashboard/email', icon: Mail, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Library', nepaliLabel: 'पुस्तकालय', href: '/dashboard/library', icon: Library, roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'] },
       { label: 'Inventory (Jinsi)', nepaliLabel: 'जिन्सी खाता', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Notices & SMS', nepaliLabel: 'सूचना / SMS', href: '/dashboard/notices', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'] },

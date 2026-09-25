@@ -19,6 +19,9 @@ import {
   Type,
   Sliders,
   Image as ImageIcon,
+  Upload,
+  RotateCcw,
+  ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -40,6 +43,12 @@ export default function SchoolLettersPage() {
   const [lineHeight, setLineHeight] = useState<number>(2.0);
   const [showWatermark, setShowWatermark] = useState<boolean>(true);
 
+  // Logo & Signature Upload State
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+  const [customSignatureUrl, setCustomSignatureUrl] = useState<string | null>(null);
+  const [isPrincipalApproved, setIsPrincipalApproved] = useState<boolean>(true);
+  const [includeSignature, setIncludeSignature] = useState<boolean>(true);
+
   // Form State
   const [letterForm, setLetterForm] = useState({
     chalaniNo: `चलानी-२०८३/०१`,
@@ -53,7 +62,7 @@ export default function SchoolLettersPage() {
     schoolEstdEn: 'Estd: 2007',
     recipient: 'श्रीमान् शिक्षा विकास तथा समन्वय इकाई प्रमुख,\nरौतहट, गौर।',
     subject: 'कक्षा ११ र १२ को नियमित पठनपाठन सञ्चालन सम्बन्धमा।',
-    salutation: '',
+    salutation: 'महोदय,',
     body: `यस विद्यालयमा अध्ययनरत कक्षा ११ र १२ का सम्पूर्ण विद्यार्थी तथा अभिभावकहरूलाई जानकारी गराइन्छ कि मिति २०८३-०३-१७ गते बिहान ६ बजेदेखि कक्षा ११ र १२ को नियमित पठनपाठन सञ्चालन हुने भएकाले सबै विद्यार्थीहरू विद्यालय पोसाकमा समयमै उपस्थित भई नियमित रूपमा कक्षामा सहभागी हुन अनुरोध गरिन्छ।\n\nअनुपस्थित हुने विद्यार्थी स्वयं जिम्मेवार हुने व्यहोरा समेत जानकारी गराइन्छ।`,
     signatoryName: 'प्रेमलाल प्रसाद राउत',
     signatoryRole: 'प्रधानाध्यापक',
@@ -75,14 +84,29 @@ export default function SchoolLettersPage() {
     },
   });
 
-  // Fetch school info
-  const { data: schoolData } = useQuery({
-    queryKey: ['school-profile'],
-    queryFn: async () => {
-      const res = await api.get('/school/profile');
-      return res.data?.data;
-    },
-  });
+  // Handle Logo Upload
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomLogoUrl(reader.result as string);
+      toast.success('नयाँ लोगो लोड भयो (Custom logo uploaded)!');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Signature Upload
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomSignatureUrl(reader.result as string);
+      toast.success('प्रधानाध्यापकको डिजिटल हस्ताक्षर लोड भयो (Signature uploaded)!');
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Create & Dispatch Letter Mutation
   const createLetterMutation = useMutation({
@@ -110,12 +134,12 @@ export default function SchoolLettersPage() {
       return;
     }
 
-    const schoolNe = l.schoolNameNe || 'श्री नेपाल माध्यमिक विद्यालय विश्रामपुर';
-    const subNe = l.schoolSubtitleNe || 'वृन्दावन न.पा.-२, रौतहट';
-    const estdNe = l.schoolEstdNe || '(स्थापित-२००७ साल)';
-    const schoolEn = l.schoolNameEn || 'SHREE NEPAL SECONDARY SCHOOL BISHRAMPUR';
-    const subEn = l.schoolSubtitleEn || 'Brindawan Municipality -2, Rautahat';
-    const estdEn = l.schoolEstdEn || 'Estd: 2007';
+    const schoolNe = l.schoolNameNe || letterForm.schoolNameNe;
+    const subNe = l.schoolSubtitleNe || letterForm.schoolSubtitleNe;
+    const estdNe = l.schoolEstdNe || letterForm.schoolEstdNe;
+    const schoolEn = l.schoolNameEn || letterForm.schoolNameEn;
+    const subEn = l.schoolSubtitleEn || letterForm.schoolSubtitleEn;
+    const estdEn = l.schoolEstdEn || letterForm.schoolEstdEn;
 
     printWin.document.write(`
       <!DOCTYPE html>
@@ -159,44 +183,38 @@ export default function SchoolLettersPage() {
             .emblem-left {
               position: absolute;
               left: 0;
-              top: 0;
-              width: 75px;
-              height: 75px;
-              object-fit: contain;
-            }
-            .emblem-svg {
-              width: 72px;
-              height: 72px;
+              top: 2px;
+              width: 78px;
+              height: 78px;
             }
             .header-text {
               text-align: center;
-              padding-left: 60px;
-              padding-right: 20px;
+              padding-left: 80px;
+              padding-right: 15px;
             }
-            .school-ne { 
-              font-size: 23px; 
-              font-weight: 900; 
-              color: #111; 
+            .school-ne {
+              font-size: 20px;
+              font-weight: 900;
+              color: #0b1f3a;
               margin: 0;
-              letter-spacing: 0.5px;
+              line-height: 1.25;
             }
             .sub-ne {
               font-size: 13.5px;
               font-weight: bold;
-              color: #111;
+              color: #222;
               margin: 1px 0;
             }
             .estd-ne {
-              font-size: 11px;
-              font-weight: bold;
+              font-size: 12px;
+              font-weight: 800;
               color: #333;
               margin: 0;
             }
-            .school-en { 
-              font-size: 13.5px; 
-              font-weight: 900; 
-              color: #111; 
-              letter-spacing: 0.8px;
+            .school-en {
+              font-size: 13.5px;
+              font-weight: 900;
+              color: #0b1f3a;
               margin-top: 2px;
               text-transform: uppercase;
               font-family: Arial, sans-serif;
@@ -265,6 +283,9 @@ export default function SchoolLettersPage() {
               width: 140px;
               height: 45px;
               margin: 0 auto 5px auto;
+              display: flex;
+              align-items: center;
+              justify-content: center;
             }
             .sign-name {
               font-weight: 900;
@@ -290,19 +311,19 @@ export default function SchoolLettersPage() {
         </head>
         <body>
           <div class="watermark">
+            ${customLogoUrl ? `<img src="${customLogoUrl}" style="width:100%;height:100%;object-fit:contain;"/>` : `
             <svg viewBox="0 0 100 100" class="w-full h-full">
               <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="#1e3a5f" stroke-width="2"/>
               <polygon points="50,15 80,30 80,70 50,85 20,70 20,30" fill="none" stroke="#1e3a5f" stroke-width="1.5"/>
               <circle cx="50" cy="50" r="22" fill="none" stroke="#1e3a5f" stroke-width="1.5"/>
-              <path d="M40,55 Q50,45 50,35 Q50,45 60,55 Q50,50 40,55 Z" fill="#1e3a5f"/>
-              <path d="M35,62 L50,52 L65,62 L50,58 Z" fill="#1e3a5f"/>
-            </svg>
+            </svg>`}
           </div>
 
           <div class="letter-container">
             <div class="letterhead">
               <div class="emblem-left">
-                <svg viewBox="0 0 100 100" class="emblem-svg">
+                ${customLogoUrl ? `<img src="${customLogoUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;"/>` : `
+                <svg viewBox="0 0 100 100" style="width:100%;height:100%;">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
                   <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
                   <path id="curveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
@@ -313,10 +334,9 @@ export default function SchoolLettersPage() {
                   <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
                     <textPath href="#curveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
                   </text>
-                  <!-- Star & Book Center -->
                   <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" stroke-width="1.5"/>
                   <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
-                </svg>
+                </svg>`}
               </div>
 
               <div class="header-text">
@@ -351,12 +371,15 @@ export default function SchoolLettersPage() {
             <div class="letter-body">${l.body}</div>
 
             <div class="signatory-box">
-              <div class="signature-graphic">
-                <svg viewBox="0 0 160 50" class="w-full h-full">
-                  <path d="M20,38 Q45,10 65,30 T105,25 Q125,12 145,28" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
-                  <path d="M50,30 Q65,42 95,35" fill="none" stroke="#111" stroke-width="1.5"/>
-                </svg>
-              </div>
+              ${includeSignature && isPrincipalApproved ? `
+                <div class="signature-graphic">
+                  ${customSignatureUrl ? `<img src="${customSignatureUrl}" style="max-height:45px;max-width:140px;object-fit:contain;"/>` : `
+                  <svg viewBox="0 0 160 50" style="width:100%;height:100%;">
+                    <path d="M20,38 Q45,10 65,30 T105,25 Q125,12 145,28" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
+                    <path d="M50,30 Q65,42 95,35" fill="none" stroke="#111" stroke-width="1.5"/>
+                  </svg>`}
+                </div>
+              ` : '<div style="height:35px;"></div>'}
               <div class="sign-name">${l.signatoryName || 'प्रेमलाल प्रसाद राउत'}</div>
               <div class="sign-role">${l.signatoryRole || 'प्रधानाध्यापक'}</div>
               <div class="sign-school">${l.signatorySchool || 'श्री नेपाल मा. वि.'}</div>
@@ -385,14 +408,14 @@ export default function SchoolLettersPage() {
             <span>Official Letterpad System (विद्यालय आधिकारिक लेटरप्याड)</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            श्री नेपाल माध्यमिक विद्यालय विश्रामपुरको आधिकारिक लेटरप्याड ढाँचामा पत्राचार, सम्पादन तथा उच्च गुणस्तर A4 प्रिन्ट
+            प्रशासन तथा लेखापालद्वारा आधिकारिक पत्राचार, सम्पादन, लोगो/हस्ताक्षर व्यवस्थापन तथा प्रिन्ट
           </p>
         </div>
 
         <div className="flex rounded-xl bg-slate-200/80 p-1 text-xs font-bold gap-1 shadow-inner">
           <button
             onClick={() => setActiveTab('composer')}
-            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 ${
+            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'composer' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-700 hover:text-gray-900'
             }`}
           >
@@ -401,7 +424,7 @@ export default function SchoolLettersPage() {
           </button>
           <button
             onClick={() => setActiveTab('register')}
-            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 ${
+            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'register' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-700 hover:text-gray-900'
             }`}
           >
@@ -426,6 +449,81 @@ export default function SchoolLettersPage() {
               </span>
             </div>
 
+            {/* Logo & Signature Upload Panel */}
+            <div className="rounded-xl bg-blue-50/70 p-3.5 border border-blue-200 space-y-3">
+              <span className="font-bold text-[#1e3a5f] text-xs block">
+                🖼️ School Logo & Principal Signature (लोगो र हस्ताक्षर):
+              </span>
+
+              <div className="grid grid-cols-2 gap-2">
+                {/* Logo Upload */}
+                <div className="bg-white p-2.5 rounded-lg border border-blue-100 space-y-1.5">
+                  <span className="text-[11px] font-bold text-gray-700 block">विद्यालय लोगो:</span>
+                  <div className="flex items-center gap-2">
+                    <label className="flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold text-center cursor-pointer transition">
+                      <Upload size={12} className="inline mr-1" />
+                      <span>Upload Logo</span>
+                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                    </label>
+                    {customLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomLogoUrl(null)}
+                        className="p-1.5 text-gray-400 hover:text-rose-600 text-[10px]"
+                        title="Reset Logo"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Signature Upload */}
+                <div className="bg-white p-2.5 rounded-lg border border-blue-100 space-y-1.5">
+                  <span className="text-[11px] font-bold text-gray-700 block">प्रधानाध्यापक हस्ताक्षर:</span>
+                  <div className="flex items-center gap-2">
+                    <label className="flex-1 py-1.5 px-2 bg-[#1e3a5f] hover:bg-[#2a5280] text-white rounded text-[10px] font-bold text-center cursor-pointer transition">
+                      <Upload size={12} className="inline mr-1" />
+                      <span>Upload Sign</span>
+                      <input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
+                    </label>
+                    {customSignatureUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomSignatureUrl(null)}
+                        className="p-1.5 text-gray-400 hover:text-rose-600 text-[10px]"
+                        title="Reset Sign"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Approval & Signature Toggles */}
+              <div className="flex flex-wrap items-center justify-between pt-1 gap-2 border-t border-blue-100 text-[11px]">
+                <label className="flex items-center gap-1.5 font-bold text-gray-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPrincipalApproved}
+                    onChange={(e) => setIsPrincipalApproved(e.target.checked)}
+                    className="rounded text-emerald-600"
+                  />
+                  <span>प्रशासकीय स्वीकृति (Admin Approved)</span>
+                </label>
+                <label className="flex items-center gap-1.5 font-bold text-gray-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeSignature}
+                    onChange={(e) => setIncludeSignature(e.target.checked)}
+                    className="rounded text-[#1e3a5f]"
+                  />
+                  <span>हस्ताक्षर समावेश (Include Signature)</span>
+                </label>
+              </div>
+            </div>
+
             {/* Typography Customizer */}
             <div className="rounded-xl bg-slate-50 p-3 border border-slate-200 space-y-2">
               <div className="flex items-center justify-between font-bold text-gray-700">
@@ -441,7 +539,7 @@ export default function SchoolLettersPage() {
                     key={f.id}
                     type="button"
                     onClick={() => setSelectedFont(f.id)}
-                    className={`p-2 rounded-lg border text-left transition font-semibold text-[11px] ${
+                    className={`p-2 rounded-lg border text-left transition font-semibold text-[11px] cursor-pointer ${
                       selectedFont === f.id
                         ? 'border-[#1e3a5f] bg-blue-50 text-[#1e3a5f] font-bold ring-1 ring-[#1e3a5f]'
                         : 'border-gray-200 bg-white text-gray-700 hover:bg-slate-100'
@@ -474,6 +572,51 @@ export default function SchoolLettersPage() {
                   />
                   <span>Watermark</span>
                 </label>
+              </div>
+            </div>
+
+            {/* Editable Header Details */}
+            <div className="space-y-2 p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <span className="font-bold text-gray-800 text-[11px] block">शीर्षक सम्पादन (Header Info):</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500">विद्यालय नाम (नेपाली):</label>
+                  <input
+                    type="text"
+                    value={letterForm.schoolNameNe}
+                    onChange={(e) => setLetterForm({ ...letterForm, schoolNameNe: e.target.value })}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500">School Name (English):</label>
+                  <input
+                    type="text"
+                    value={letterForm.schoolNameEn}
+                    onChange={(e) => setLetterForm({ ...letterForm, schoolNameEn: e.target.value })}
+                    className="erp-input font-bold uppercase"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500">ठेगाना (नेपाली):</label>
+                  <input
+                    type="text"
+                    value={letterForm.schoolSubtitleNe}
+                    onChange={(e) => setLetterForm({ ...letterForm, schoolSubtitleNe: e.target.value })}
+                    className="erp-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-gray-500">Address (English):</label>
+                  <input
+                    type="text"
+                    value={letterForm.schoolSubtitleEn}
+                    onChange={(e) => setLetterForm({ ...letterForm, schoolSubtitleEn: e.target.value })}
+                    className="erp-input"
+                  />
+                </div>
               </div>
             </div>
 
@@ -531,6 +674,17 @@ export default function SchoolLettersPage() {
             </div>
 
             <div>
+              <label className="block font-bold text-gray-700 mb-1">सम्बोधन (Salutation):</label>
+              <input
+                type="text"
+                value={letterForm.salutation}
+                onChange={(e) => setLetterForm({ ...letterForm, salutation: e.target.value })}
+                className="erp-input font-semibold"
+                placeholder="महोदय / महाशय,"
+              />
+            </div>
+
+            <div>
               <label className="block font-bold text-gray-700 mb-1">पत्रको मुख्य व्यहोरा (Letter Body Content):</label>
               <textarea
                 rows={7}
@@ -570,7 +724,7 @@ export default function SchoolLettersPage() {
               <button
                 type="button"
                 onClick={() => triggerLetterPrint()}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2 font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 transition shadow-2xs"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
               >
                 <Printer size={14} className="text-blue-600" />
                 <span>Direct Print (प्रिन्ट)</span>
@@ -579,7 +733,7 @@ export default function SchoolLettersPage() {
                 type="button"
                 disabled={createLetterMutation.isPending}
                 onClick={() => createLetterMutation.mutate()}
-                className="rounded-xl bg-[#1e3a5f] px-5 py-2 font-bold text-white hover:bg-[#2a5280] flex items-center gap-1.5 transition disabled:opacity-60 shadow-xs"
+                className="rounded-xl bg-[#1e3a5f] px-5 py-2 font-bold text-white hover:bg-[#2a5280] flex items-center gap-1.5 transition disabled:opacity-60 shadow-xs cursor-pointer"
               >
                 <Send size={14} />
                 <span>{createLetterMutation.isPending ? 'Saving...' : 'Save & Register (चलानी दर्ता)'}</span>
@@ -595,32 +749,39 @@ export default function SchoolLettersPage() {
             {/* Watermark Emblem */}
             {showWatermark && (
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 opacity-[0.06] pointer-events-none">
-                <svg viewBox="0 0 100 100" className="w-full h-full">
-                  <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="#1e3a5f" stroke-width="2"/>
-                  <circle cx="50" cy="50" r="22" fill="none" stroke="#1e3a5f" stroke-width="1.5"/>
-                  <path d="M40,55 Q50,45 50,35 Q50,45 60,55 Q50,50 40,55 Z" fill="#1e3a5f"/>
-                </svg>
+                {customLogoUrl ? (
+                  <img src={customLogoUrl} alt="Watermark" className="w-full h-full object-contain" />
+                ) : (
+                  <svg viewBox="0 0 100 100" className="w-full h-full">
+                    <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="#1e3a5f" stroke-width="2"/>
+                    <circle cx="50" cy="50" r="22" fill="none" stroke="#1e3a5f" stroke-width="1.5"/>
+                  </svg>
+                )}
               </div>
             )}
 
-            {/* School Header Matching exact image 1 */}
+            {/* School Header */}
             <div className="relative border-b-2 border-black pb-3">
-              {/* Left Circular Emblem */}
-              <div className="absolute left-0 top-0 w-16 h-16">
-                <svg viewBox="0 0 100 100" className="w-full h-full">
-                  <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
-                  <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
-                  <path id="previewCurveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
-                  <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
-                    <textPath href="#previewCurveTop" startOffset="50%">श्री नेपाल मा.वि. विश्रामपुर</textPath>
-                  </text>
-                  <path id="previewCurveBottom" d="M 15 50 A 35 35 0 0 0 85 50" fill="none"/>
-                  <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
-                    <textPath href="#previewCurveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
-                  </text>
-                  <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" stroke-width="1.5"/>
-                  <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
-                </svg>
+              {/* Left Circular Emblem or Custom Logo */}
+              <div className="absolute left-0 top-0 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center">
+                {customLogoUrl ? (
+                  <img src={customLogoUrl} alt="Logo" className="w-full h-full object-contain" />
+                ) : (
+                  <svg viewBox="0 0 100 100" className="w-full h-full">
+                    <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
+                    <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
+                    <path id="previewCurveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
+                    <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
+                      <textPath href="#previewCurveTop" startOffset="50%">श्री नेपाल मा.वि. विश्रामपुर</textPath>
+                    </text>
+                    <path id="previewCurveBottom" d="M 15 50 A 35 35 0 0 0 85 50" fill="none"/>
+                    <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
+                      <textPath href="#previewCurveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
+                    </text>
+                    <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" stroke-width="1.5"/>
+                    <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
+                  </svg>
+                )}
               </div>
 
               {/* Center Typography */}
@@ -646,13 +807,21 @@ export default function SchoolLettersPage() {
               </div>
             </div>
 
+            {/* Chalani & Patra Sankhya Row */}
+            {letterForm.chalaniNo && (
+              <div className="flex justify-between items-center text-xs font-bold text-gray-800 pt-1">
+                <div>पत्र संख्या: <span className="font-mono">{letterForm.patraSankhya}</span></div>
+                <div>चलानी नं.: <span className="font-mono">{letterForm.chalaniNo}</span></div>
+              </div>
+            )}
+
             {/* Date Bar on Right */}
-            <div className="text-right text-xs font-bold text-gray-800 pt-2">
+            <div className="text-right text-xs font-bold text-gray-800">
               मिति: <span className="font-mono font-black">{letterForm.letterDateBs}</span>
             </div>
 
             {/* Subject Centered Bold */}
-            <div className="text-center font-black text-sm md:text-base text-gray-950 my-4 tracking-wide">
+            <div className="text-center font-black text-sm md:text-base text-gray-950 my-3 tracking-wide">
               विषय: {letterForm.subject}
             </div>
 
@@ -679,13 +848,19 @@ export default function SchoolLettersPage() {
             </div>
 
             {/* Signatory Footer Right */}
-            <div className="pt-10 flex justify-end">
+            <div className="pt-8 flex justify-end">
               <div className="text-center w-56 space-y-0.5">
-                <div className="h-9 flex items-center justify-center">
-                  <svg viewBox="0 0 160 40" className="w-32 h-8">
-                    <path d="M20,28 Q45,5 65,22 T105,18 Q125,8 145,20" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
-                  </svg>
-                </div>
+                {includeSignature && isPrincipalApproved && (
+                  <div className="h-10 flex items-center justify-center">
+                    {customSignatureUrl ? (
+                      <img src={customSignatureUrl} alt="Signature" className="max-h-10 max-w-36 object-contain" />
+                    ) : (
+                      <svg viewBox="0 0 160 40" className="w-32 h-8">
+                        <path d="M20,28 Q45,5 65,22 T105,18 Q125,8 145,20" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
+                      </svg>
+                    )}
+                  </div>
+                )}
                 <p className="font-black text-xs text-gray-950">
                   {letterForm.signatoryName}
                 </p>
@@ -753,7 +928,7 @@ export default function SchoolLettersPage() {
                       <td className="p-3.5 text-center">
                         <button
                           onClick={() => triggerLetterPrint(l)}
-                          className="rounded-lg p-1.5 text-gray-600 hover:bg-blue-50 hover:text-blue-700 transition"
+                          className="rounded-lg p-1.5 text-gray-600 hover:bg-blue-50 hover:text-blue-700 transition cursor-pointer"
                           title="Print Letter"
                         >
                           <Printer size={16} />
