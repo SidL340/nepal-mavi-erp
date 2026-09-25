@@ -25,6 +25,9 @@ import {
   BookMarked,
   Check,
   Edit2,
+  Tag,
+  FolderPlus,
+  Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/lib/auth-store';
@@ -52,6 +55,9 @@ const DEFAULT_CATEGORIES = [
   'पाठ्यपुस्तक (Course / Text Books)',
   'सन्दर्भ सामग्री (Reference Materials)',
   'सामान्य ज्ञान (General Knowledge)',
+  'पत्रपत्रिका / जर्नल (Journals & Magazines)',
+  'धर्म / दर्शन (Philosophy / Religion)',
+  'जीवनी तथा संस्मरण (Biography / Memoir)',
   'अन्य (Other)',
 ];
 
@@ -71,6 +77,7 @@ export default function LibraryPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'books' | 'issues' | 'overdue'>('books');
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
 
   // Modals
   const [isAddBookModalOpen, setIsAddBookModalOpen] = useState(false);
@@ -78,6 +85,46 @@ export default function LibraryPage() {
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   const [isReissueModalOpen, setIsReissueModalOpen] = useState(false);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+
+  // Category addition state inside Add/Edit Book modal
+  const [isAddBookCustomCategory, setIsAddBookCustomCategory] = useState(false);
+  const [addBookCustomCategory, setAddBookCustomCategory] = useState('');
+  const [isEditBookCustomCategory, setIsEditBookCustomCategory] = useState(false);
+  const [editBookCustomCategory, setEditBookCustomCategory] = useState('');
+
+  // Fetch book categories
+  const { data: serverCategories } = useQuery({
+    queryKey: ['library-categories'],
+    queryFn: async () => {
+      const res = await api.get('/library/categories');
+      return res.data?.data || DEFAULT_CATEGORIES;
+    },
+  });
+
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const allCategories: string[] = Array.from(
+    new Set([...(serverCategories || DEFAULT_CATEGORIES), ...customCategories])
+  );
+
+  const handleAddNewCategory = (catName: string) => {
+    const trimmed = catName.trim();
+    if (!trimmed) {
+      toast.error('कृपया विधाको नाम लेख्नुहोस् (Enter category name).');
+      return false;
+    }
+    if (!allCategories.includes(trimmed)) {
+      setCustomCategories((prev) => [...prev, trimmed]);
+      queryClient.invalidateQueries({ queryKey: ['library-categories'] });
+      toast.success(`नयाँ विधा "${trimmed}" थपियो!`);
+    } else {
+      toast.success(`विधा "${trimmed}" पहिल्यै उपलब्ध छ।`);
+    }
+    setNewCategoryInput('');
+    setIsAddCategoryModalOpen(false);
+    return true;
+  };
 
   // Selected Issue for Reissue / Return
   const [selectedIssue, setSelectedIssue] = useState<any>(null);
@@ -89,7 +136,6 @@ export default function LibraryPage() {
   // Edit Book State
   const [editingBook, setEditingBook] = useState<any>(null);
   const [editBookData, setEditBookData] = useState<any>({});
-
 
   // Bulk Rows state
   const [bulkRows, setBulkRows] = useState<BulkBookRow[]>([
@@ -145,11 +191,14 @@ export default function LibraryPage() {
   };
   const [dueDateBs, setDueDateBs] = useState(calculateDueBs(15));
 
-  // Fetch Books
+  // Fetch Books with Search and Category Filter
   const { data: booksData, isLoading: isBooksLoading } = useQuery({
-    queryKey: ['books', search],
+    queryKey: ['books', search, categoryFilter],
     queryFn: async () => {
-      const res = await api.get(`/library?search=${encodeURIComponent(search)}`);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (categoryFilter) params.append('category', categoryFilter);
+      const res = await api.get(`/library?${params.toString()}`);
       return res.data?.data || [];
     },
   });
@@ -454,6 +503,14 @@ export default function LibraryPage() {
         {isAdminOrLibrarian && (
           <div className="flex flex-wrap items-center gap-2">
             <button
+              onClick={() => setIsAddCategoryModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition"
+            >
+              <FolderPlus size={15} />
+              <span>+ Add Category (विधा थप्नुहोस्)</span>
+            </button>
+
+            <button
               onClick={() => setIsBulkModalOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-xs font-extrabold text-white shadow-xs transition"
             >
@@ -516,17 +573,55 @@ export default function LibraryPage() {
       {/* ─── TAB 1: BOOKS CATALOG ─────────────────────────────────────────── */}
       {activeTab === 'books' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by title, author, category, ISBN..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="erp-input pl-9 text-xs"
-              />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-1 items-center gap-2 flex-wrap sm:flex-nowrap">
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <Search size={15} className="absolute left-3 top-2.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by title, author, category, ISBN..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="erp-input pl-9 text-xs"
+                />
+              </div>
+
+              {/* Category Filter Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <Filter size={14} className="text-gray-400 shrink-0" />
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-2xs focus:border-[#1e3a5f] focus:outline-none"
+                >
+                  <option value="">All Categories (सबै विधाहरू)</option>
+                  {allCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                {categoryFilter && (
+                  <button
+                    onClick={() => setCategoryFilter('')}
+                    className="rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 p-1.5 text-xs font-bold transition"
+                    title="Clear filter"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
             </div>
+
+            {isAdminOrLibrarian && (
+              <button
+                onClick={() => setIsAddCategoryModalOpen(true)}
+                className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-xl transition self-start sm:self-auto"
+              >
+                <Tag size={13} />
+                <span>Categories ({allCategories.length})</span>
+              </button>
+            )}
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
@@ -1181,13 +1276,34 @@ export default function LibraryPage() {
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Category</label>
-                  <select name="category" className="erp-input font-semibold">
-                    {DEFAULT_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                <div className="col-span-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-gray-700">Category (विधा)</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddBookCustomCategory(!isAddBookCustomCategory)}
+                      className="text-[10px] font-bold text-purple-700 hover:underline"
+                    >
+                      {isAddBookCustomCategory ? 'Select' : '+ Custom'}
+                    </button>
+                  </div>
+                  {isAddBookCustomCategory ? (
+                    <input
+                      type="text"
+                      name="category"
+                      required
+                      placeholder="Type custom category..."
+                      value={addBookCustomCategory}
+                      onChange={(e) => setAddBookCustomCategory(e.target.value)}
+                      className="erp-input font-semibold text-purple-900 border-purple-300 focus:border-purple-600"
+                    />
+                  ) : (
+                    <select name="category" className="erp-input font-semibold">
+                      {allCategories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Total Copies</label>
@@ -1239,17 +1355,27 @@ export default function LibraryPage() {
               </button>
             </div>
 
-            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
+            <div className="flex flex-wrap items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs gap-2">
               <span className="text-gray-600 font-semibold">
                 Tip: You can add rows below or paste directly from Microsoft Excel.
               </span>
-              <button
-                type="button"
-                onClick={() => setShowPasteBox(!showPasteBox)}
-                className="rounded-lg bg-white border border-gray-200 px-3 py-1 font-bold text-[#1e3a5f] hover:bg-slate-100"
-              >
-                {showPasteBox ? 'Hide Paste Box' : '📋 Paste from Excel / TSV'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddCategoryModalOpen(true)}
+                  className="rounded-lg bg-purple-50 border border-purple-200 px-3 py-1 font-bold text-purple-700 hover:bg-purple-100 flex items-center gap-1"
+                >
+                  <FolderPlus size={13} />
+                  <span>+ Add Category</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPasteBox(!showPasteBox)}
+                  className="rounded-lg bg-white border border-gray-200 px-3 py-1 font-bold text-[#1e3a5f] hover:bg-slate-100"
+                >
+                  {showPasteBox ? 'Hide Paste Box' : '📋 Paste from Excel / TSV'}
+                </button>
+              </div>
             </div>
 
             {showPasteBox && (
@@ -1324,9 +1450,9 @@ export default function LibraryPage() {
                         <select
                           value={row.category}
                           onChange={(e) => handleBulkRowChange(idx, 'category', e.target.value)}
-                          className="erp-input text-xs"
+                          className="erp-input text-xs font-semibold"
                         >
-                          {DEFAULT_CATEGORIES.map((c) => (
+                          {allCategories.map((c) => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
@@ -1459,16 +1585,38 @@ export default function LibraryPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Category (श्रेणी)</label>
-                  <select
-                    value={editBookData.category || ''}
-                    onChange={(e) => setEditBookData((p: any) => ({ ...p, category: e.target.value }))}
-                    className="w-full rounded-xl border border-gray-300 p-2.5 text-xs bg-white"
-                  >
-                    {DEFAULT_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-gray-700">Category (श्रेणी/विधा)</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditBookCustomCategory(!isEditBookCustomCategory)}
+                      className="text-[10px] font-bold text-purple-700 hover:underline"
+                    >
+                      {isEditBookCustomCategory ? 'Select' : '+ Custom'}
+                    </button>
+                  </div>
+                  {isEditBookCustomCategory ? (
+                    <input
+                      type="text"
+                      value={editBookCustomCategory}
+                      onChange={(e) => {
+                        setEditBookCustomCategory(e.target.value);
+                        setEditBookData((p: any) => ({ ...p, category: e.target.value }));
+                      }}
+                      placeholder="Type custom category..."
+                      className="w-full rounded-xl border border-purple-300 p-2.5 text-xs text-purple-900 font-semibold focus:border-purple-600"
+                    />
+                  ) : (
+                    <select
+                      value={editBookData.category || ''}
+                      onChange={(e) => setEditBookData((p: any) => ({ ...p, category: e.target.value }))}
+                      className="w-full rounded-xl border border-gray-300 p-2.5 text-xs bg-white font-semibold"
+                    >
+                      {allCategories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Total Copies (कुल प्रति)</label>
@@ -1517,6 +1665,110 @@ export default function LibraryPage() {
                 className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2 text-xs font-bold text-white disabled:opacity-60"
               >
                 {editBookMutation.isPending ? 'Saving...' : '💾 Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ADD / MANAGE CATEGORY MODAL ────────────────────────────────────── */}
+      {isAddCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <FolderPlus size={18} className="text-purple-700" />
+                <h2 className="text-base font-bold text-[#1e3a5f]">Add Book Category (नयाँ पुस्तक विधा थप्नुहोस्)</h2>
+              </div>
+              <button onClick={() => setIsAddCategoryModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Category Input Form */}
+              <div className="space-y-2">
+                <label className="block font-bold text-gray-700">Category Name (विधाको नाम):</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCategoryInput}
+                    onChange={(e) => setNewCategoryInput(e.target.value)}
+                    placeholder="e.g. रोबोटिक्स तथा AI / बाल कथा / Health"
+                    className="erp-input font-bold text-purple-900 border-purple-300 focus:border-purple-600 flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddNewCategory(newCategoryInput);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddNewCategory(newCategoryInput)}
+                    className="rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-2 text-xs transition"
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Preset Badges */}
+              <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                <span className="block font-bold text-gray-500 text-[11px] uppercase">
+                  Quick Presets (शीघ्र सिफारिस विधाहरू):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'रोबोटिक्स तथा AI (Robotics & AI)',
+                    'चित्रकला तथा हस्तकला (Arts & Crafts)',
+                    'संस्कृत तथा दर्शन (Sanskrit & Vedic)',
+                    'स्वास्थ्य तथा चिकित्सा (Health & Medical)',
+                    'काव्य तथा कविता (Poetry)',
+                    'खेलकुद तथा योग (Sports & Yoga)',
+                    'कानुन तथा संविधान (Law & Constitution)',
+                    'पर्यावरण तथा प्रकृति (Environment & Nature)',
+                    'भाषा तथा व्याकरण (Language & Grammar)',
+                    'कम्प्युटर तथा कोडिङ (Computer & Coding)',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleAddNewCategory(preset)}
+                      className="rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 px-2.5 py-1 text-[11px] font-semibold transition"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Existing Categories List */}
+              <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-700 text-xs">
+                    Current Active Categories ({allCategories.length}):
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                  {allCategories.map((c) => (
+                    <span
+                      key={c}
+                      className="rounded-lg bg-white border border-gray-200 text-gray-800 px-2.5 py-1 text-[11px] font-medium shadow-2xs"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t pt-3">
+              <button
+                onClick={() => setIsAddCategoryModalOpen(false)}
+                className="rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 text-xs font-bold text-white transition"
+              >
+                Done / बन्द गर्नुहोस्
               </button>
             </div>
           </div>

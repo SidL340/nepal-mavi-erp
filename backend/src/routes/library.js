@@ -102,6 +102,37 @@ router.delete('/issues/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'LI
 
 // ── BOOKS ─────────────────────────────────────────────────────────────────
 
+// GET /api/library/categories
+router.get('/categories', authenticate, async (req, res) => {
+  try {
+    const books = await prisma.book.findMany({
+      select: { category: true },
+      distinct: ['category'],
+      where: { category: { not: null } },
+    });
+    const defaultCats = [
+      'कथा / साहित्य (Literature)',
+      'विज्ञान तथा प्रविधि (Science & Tech)',
+      'गणित (Mathematics)',
+      'सामाजिक तथा इतिहास (Social & History)',
+      'बाल साहित्य (Children Books)',
+      'शब्दकोश / ज्ञानकोश (Dictionary / Encyclopedia)',
+      'पाठ्यपुस्तक (Course / Text Books)',
+      'सन्दर्भ सामग्री (Reference Materials)',
+      'सामान्य ज्ञान (General Knowledge)',
+      'पत्रपत्रिका / जर्नल (Journals / Magazines)',
+      'धर्म / दर्शन (Philosophy / Religion)',
+      'जीवनी तथा संस्मरण (Biography / Memoir)',
+      'अन्य (Other)',
+    ];
+    const existingCats = books.map(b => b.category?.trim()).filter(Boolean);
+    const merged = Array.from(new Set([...defaultCats, ...existingCats]));
+    return res.json({ success: true, data: merged });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.get('/', authenticate, async (req, res) => {
   try {
     const { search, category } = req.query;
