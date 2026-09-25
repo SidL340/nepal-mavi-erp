@@ -48,6 +48,8 @@ app.use('/api/budget',      require('./routes/budget'));
 app.use('/api/finance-reports', require('./routes/financeReports'));
 app.use('/api/leaves',      require('./routes/leaves'));
 app.use('/api/staff-tasks', require('./routes/staff-tasks').router);
+app.use('/api/daily-logs',  require('./routes/dailyLogs'));
+app.use('/api/usage-tracking', require('./routes/usageTracking'));
 
 // ── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

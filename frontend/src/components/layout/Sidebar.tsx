@@ -72,6 +72,7 @@ const navConfig: (NavItem | NavSection)[] = [
     items: [
       { label: 'Students', nepaliLabel: 'विद्यार्थीहरू', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Classes & Routine', nepaliLabel: 'कक्षा, विषय र रुटिन', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+      { label: 'Daily Teaching Logs', nepaliLabel: 'दैनिक शिक्षण लग', href: '/dashboard/teaching-logs', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Attendance', nepaliLabel: 'हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Leave Approvals', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Exams & Marks', nepaliLabel: 'परीक्षा र लब्धाङ्क', href: '/dashboard/exams', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
@@ -99,11 +100,12 @@ const navConfig: (NavItem | NavSection)[] = [
 
   },
   {
-    section: 'STAFF',
+    section: 'STAFF & TEACHERS',
     nepaliSection: 'शिक्षक तथा कर्मचारी',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
+    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'],
     items: [
       { label: 'Teachers & Staff', nepaliLabel: 'शिक्षक कर्मचारी विवरण', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Daily Teaching Log', nepaliLabel: 'दैनिक शिक्षण डायरी', href: '/dashboard/teaching-logs', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Leave Approvals', nepaliLabel: 'कर्मचारी बिदा स्वीकृति', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     ],
   },
@@ -116,8 +118,22 @@ const navConfig: (NavItem | NavSection)[] = [
       { label: 'Inventory (Jinsi)', nepaliLabel: 'जिन्सी खाता', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Notices & SMS', nepaliLabel: 'सूचना / SMS', href: '/dashboard/notices', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'] },
       { label: 'User Management', nepaliLabel: 'प्रयोगकर्ता व्यवस्थापन', href: '/dashboard/users', icon: UserCog, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'App Usage & Logins', nepaliLabel: 'प्रयोग अनुगमन तथा लगइन लग', href: '/dashboard/usage-tracking', icon: Clock, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Website Portal', nepaliLabel: 'मुख्य वेभसाइट', href: '/dashboard/website', icon: Globe, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'School Profile', nepaliLabel: 'विद्यालय प्रोफाइल', href: '/dashboard/school', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    ],
+  },
+  {
+    section: 'TEACHER PORTAL',
+    nepaliSection: 'शिक्षक पोर्टल',
+    roles: ['TEACHER'],
+    items: [
+      { label: 'Overview', nepaliLabel: 'ड्यासबोर्ड', href: '/teacher', icon: LayoutDashboard, roles: ['TEACHER'] },
+      { label: 'Daily Teaching Log', nepaliLabel: 'दैनिक शिक्षण लग', href: '/teacher?tab=daily_log', icon: BookOpen, roles: ['TEACHER'] },
+      { label: 'Class Routine', nepaliLabel: 'साप्ताहिक रुटिन', href: '/teacher?tab=routine', icon: Clock, roles: ['TEACHER'] },
+      { label: 'My Leaves', nepaliLabel: 'बिदा निवेदन', href: '/teacher?tab=leaves', icon: UserCheck, roles: ['TEACHER'] },
+      { label: 'Student Leaves', nepaliLabel: 'विद्यार्थी बिदा सिफारिस', href: '/teacher?tab=students_leave', icon: FileText, roles: ['TEACHER'] },
+      { label: 'Assigned Duties', nepaliLabel: 'तोकिएका जिम्मेवारीहरू', href: '/teacher?tab=tasks', icon: Layers, roles: ['TEACHER'] },
     ],
   },
   {
@@ -126,8 +142,11 @@ const navConfig: (NavItem | NavSection)[] = [
     roles: ['STUDENT'],
     items: [
       { label: 'Overview', nepaliLabel: 'ड्यासबोर्ड', href: '/student', icon: LayoutDashboard, roles: ['STUDENT'] },
+      { label: 'Today\'s Lessons & HW', nepaliLabel: 'दैनिक पढाइ र गृहकार्य', href: '/student?tab=lessons', icon: BookOpen, roles: ['STUDENT'] },
+      { label: 'Class Routine', nepaliLabel: 'कक्षा रुटिन', href: '/student?tab=routine', icon: Clock, roles: ['STUDENT'] },
       { label: 'My Attendance', nepaliLabel: 'हाजिरी विवरण', href: '/student?tab=attendance', icon: CalendarCheck, roles: ['STUDENT'] },
-      { label: 'Marksheets & Grades', nepaliLabel: 'लब्धाङ्क पत्र / ग्रेडसिट', href: '/student?tab=exams', icon: BookOpen, roles: ['STUDENT'] },
+      { label: 'Leave Application', nepaliLabel: 'बिदा निवेदन', href: '/student?tab=leave', icon: FileText, roles: ['STUDENT'] },
+      { label: 'Marksheets & Grades', nepaliLabel: 'लब्धाङ्क पत्र / ग्रेडसिट', href: '/student?tab=exams', icon: Award, roles: ['STUDENT'] },
       { label: 'Fee Receipts', nepaliLabel: 'शुल्क विवरण', href: '/student?tab=fees', icon: Receipt, roles: ['STUDENT'] },
       { label: 'Library Books', nepaliLabel: 'पुस्तकालय', href: '/student?tab=library', icon: Library, roles: ['STUDENT'] },
       { label: 'Notice Board', nepaliLabel: 'सूचना पाटी', href: '/student?tab=notices', icon: Bell, roles: ['STUDENT'] },

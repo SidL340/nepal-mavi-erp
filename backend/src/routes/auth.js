@@ -175,6 +175,46 @@ router.post('/login', async (req, res) => {
     const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
     const token = jwt.sign({ id: user.id, role: user.role }, secret, { expiresIn });
 
+    // ── Record Login Event & Update User Active Timestamp ──
+    try {
+      const ipAddress = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1').split(',')[0].trim();
+      const userAgent = req.headers['user-agent'] || 'Unknown Browser';
+      let deviceType = 'Desktop';
+      if (/mobile/i.test(userAgent)) deviceType = 'Mobile';
+      else if (/tablet|ipad/i.test(userAgent)) deviceType = 'Tablet';
+
+      const now = new Date();
+      // Store BS date string for fast filtering
+      const dateBs = `2083-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const fullName = user.teacher?.fullName || studentObj?.fullName || user.username;
+
+      prisma.userLoginLog.create({
+        data: {
+          userId: user.id,
+          username: user.username,
+          role: user.role,
+          fullName,
+          ipAddress,
+          userAgent,
+          deviceType,
+          loginAt: now,
+          loginDateBs: dateBs,
+          lastActiveAt: now,
+          isOnline: true,
+        },
+      }).catch((e) => console.error('Error creating login log:', e.message));
+
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          lastLoginAt: now,
+          lastActiveAt: now,
+        },
+      }).catch((e) => console.error('Error updating lastLoginAt:', e.message));
+    } catch (logErr) {
+      console.error('Login tracking error:', logErr.message);
+    }
+
     return res.json({
       success: true,
       token,

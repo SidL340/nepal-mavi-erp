@@ -95,6 +95,18 @@ export default function StudentPortalPage() {
   const [editLeaveDaysCount, setEditLeaveDaysCount] = useState(1);
   const [editLeaveReason, setEditLeaveReason] = useState('');
 
+  // Daily Lessons & Homework State
+  const [lessonsDateBs, setLessonsDateBs] = useState<string>(todayBS());
+
+  // ── 0. Fetch Daily Lessons & Homework for Student's Class ──
+  const { data: studentLessonsData, isLoading: isLessonsLoading } = useQuery({
+    queryKey: ['student-daily-lessons', lessonsDateBs],
+    queryFn: async () => {
+      const res = await api.get(`/daily-logs?dateBs=${lessonsDateBs}`);
+      return res.data?.data?.logs || [];
+    },
+  });
+
   // ── 1. Fetch Student Profile ──
   const { data: student, isLoading: isStudentLoading } = useQuery({
     queryKey: ['student-me', studentId],
@@ -648,10 +660,11 @@ export default function StudentPortalPage() {
         <div className="flex flex-wrap items-center gap-1.5 pt-6 mt-4 border-t border-white/15">
           {[
             { id: 'overview', label: 'Dashboard Overview', nepali: 'ड्यासबोर्ड', icon: GraduationCap },
+            { id: 'lessons', label: "Today's Lessons & HW", nepali: 'दैनिक पढाइ र गृहकार्य', icon: BookOpen },
             { id: 'attendance', label: 'My Attendance', nepali: 'हाजिरी', icon: CalendarCheck },
             { id: 'routine', label: 'Class Routine', nepali: 'कक्षा रुटिन', icon: Clock },
             { id: 'leave', label: 'Leave Application', nepali: 'बिदा निवेदन', icon: FileText },
-            { id: 'exams', label: 'Exam Marksheets', nepali: 'लब्धाङ्क पत्र', icon: BookOpen },
+            { id: 'exams', label: 'Exam Marksheets', nepali: 'लब्धाङ्क पत्र', icon: Award },
             { id: 'fees', label: 'Fee Receipts', nepali: 'शुल्क विवरण', icon: Receipt },
             { id: 'library', label: 'Library Books', nepali: 'पुस्तकालय', icon: BookMarked },
             { id: 'notices', label: 'School Notices', nepali: 'सूचनाहरू', icon: Bell },
@@ -928,6 +941,118 @@ export default function StudentPortalPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─────────────────── TAB 1B: TODAY'S LESSONS & HOMEWORK ─────────────── */}
+      {activeTab === 'lessons' && (
+        <div className="space-y-6">
+          {/* Top Filter & Date Selector */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                <BookOpen size={18} className="text-amber-500" />
+                <span>Today's Classroom Teaching Log & Homework (आज के-के पढाइ भयो र गृहकार्य)</span>
+              </h2>
+              <p className="text-xs text-gray-500">
+                Check what subject teachers taught in each period today, along with assigned homework and lesson notes
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-bold text-gray-700">मिति (BS):</label>
+              <input
+                type="text"
+                value={lessonsDateBs}
+                onChange={(e) => setLessonsDateBs(e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-mono font-bold bg-slate-50 w-32"
+              />
+              <button
+                type="button"
+                onClick={() => setLessonsDateBs(todayBS())}
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] rounded-xl text-xs font-black shadow-2xs transition"
+              >
+                Today (आज)
+              </button>
+            </div>
+          </div>
+
+          {/* Lessons List Grid */}
+          {isLessonsLoading ? (
+            <div className="py-16 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mb-2" />
+              <p className="text-xs">Loading classroom lesson records...</p>
+            </div>
+          ) : !studentLessonsData || studentLessonsData.length === 0 ? (
+            <div className="py-16 text-center text-gray-400 border border-dashed border-gray-200 rounded-2xl bg-white p-8 space-y-2">
+              <BookOpen size={36} className="mx-auto text-gray-300 mb-1" />
+              <h3 className="font-extrabold text-sm text-gray-700">No Lessons Logged for {lessonsDateBs} BS</h3>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">
+                Subject teachers will update the classroom log as soon as periods are completed. Please check back later today!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {studentLessonsData.map((log: any) => (
+                <div
+                  key={log.id}
+                  className="rounded-2xl border border-gray-200 bg-white p-5 shadow-2xs hover:shadow-md transition space-y-3.5"
+                >
+                  {/* Period & Subject Header */}
+                  <div className="flex items-start justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-[#1e3a5f] text-white px-2.5 py-0.5 rounded-lg text-[10px] font-black font-mono">
+                          {log.periodNo ? `PERIOD ${log.periodNo}` : 'HOUR'}
+                        </span>
+                        <h4 className="font-black text-sm text-gray-900">
+                          {log.subject?.name || log.subjectName || 'General Subject'}
+                        </h4>
+                      </div>
+                      <p className="text-xs text-gray-500 font-bold mt-1 flex items-center gap-1.5">
+                        <GraduationCap size={13} className="text-blue-600" />
+                        <span>Teacher: <strong>{log.teacher?.fullName || 'Subject Faculty'}</strong></span>
+                      </p>
+                    </div>
+
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase">
+                      {log.status === 'COMPLETED' ? 'पढाइ सम्पन्न' : log.status}
+                    </span>
+                  </div>
+
+                  {/* Topic Taught */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                      पढाइएको पाठ / विषयवस्तु (Lesson Topic Taught):
+                    </span>
+                    <p className="text-xs text-gray-800 font-semibold leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      {log.topicTaught}
+                    </p>
+                  </div>
+
+                  {/* Learning Outcome if any */}
+                  {log.learningOutcome && (
+                    <div className="text-[11px] text-emerald-800 font-medium flex items-start gap-1.5 bg-emerald-50/70 p-2 rounded-xl border border-emerald-100">
+                      <Sparkles size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <span><strong>सिकाइ उपलब्धि:</strong> {log.learningOutcome}</span>
+                    </div>
+                  )}
+
+                  {/* Homework / Assignment Highlight */}
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-amber-900 uppercase flex items-center gap-1">
+                        <span>📝</span> गृहकार्य / कक्षाकार्य (Homework / Project):
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-amber-950 leading-relaxed">
+                      {log.homework || 'आज कुनै विशेष गृहकार्य तोकिएको छैन (No homework assigned).'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

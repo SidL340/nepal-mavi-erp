@@ -74,12 +74,15 @@ model User {
   role        String   @default("STUDENT") // SUPER_ADMIN, ADMIN, ACCOUNTANT, TEACHER, LIBRARIAN, STUDENT
   isActive    Boolean  @default(true)
   mustChangePassword Boolean @default(false)
+  lastLoginAt DateTime?
+  lastActiveAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   teacher     Teacher?
   student     Student?
   resetRequests PasswordResetRequest[]
+  loginLogs   UserLoginLog[]
 }
 
 // ─── TEACHERS ───────────────────────────────────────────────────────────────
@@ -126,6 +129,7 @@ model Teacher {
   routines            ClassRoutine[]
   leaveRequests       LeaveRequest[]
   tasks               StaffTask[] @relation("StaffAssignedTasks")
+  dailyTeachingLogs   DailyTeachingLog[]
 }
 
 // ─── STUDENTS ────────────────────────────────────────────────────────────────
@@ -203,6 +207,7 @@ model Class {
   feeStructures   ClassFeeStructure[]
   routines        ClassRoutine[]
   leaveRequests   LeaveRequest[]
+  dailyTeachingLogs DailyTeachingLog[]
 }
 
 model ClassEnrollment {
@@ -232,6 +237,7 @@ model Subject {
   teacherSubjects TeacherSubject[]
   examSubjects    ExamSubject[]
   routines        ClassRoutine[]
+  dailyTeachingLogs DailyTeachingLog[]
 }
 
 model ClassSubject {
@@ -953,5 +959,56 @@ model StaffTask {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
+
+// ─── DAILY TEACHING LOG / TEACHER DIARY ──────────────────────────────────────
+
+model DailyTeachingLog {
+  id                    Int       @id @default(autoincrement())
+  teacherId             Int
+  teacher               Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  classId               Int
+  class                 Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId             Int?
+  subject               Subject?  @relation(fields: [subjectId], references: [id])
+  subjectName           String?   // e.g. "कम्प्युटर विज्ञान (Computer Science)"
+  dateBs                String    // e.g. "2083-05-15"
+  dateAd                DateTime  @default(now())
+  periodNo              Int?      // 1, 2, 3, 4, 5, 6, 7, 8
+  topicTaught           String    @db.Text // पाठ / शीर्षक / सिकाइ सहजीकरण विवरण (What was taught today)
+  learningOutcome       String?   @db.Text // सिकाइ उपलब्धि / सक्षमता
+  homework              String?   @db.Text // गृहकार्य / परियोजना कार्य (Homework / Assignment)
+  teachingMethod        String?   // शिक्षण विधि / सामग्री (e.g. Demonstration, Discussion, Project, Lab)
+  studentFeedback       String?   @db.Text // विद्यार्थी सहभागिता / प्रतिक्रिया
+  status                String    @default("COMPLETED") // COMPLETED, CANCELLED, RESCHEDULED, SUBSTITUTED
+  substituteTeacherName String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([classId, dateBs])
+  @@index([teacherId, dateBs])
+}
+
+// ─── USER LOGIN & USAGE ACTIVITY TRACKING ────────────────────────────────────
+
+model UserLoginLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  username    String
+  role        String   // SUPER_ADMIN, ADMIN, TEACHER, STUDENT, LIBRARIAN, ACCOUNTANT
+  fullName    String?
+  ipAddress   String?
+  userAgent   String?  // Device / Browser
+  deviceType  String?  // Mobile, Tablet, Desktop
+  loginAt     DateTime @default(now())
+  loginDateBs String?  // e.g. "2083-05-15"
+  lastActiveAt DateTime @default(now())
+  isOnline    Boolean  @default(true)
+
+  @@index([userId, loginAt])
+  @@index([loginDateBs])
+  @@index([role])
+}
+
 
 

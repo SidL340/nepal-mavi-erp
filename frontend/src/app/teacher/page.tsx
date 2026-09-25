@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   Trophy,
   Laptop,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -58,6 +59,7 @@ export default function TeacherPortalPage() {
 
   const [activeTab, setActiveTab] = useState<
     | 'overview'
+    | 'daily_log'
     | 'tasks'
     | 'routine'
     | 'leaves'
@@ -70,6 +72,19 @@ export default function TeacherPortalPage() {
   const [taskStatusFilter, setTaskStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
   const [dailyLog, setDailyLog] = useState('');
   const [selectedClassLog, setSelectedClassLog] = useState('');
+
+  // Daily Teaching Log Form State
+  const [logFormClassId, setLogFormClassId] = useState<string>('');
+  const [logFormSubjectId, setLogFormSubjectId] = useState<string>('');
+  const [logFormSubjectName, setLogFormSubjectName] = useState<string>('');
+  const [logFormDateBs, setLogFormDateBs] = useState<string>(todayBS());
+  const [logFormPeriodNo, setLogFormPeriodNo] = useState<number | ''>(1);
+  const [logFormTopic, setLogFormTopic] = useState<string>('');
+  const [logFormOutcome, setLogFormOutcome] = useState<string>('');
+  const [logFormHomework, setLogFormHomework] = useState<string>('');
+  const [logFormMethod, setLogFormMethod] = useState<string>('व्याख्या तथा छलफल (Discussion & Lecture)');
+  const [logFilterDateBs, setLogFilterDateBs] = useState<string>(todayBS());
+  const [logFilterClassId, setLogFilterClassId] = useState<string>('');
 
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [isProblemModalOpen, setIsProblemModalOpen] = useState(false);
@@ -187,6 +202,55 @@ export default function TeacherPortalPage() {
       return res.data?.data || null;
     },
     enabled: !!teacherId,
+  });
+
+  // 9. Fetch Teacher's Teaching Logs (Filtered)
+  const { data: teacherLogsData, isLoading: isTeacherLogsLoading } = useQuery({
+    queryKey: ['teacher-daily-logs', teacherId, logFilterDateBs, logFilterClassId],
+    queryFn: async () => {
+      if (!teacherId) return [];
+      const params = new URLSearchParams();
+      params.append('teacherId', String(teacherId));
+      if (logFilterDateBs) params.append('dateBs', logFilterDateBs);
+      if (logFilterClassId) params.append('classId', logFilterClassId);
+      const res = await api.get(`/daily-logs?${params.toString()}`);
+      return res.data?.data?.logs || [];
+    },
+    enabled: !!teacherId,
+  });
+
+  // Create Teaching Log Mutation
+  const createTeachingLogMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/daily-logs', payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['teacher-daily-logs'] });
+      setLogFormTopic('');
+      setLogFormOutcome('');
+      setLogFormHomework('');
+      setDailyLog('');
+      toast.success(data.message || 'Teaching log saved successfully!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to save teaching log.');
+    },
+  });
+
+  // Delete Teaching Log Mutation
+  const deleteTeachingLogMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/daily-logs/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teacher-daily-logs'] });
+      toast.success('Teaching log deleted.');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete log.');
+    },
   });
 
   const myTasks: any[] = myTasksData || [];
@@ -491,8 +555,20 @@ export default function TeacherPortalPage() {
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
           }`}
         >
-          <BookOpen size={15} />
-          <span>Dashboard & Diary</span>
+          <LayoutDashboard size={15} />
+          <span>Dashboard Overview</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('daily_log')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+            activeTab === 'daily_log'
+              ? 'bg-blue-700 text-white shadow-xs'
+              : 'bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200'
+          }`}
+        >
+          <BookOpen size={15} className="text-amber-400" />
+          <span>Daily Teaching Log (दैनिक शिक्षण लग)</span>
         </button>
 
         <button
@@ -721,7 +797,7 @@ export default function TeacherPortalPage() {
                 Record what topic and assignment you taught today to keep parents and administration updated.
               </p>
 
-              <form onSubmit={handleSaveLog} className="space-y-3 text-xs">
+              <div className="space-y-3 text-xs">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-gray-700 mb-1">Class Taught *</label>
@@ -759,13 +835,33 @@ export default function TeacherPortalPage() {
                 </div>
 
                 <button
-                  type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-sm"
+                  type="button"
+                  disabled={createTeachingLogMutation.isPending}
+                  onClick={() => {
+                    if (!selectedClassLog) {
+                      toast.error('Please select a class first.');
+                      return;
+                    }
+                    if (!dailyLog.trim()) {
+                      toast.error('Please enter the topics taught and homework.');
+                      return;
+                    }
+                    createTeachingLogMutation.mutate({
+                      teacherId,
+                      classId: selectedClassLog,
+                      dateBs: todayBS(),
+                      periodNo: 1,
+                      topicTaught: dailyLog.trim(),
+                      homework: dailyLog.includes('Homework') ? dailyLog.split(/homework/i)[1]?.trim() : null,
+                      status: 'COMPLETED',
+                    });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   <Save size={14} />
-                  <span>Save Lesson Diary (डायरी सुरक्षित)</span>
+                  <span>{createTeachingLogMutation.isPending ? 'Saving...' : 'Save Lesson Diary (डायरी सुरक्षित)'}</span>
                 </button>
-              </form>
+              </div>
             </div>
 
             {/* School Announcements */}
@@ -791,6 +887,314 @@ export default function TeacherPortalPage() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: DAILY TEACHING LOG (दैनिक शिक्षण डायरी) ────────────────────── */}
+      {activeTab === 'daily_log' && (
+        <div className="space-y-6">
+          {/* Header Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-[#1e3a5f] via-[#264b77] to-[#1e3a5f] p-5 text-white shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-[#1e3a5f] font-black text-xs rounded-lg mb-1.5 shadow-2xs">
+                <BookOpen size={14} />
+                <span>Teacher Daily Diary & Classroom Teaching Log</span>
+              </div>
+              <h2 className="text-xl font-extrabold text-white">दैनिक शिक्षण लग तथा सिकाइ सहजीकरण डायरी</h2>
+              <p className="text-xs text-blue-200 mt-0.5 font-nepali">
+                प्रत्येक घण्टीमा पढाएको पाठ, सिकाइ उपलब्धि तथा विद्यार्थीलाई दिएको गृहकार्य रेकर्ड गर्नुहोस्। यो विवरण विद्यार्थी र प्रशासनले पनि हेर्न सक्नेछन्।
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <span className="bg-white/20 px-3.5 py-2 rounded-xl text-white font-black backdrop-blur-xs">
+                {teacherLogsData?.length || 0} Lessons Recorded
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left 5 Cols: Quick Add Lesson Log Form */}
+            <div className="lg:col-span-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-xs space-y-4">
+              <div className="border-b border-gray-100 pb-2">
+                <h3 className="font-extrabold text-sm text-[#1e3a5f] flex items-center gap-2">
+                  <BookOpen size={16} className="text-amber-500" />
+                  <span>Record Lesson Taught (नयाँ पाठ प्रविष्टि)</span>
+                </h3>
+                <p className="text-[11px] text-gray-500">Log today's completed classroom period</p>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!logFormClassId) {
+                    toast.error('Please select a class.');
+                    return;
+                  }
+                  if (!logFormTopic.trim()) {
+                    toast.error('Please enter the lesson topic taught.');
+                    return;
+                  }
+
+                  createTeachingLogMutation.mutate({
+                    teacherId,
+                    classId: logFormClassId,
+                    subjectId: logFormSubjectId || undefined,
+                    subjectName: logFormSubjectName || undefined,
+                    dateBs: logFormDateBs || todayBS(),
+                    periodNo: logFormPeriodNo || 1,
+                    topicTaught: logFormTopic.trim(),
+                    learningOutcome: logFormOutcome.trim() || undefined,
+                    homework: logFormHomework.trim() || undefined,
+                    teachingMethod: logFormMethod.trim() || undefined,
+                    status: 'COMPLETED',
+                  });
+                }}
+                className="space-y-3 text-xs"
+              >
+                {/* Class & Period */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Class (कक्षा) *</label>
+                    <select
+                      required
+                      value={logFormClassId}
+                      onChange={(e) => setLogFormClassId(e.target.value)}
+                      className="erp-input font-bold"
+                    >
+                      <option value="">-- Select Class --</option>
+                      {classesData?.map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.section ? `(${c.section})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Period (घण्टी) *</label>
+                    <select
+                      value={logFormPeriodNo}
+                      onChange={(e) => setLogFormPeriodNo(Number(e.target.value))}
+                      className="erp-input font-bold"
+                      required
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                        <option key={p} value={p}>
+                          Period {p} ({p}st/nd/th Hour)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Subject & Date */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Subject (विषय) *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Science / Math / नेपाली"
+                      value={logFormSubjectName}
+                      onChange={(e) => setLogFormSubjectName(e.target.value)}
+                      className="erp-input font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Date (मिति BS) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={logFormDateBs}
+                      onChange={(e) => setLogFormDateBs(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Topic Taught */}
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Lesson Topic Taught (पढाइएको पाठ / शीर्षक) *
+                  </label>
+                  <textarea
+                    required
+                    rows={2}
+                    placeholder="e.g. Chapter 5: Human Circulatory System - Blood vessels & Heart structure"
+                    value={logFormTopic}
+                    onChange={(e) => setLogFormTopic(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+
+                {/* Learning Outcome */}
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Learning Outcome (सिकाइ उपलब्धि):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Students can sketch and label heart chambers"
+                    value={logFormOutcome}
+                    onChange={(e) => setLogFormOutcome(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+
+                {/* Homework Assigned */}
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Homework / Assignment (गृहकार्य / कक्षाकार्य):
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Solve Q1 to Q6 from exercise 5.2 and make a summary note"
+                    value={logFormHomework}
+                    onChange={(e) => setLogFormHomework(e.target.value)}
+                    className="erp-input font-medium"
+                  />
+                </div>
+
+                {/* Teaching Method */}
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Teaching Method / Materials (विधि र सामग्री):
+                  </label>
+                  <input
+                    type="text"
+                    value={logFormMethod}
+                    onChange={(e) => setLogFormMethod(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={createTeachingLogMutation.isPending}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] py-2.5 font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  <Save size={15} />
+                  <span>
+                    {createTeachingLogMutation.isPending
+                      ? 'Saving Lesson Log...'
+                      : 'Save Teaching Log (डायरी सुरक्षित गर्नुहोस्)'}
+                  </span>
+                </button>
+              </form>
+            </div>
+
+            {/* Right 7 Cols: History of Teaching Logs */}
+            <div className="lg:col-span-7 space-y-4">
+              {/* Filter Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-bold text-gray-600">Date (मिति):</label>
+                  <input
+                    type="text"
+                    value={logFilterDateBs}
+                    onChange={(e) => setLogFilterDateBs(e.target.value)}
+                    className="rounded-xl border border-gray-200 px-2.5 py-1 text-xs font-mono font-bold bg-slate-50 w-28"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLogFilterDateBs(todayBS())}
+                    className="px-2 py-1 bg-blue-50 text-blue-800 rounded-lg text-[10px] font-bold"
+                  >
+                    Today
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={logFilterClassId}
+                    onChange={(e) => setLogFilterClassId(e.target.value)}
+                    className="rounded-xl border border-gray-200 px-2.5 py-1 text-xs font-bold bg-slate-50"
+                  >
+                    <option value="">All Classes</option>
+                    {classesData?.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.section ? `(${c.section})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Logs List Cards */}
+              {isTeacherLogsLoading ? (
+                <div className="py-16 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mb-2" />
+                  <p className="text-xs">Loading your lesson logs...</p>
+                </div>
+              ) : !teacherLogsData || teacherLogsData.length === 0 ? (
+                <div className="py-16 text-center text-gray-400 border border-dashed border-gray-200 rounded-2xl bg-white p-6 space-y-2">
+                  <BookOpen size={36} className="mx-auto text-gray-300 mb-1" />
+                  <p className="text-sm font-bold text-gray-700">कुनै शिक्षण लग फेला परेन (No logs for this date)</p>
+                  <p className="text-xs text-gray-400">दायाँ तर्फको फारमबाट आफ्नो दैनिक पाठ र गृहकार्य लग सुरक्षित गर्नुहोस्।</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {teacherLogsData.map((log: any) => (
+                    <div
+                      key={log.id}
+                      className="rounded-2xl border border-gray-200 bg-white p-4 shadow-2xs space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-[#1e3a5f] text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">
+                            {log.periodNo ? `PERIOD ${log.periodNo}` : 'HOUR'}
+                          </span>
+                          <strong className="text-sm text-gray-900">
+                            {log.class?.name} ({log.class?.section || 'A'}) • {log.subject?.name || log.subjectName || 'General'}
+                          </strong>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            सम्पन्न
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this lesson log?')) {
+                                deleteTeachingLogMutation.mutate(log.id);
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-rose-600 rounded"
+                            title="Delete Log"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase">पढाइएको पाठ (Topic Taught):</span>
+                        <p className="text-xs text-gray-800 font-semibold mt-0.5">{log.topicTaught}</p>
+                      </div>
+
+                      {log.learningOutcome && (
+                        <div className="text-[11px] text-emerald-800 font-medium">
+                          <span>🎯 सिकाइ उपलब्धि: </span>
+                          <span>{log.learningOutcome}</span>
+                        </div>
+                      )}
+
+                      {log.homework && (
+                        <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-xs text-amber-950">
+                          <strong className="block text-[10px] uppercase font-black text-amber-900">
+                            📝 गृहकार्य (Homework):
+                          </strong>
+                          <p className="font-bold mt-0.5">{log.homework}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
