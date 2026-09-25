@@ -505,14 +505,17 @@ router.post('/sync', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
 
     const isAuthError = err.message.includes('Invalid credentials') || 
                         err.message.includes('Application-specific password') || 
-                        err.message.includes('AUTHENTICATIONFAILED');
+                        err.message.includes('AUTHENTICATIONFAILED') ||
+                        err.message.includes('Command failed') ||
+                        err.message.includes('LOGIN');
 
     const friendlyMsg = isAuthError
-      ? 'गुगलले मुख्य पासवर्ड सिधै स्वीकार गर्दैन। कृपया Google Account > Security बाट १६-अक्षरको "App Password" जेनेरेट गरी राख्नुहोस्।'
+      ? 'जिमेलको सुरक्षा नीतिका कारण प्रत्यक्ष सिंक गर्न १६-अक्षरको "Google App Password" चाहिन्छ। तपाईं माथिको "Open in Gmail" बटनबाट तुरुन्तै सबै नयाँ इमेल हेर्न सक्नुहुन्छ।'
       : 'जिमेलसँग सम्पर्क हुन सकेन: ' + err.message;
 
     return res.status(400).json({
       success: false,
+      isAuthError,
       message: friendlyMsg,
       rawError: err.message,
     });

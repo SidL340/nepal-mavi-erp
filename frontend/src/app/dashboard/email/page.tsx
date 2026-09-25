@@ -172,7 +172,8 @@ export default function SchoolEmailPage() {
       queryClient.invalidateQueries({ queryKey: ['school-emails'] });
     },
     onError: (err: any) => {
-      toast.error(err?.response?.data?.message || 'जिमेल सिंक हुन सकेन।');
+      const msg = err?.response?.data?.message || 'जिमेल सिंक हुन सकेन।';
+      toast.error(msg, { duration: 6000 });
     },
   });
 
