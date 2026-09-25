@@ -2471,8 +2471,32 @@ export default function ExamsPage() {
                     </p>
                   </div>
 
-                  {/* Preset Buttons */}
+                  {/* Segmented Shift Mode Toggle */}
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allC = (classesData || []).map((c: any) => c.id);
+                        setAddExamShifts([
+                          {
+                            name: 'DAY',
+                            nameNepali: 'दिवा सत्र (Day Shift)',
+                            startTime: '11:00 AM',
+                            endTime: '02:00 PM',
+                            classIds: allC,
+                          },
+                        ]);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                        addExamShifts.length === 1
+                          ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-blue-300'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Sun size={13} className={addExamShifts.length === 1 ? 'text-amber-300' : 'text-amber-500'} />
+                      <span>Single Shift (एकल सत्र)</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -2499,28 +2523,14 @@ export default function ExamsPage() {
                           },
                         ]);
                       }}
-                      className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[10px] font-bold transition"
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                        addExamShifts.length > 1
+                          ? 'bg-purple-700 text-white border-purple-700 shadow-xs ring-2 ring-purple-300'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
+                      }`}
                     >
-                      ⚡ 2 Shifts (Morning + Day)
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const allC = (classesData || []).map((c: any) => c.id);
-                        setAddExamShifts([
-                          {
-                            name: 'DAY',
-                            nameNepali: 'दिवा सत्र (Day Shift)',
-                            startTime: '11:00 AM',
-                            endTime: '02:00 PM',
-                            classIds: allC,
-                          },
-                        ]);
-                      }}
-                      className="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 text-[10px] font-bold transition"
-                    >
-                      ⚡ Single Shift (Day Only)
+                      <Layers size={13} className={addExamShifts.length > 1 ? 'text-amber-300' : 'text-purple-600'} />
+                      <span>Multiple Shifts (बहु-सत्र / Morning + Day)</span>
                     </button>
                   </div>
                 </div>
@@ -2808,8 +2818,32 @@ export default function ExamsPage() {
                     </p>
                   </div>
 
-                  {/* Preset Buttons */}
+                  {/* Segmented Shift Mode Toggle */}
                   <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allC = (classesData || []).map((c: any) => c.id);
+                        setEditExamShifts([
+                          {
+                            name: 'DAY',
+                            nameNepali: 'दिवा सत्र (Day Shift)',
+                            startTime: '11:00 AM',
+                            endTime: '02:00 PM',
+                            classIds: allC,
+                          },
+                        ]);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                        editExamShifts.length === 1
+                          ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-blue-300'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Sun size={13} className={editExamShifts.length === 1 ? 'text-amber-300' : 'text-amber-500'} />
+                      <span>Single Shift (एकल सत्र)</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -2836,28 +2870,14 @@ export default function ExamsPage() {
                           },
                         ]);
                       }}
-                      className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[10px] font-bold transition"
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                        editExamShifts.length > 1
+                          ? 'bg-purple-700 text-white border-purple-700 shadow-xs ring-2 ring-purple-300'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
+                      }`}
                     >
-                      ⚡ 2 Shifts (Morning + Day)
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const allC = (classesData || []).map((c: any) => c.id);
-                        setEditExamShifts([
-                          {
-                            name: 'DAY',
-                            nameNepali: 'दिवा सत्र (Day Shift)',
-                            startTime: '11:00 AM',
-                            endTime: '02:00 PM',
-                            classIds: allC,
-                          },
-                        ]);
-                      }}
-                      className="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 text-[10px] font-bold transition"
-                    >
-                      ⚡ Single Shift (Day Only)
+                      <Layers size={13} className={editExamShifts.length > 1 ? 'text-amber-300' : 'text-purple-600'} />
+                      <span>Multiple Shifts (बहु-सत्र / Morning + Day)</span>
                     </button>
                   </div>
                 </div>

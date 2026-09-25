@@ -21,6 +21,10 @@ import {
   Sun,
   Moon,
   RotateCcw,
+  CheckSquare,
+  Square,
+  HelpCircle,
+  Hash,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -32,15 +36,13 @@ export default function ExamSeatPlanningPage() {
   const [selectedShift, setSelectedShift] = useState<string>('DAY');
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
-  const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
+  const [selectedRoomIdsForAllocation, setSelectedRoomIdsForAllocation] = useState<number[]>([]);
 
-  // New Room Form
-  const [newRoom, setNewRoom] = useState({
-    roomNo: '',
-    building: 'Main Block',
-    totalBenches: '15',
-    seatsPerBench: '2',
-  });
+  // Room Plan Form
+  const [roomNo, setRoomNo] = useState('');
+  const [building, setBuilding] = useState('Main Block');
+  const [totalBenches, setTotalBenches] = useState('15');
+  const [seatsPerBench, setSeatsPerBench] = useState('2');
 
   // Fetch Exams
   const { data: examsData } = useQuery({
@@ -61,13 +63,22 @@ export default function ExamSeatPlanningPage() {
   });
 
   // Fetch Rooms
-  const { data: roomsData } = useQuery({
+  const { data: roomsData, isLoading: isRoomsLoading } = useQuery({
     queryKey: ['exam-rooms'],
     queryFn: async () => {
       const res = await api.get('/seat-plans/rooms');
       return res.data?.data || [];
     },
   });
+
+  const rooms: any[] = roomsData || [];
+
+  // Auto-select all rooms for allocation by default
+  useEffect(() => {
+    if (rooms.length > 0 && selectedRoomIdsForAllocation.length === 0) {
+      setSelectedRoomIdsForAllocation(rooms.map((r: any) => r.id));
+    }
+  }, [rooms]);
 
   // Current Exam Object
   const currentExam = examsData?.find((e: any) => e.id.toString() === selectedExamId);
@@ -133,17 +144,37 @@ export default function ExamSeatPlanningPage() {
   // Create Room Mutation
   const createRoomMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/seat-plans/rooms', newRoom);
+      if (!roomNo.trim()) throw new Error('Please enter Room Number/Name.');
+      const res = await api.post('/seat-plans/rooms', {
+        roomNo: roomNo.trim(),
+        building: building.trim(),
+        totalBenches: parseInt(totalBenches) || 15,
+        seatsPerBench: parseInt(seatsPerBench) || 2,
+      });
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Room created!');
-      setIsAddRoomModalOpen(false);
-      setNewRoom({ roomNo: '', building: 'Main Block', totalBenches: '15', seatsPerBench: '2' });
+      toast.success(data.message || 'Room created successfully!');
+      setRoomNo('');
       queryClient.invalidateQueries({ queryKey: ['exam-rooms'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to create room');
+      toast.error(err.response?.data?.message || err.message || 'Failed to create room');
+    },
+  });
+
+  // Seed Default Rooms Mutation
+  const seedRoomsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/seat-plans/rooms/seed-default');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Standard exam rooms seeded!');
+      queryClient.invalidateQueries({ queryKey: ['exam-rooms'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to seed rooms');
     },
   });
 
@@ -166,15 +197,18 @@ export default function ExamSeatPlanningPage() {
       if (!selectedExamId || selectedClassIds.length === 0) {
         throw new Error('Please select an Exam and at least one Class');
       }
-      const allRoomIds = roomsData?.map((r: any) => r.id) || [];
-      if (allRoomIds.length === 0) {
-        throw new Error('Please add at least one Exam Room first');
+      const targetRoomIds = selectedRoomIdsForAllocation.length > 0
+        ? selectedRoomIdsForAllocation
+        : rooms.map((r: any) => r.id);
+
+      if (targetRoomIds.length === 0) {
+        throw new Error('Please add at least one Exam Room first in Step 1');
       }
 
       const res = await api.post('/seat-plans/auto-generate', {
         examId: parseInt(selectedExamId),
         shift: selectedShift || 'DAY',
-        roomIds: allRoomIds,
+        roomIds: targetRoomIds,
         classIds: selectedClassIds,
       });
       return res.data;
@@ -220,6 +254,12 @@ export default function ExamSeatPlanningPage() {
     }
   };
 
+  const handleToggleRoomForAllocation = (rid: number) => {
+    setSelectedRoomIdsForAllocation((prev) =>
+      prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]
+    );
+  };
+
   const printDoorNotice = () => {
     if (!seatPlansData || seatPlansData.length === 0) {
       toast.error('No seat plan to print');
@@ -247,7 +287,7 @@ export default function ExamSeatPlanningPage() {
     });
 
     const roomSections = Object.entries(seatsByRoom).map(([rName, seats]) => {
-      const rows = seats.map((s, idx) => `
+      const rows = seats.map((s) => `
         <tr>
           <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-weight: bold;">${s.benchNo}</td>
           <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-weight: bold; background: #f8fafc;">${s.seatPosition}</td>
@@ -318,7 +358,8 @@ export default function ExamSeatPlanningPage() {
     printWin.document.close();
   };
 
-  const rooms = roomsData || [];
+  const totalSchoolBenches = rooms.reduce((sum, r) => sum + (r.totalBenches || 0), 0);
+  const totalSchoolCapacity = rooms.reduce((sum, r) => sum + (r.totalCapacity || r.totalBenches * 2), 0);
   const seatPlans = seatPlansData || [];
 
   return (
@@ -337,10 +378,10 @@ export default function ExamSeatPlanningPage() {
           </div>
           <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f] flex items-center gap-2">
             <Grid className="text-[#1e3a5f]" />
-            <span>Shift-Wise Anti-Cheating Seat Planning (सिट योजना)</span>
+            <span>Room Plan & Shift-Wise Anti-Cheating Seat Allocation</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            शिफ्ट अनुसार (Morning/Day/Evening) कोठा क्षमता, बेन्च पुन:प्रयोग, एकान्तर (Interleaved) सिट प्लान र ढोका सूचना
+            कोठा तथा बेन्च योजना (Room & Desk Plan) तयार गरी प्रत्येक सत्रका लागि एकान्तर (Interleaved) सिट प्लान र ढोका टाँस निकाल्नुहोस्
           </p>
         </div>
 
@@ -361,24 +402,205 @@ export default function ExamSeatPlanningPage() {
             <Printer size={14} />
             <span>Print Door Notice ({selectedShift})</span>
           </button>
-
-          <button
-            onClick={() => setIsAddRoomModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] transition shadow-xs"
-          >
-            <Plus size={14} />
-            <span>Add Exam Room (कोठा थप्नुहोस्)</span>
-          </button>
         </div>
       </div>
 
-      {/* Control Panel: Exam & Shift Selection */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-          <h2 className="text-xs font-extrabold uppercase tracking-wider text-gray-700 flex items-center gap-2">
-            <Sparkles size={15} className="text-amber-500" />
-            <span>1. Choose Exam & Exam Shift (परीक्षा र शिफ्ट चयन)</span>
-          </h2>
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ─── STEP 1: ROOM & BENCH PLAN (कोठा तथा बेन्च योजना) ───────────────── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      <div className="rounded-3xl border-2 border-blue-200/80 bg-white p-6 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-blue-100 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-blue-700 text-white font-black text-sm flex items-center justify-center shadow-xs">
+              १
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-[#1e3a5f] flex items-center gap-2 uppercase tracking-wide">
+                <Building size={16} className="text-blue-700" />
+                <span>STEP 1: Room Plan (कोठा तथा बेन्च व्यवस्थापन)</span>
+              </h2>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                पहिले परीक्षा कोठा, भवन र त्यस कोठामा रहेका डेस्क/बेन्चको संख्या प्रविष्टि गर्नुहोस्
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-xl bg-blue-50 border border-blue-200/80 px-3 py-1 font-bold text-[#1e3a5f] text-xs">
+              कुल <strong>{rooms.length}</strong> कोठा • <strong>{totalSchoolBenches}</strong> बेन्च • <strong>{totalSchoolCapacity}</strong> सिट क्षमता/सत्र
+            </span>
+          </div>
+        </div>
+
+        {/* Quick Room Creator Form */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            createRoomMutation.mutate();
+          }}
+          className="rounded-2xl bg-slate-50/90 border border-slate-200 p-4 space-y-3 text-xs"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="md:col-span-2">
+              <label className="block font-bold text-gray-700 mb-1">Room No. / Room Name *</label>
+              <input
+                required
+                type="text"
+                placeholder="e.g. Room 101, Hall A, Science Wing"
+                value={roomNo}
+                onChange={(e) => setRoomNo(e.target.value)}
+                className="erp-input font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 mb-1">Building / Block</label>
+              <input
+                type="text"
+                placeholder="e.g. Main Block"
+                value={building}
+                onChange={(e) => setBuilding(e.target.value)}
+                className="erp-input"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 mb-1">No. of Benches *</label>
+              <input
+                required
+                type="number"
+                min="1"
+                max="100"
+                value={totalBenches}
+                onChange={(e) => setTotalBenches(e.target.value)}
+                className="erp-input font-mono font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 mb-1">Seats / Bench</label>
+              <select
+                value={seatsPerBench}
+                onChange={(e) => setSeatsPerBench(e.target.value)}
+                className="erp-input font-bold"
+              >
+                <option value="2">2 Seats (Left & Right)</option>
+                <option value="3">3 Seats (L, M, R)</option>
+                <option value="1">1 Seat (Single Desk)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200/80">
+            <div className="text-[11px] text-gray-600 font-nepali flex items-center gap-1">
+              <span>अनुमानित क्षमता:</span>
+              <strong className="text-blue-900 font-mono">
+                {parseInt(totalBenches || '0') * parseInt(seatsPerBench || '2')}
+              </strong>
+              <span>जना विद्यार्थी प्रति सत्र</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {rooms.length === 0 && (
+                <button
+                  type="button"
+                  disabled={seedRoomsMutation.isPending}
+                  onClick={() => seedRoomsMutation.mutate()}
+                  className="rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-blue-900 px-3.5 py-1.5 text-xs font-bold transition shadow-2xs"
+                >
+                  ⚡ Auto-Add Standard Rooms 1-5
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={createRoomMutation.isPending || !roomNo.trim()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
+              >
+                <Plus size={14} />
+                <span>{createRoomMutation.isPending ? 'Adding...' : 'Add Exam Room (कोठा थप्नुहोस्)'}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* Configured Rooms Cards Grid */}
+        <div className="space-y-2">
+          <h3 className="font-bold text-xs text-gray-700 uppercase tracking-wider">
+            हाल सिर्जना गरिएका परीक्षा कोठाहरू ({rooms.length} Rooms Available):
+          </h3>
+
+          {isRoomsLoading ? (
+            <div className="py-6 text-center text-gray-400 text-xs">Loading exam rooms...</div>
+          ) : rooms.length === 0 ? (
+            <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-gray-200 text-xs text-gray-500 space-y-1">
+              <Building size={28} className="mx-auto text-gray-300 mb-1" />
+              <p className="font-bold text-gray-700">कुनै परीक्षा कोठा सिर्जना गरिएको छैन।</p>
+              <p className="text-[11px]">माथिको फारम प्रयोग गरी वा &quot;Auto-Add Standard Rooms&quot; क्लिक गरी कोठा थप्नुहोस्।</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+              {rooms.map((r: any) => {
+                const isSelectedForAllocation = selectedRoomIdsForAllocation.includes(r.id);
+                return (
+                  <div
+                    key={r.id}
+                    className={`rounded-2xl border p-3 text-xs space-y-1.5 transition relative group ${
+                      isSelectedForAllocation
+                        ? 'border-blue-300 bg-blue-50/40'
+                        : 'border-gray-200 bg-white opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <strong className="text-gray-900 font-extrabold text-sm">{r.roomNo}</strong>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete ${r.roomNo}?`)) {
+                            deleteRoomMutation.mutate(r.id);
+                          }
+                        }}
+                        title="Delete Room"
+                        className="text-gray-400 hover:text-rose-600 transition"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-gray-500 truncate">{r.building || 'Main Block'}</p>
+
+                    <div className="pt-1 border-t border-slate-200/60 flex items-center justify-between font-mono text-[10px] font-bold">
+                      <span className="text-gray-600">{r.totalBenches} Benches</span>
+                      <span className="text-blue-700">{r.totalCapacity || r.totalBenches * 2} Seats</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ─── STEP 2: CHOOSE EXAM, SHIFT & SMART ALLOCATION ──────────────────── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      <div className="rounded-3xl border-2 border-purple-200/80 bg-white p-6 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-purple-100 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-purple-700 text-white font-black text-sm flex items-center justify-center shadow-xs">
+              २
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-purple-950 flex items-center gap-2 uppercase tracking-wide">
+                <Sparkles size={16} className="text-purple-700" />
+                <span>STEP 2: Choose Exam, Shift & Classes (परीक्षा, सत्र तथा कक्षा छनौट)</span>
+              </h2>
+              <p className="text-[11px] text-purple-800 font-nepali">
+                कुन परीक्षा र कुन शिफ्ट (बिहानी वा दिवा) का लागि सिट योजना बनाउने हो चयन गर्नुहोस्
+              </p>
+            </div>
+          </div>
+
           {seatPlans.length > 0 && (
             <button
               onClick={() => {
@@ -387,7 +609,7 @@ export default function ExamSeatPlanningPage() {
                 }
               }}
               disabled={clearShiftSeatPlanMutation.isPending}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 hover:underline"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline"
             >
               <RotateCcw size={12} />
               <span>Reset {selectedShift} Plan</span>
@@ -415,31 +637,31 @@ export default function ExamSeatPlanningPage() {
 
           {/* Room Filter */}
           <div>
-            <label className="block font-bold text-gray-700 mb-1">Filter by Room View:</label>
+            <label className="block font-bold text-gray-700 mb-1">Filter Layout View by Room:</label>
             <select
               value={selectedRoomId}
               onChange={(e) => setSelectedRoomId(e.target.value)}
               className="erp-input font-medium"
             >
-              <option value="">All Exam Rooms (सबै कोठा)</option>
+              <option value="">All Exam Rooms (सबै कोठा एकमुष्ट)</option>
               {rooms.map((r: any) => (
                 <option key={r.id} value={r.id}>
-                  Room {r.roomNo} ({r.totalBenches} benches, {r.totalCapacity || r.totalBenches * 2} capacity)
+                  {r.roomNo} ({r.totalBenches} benches, {r.totalCapacity || r.totalBenches * 2} capacity)
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* ─── Shift Selector Pills ─── */}
+        {/* Shift Selector Pills */}
         <div className="space-y-2 pt-2 border-t border-gray-100">
           <label className="block font-bold text-gray-800 text-xs flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Clock size={14} className="text-blue-600" />
-              <span>Select Shift for Seat Planning (कुन शिफ्टको सिट प्लान गर्ने?):</span>
+              <span>Choose Shift to Plan (कुन सत्रको सिट योजना बनाउने?):</span>
             </span>
             <span className="text-[11px] text-gray-500 font-normal">
-              Rooms & benches are automatically reused across different shifts.
+              Rooms and benches are automatically reused across shifts without conflicts.
             </span>
           </label>
 
@@ -447,18 +669,19 @@ export default function ExamSeatPlanningPage() {
             {examShifts.length > 0 ? (
               examShifts.map((sh: any) => {
                 const isSelected = selectedShift === sh.name;
+                const isMorning = (sh.name || '').toUpperCase().includes('MORN');
                 return (
                   <button
                     key={sh.id || sh.name}
                     type="button"
                     onClick={() => setSelectedShift(sh.name)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
                       isSelected
-                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm scale-[1.02]'
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md scale-[1.02]'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {sh.name.toUpperCase().includes('MORN') ? (
+                    {isMorning ? (
                       <Sun size={14} className={isSelected ? 'text-amber-300' : 'text-amber-600'} />
                     ) : (
                       <Moon size={14} className={isSelected ? 'text-blue-200' : 'text-indigo-600'} />
@@ -479,9 +702,9 @@ export default function ExamSeatPlanningPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedShift('MORNING')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
                     selectedShift === 'MORNING'
-                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm'
+                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -493,9 +716,9 @@ export default function ExamSeatPlanningPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedShift('DAY')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
                     selectedShift === 'DAY'
-                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm'
+                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md'
                       : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -503,25 +726,12 @@ export default function ExamSeatPlanningPage() {
                   <span>Day Shift (दिवा सत्र)</span>
                   <span className="text-[10px] opacity-80 font-mono">11:00 AM - 02:00 PM</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedShift('EVENING')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
-                    selectedShift === 'EVENING'
-                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <Moon size={14} className="text-indigo-500" />
-                  <span>Evening Shift (साँझ सत्र)</span>
-                </button>
               </>
             )}
           </div>
         </div>
 
-        {/* Multi-class checklist for interleaving */}
+        {/* Classes to Interleave */}
         <div className="space-y-2 pt-2 border-t border-gray-100 text-xs">
           <div className="flex items-center justify-between">
             <label className="font-bold text-gray-700">
@@ -557,6 +767,96 @@ export default function ExamSeatPlanningPage() {
           </div>
         </div>
 
+        {/* Select Rooms for this Allocation */}
+        <div className="space-y-2.5 pt-2.5 border-t border-gray-100 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+            <div>
+              <label className="font-bold text-gray-800 flex items-center gap-1.5">
+                <Building size={14} className="text-purple-700" />
+                <span>Select Rooms for this Exam Shift (यस {selectedShift} शिफ्टका लागि प्रयोग गरिने कोठाहरू):</span>
+              </label>
+              <p className="text-[10px] text-gray-500 font-nepali">
+                यस सत्रमा कुन-कुन कोठामा विद्यार्थी राख्ने हो छनौट गर्नुहोस् (अनचेक गरिएका कोठाहरूमा विद्यार्थी राखिने छैन)
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRoomIdsForAllocation(rooms.map((r: any) => r.id))}
+                className="text-blue-600 hover:underline font-bold text-[10.5px]"
+              >
+                Select All Rooms
+              </button>
+              <span className="text-gray-300">|</span>
+              <button
+                type="button"
+                onClick={() => setSelectedRoomIdsForAllocation([])}
+                className="text-gray-500 hover:underline font-bold text-[10.5px]"
+              >
+                Deselect All
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+            {rooms.map((r: any) => {
+              const isChecked = selectedRoomIdsForAllocation.includes(r.id);
+              const roomCap = r.totalCapacity || r.totalBenches * (r.seatsPerBench || 2);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => handleToggleRoomForAllocation(r.id)}
+                  className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between gap-1.5 ${
+                    isChecked
+                      ? 'bg-purple-50 border-purple-600 text-purple-950 ring-2 ring-purple-600/30 shadow-xs'
+                      : 'border-gray-200 bg-white text-gray-400 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-xs truncate text-gray-900">{r.roomNo}</span>
+                    <span className={`h-4 w-4 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                      isChecked ? 'bg-purple-700 text-white' : 'border border-gray-300 bg-white'
+                    }`}>
+                      {isChecked ? '✓' : ''}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-gray-500 truncate">{r.building || 'Main Block'}</p>
+
+                  <div className="pt-1 border-t border-purple-100 flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-gray-500">{r.totalBenches} Desks</span>
+                    <span className="font-bold text-purple-800">{roomCap} Seats</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Capacity Status Badge */}
+          {selectedRoomIdsForAllocation.length > 0 && (
+            <div className="rounded-xl bg-purple-100/60 border border-purple-200 p-2.5 flex items-center justify-between text-[11px] text-purple-950 font-semibold">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                <span>
+                  छानिएका <strong>{selectedRoomIdsForAllocation.length}</strong> वटा कोठामा जम्मा{' '}
+                  <strong className="font-mono text-purple-900">
+                    {rooms
+                      .filter((r: any) => selectedRoomIdsForAllocation.includes(r.id))
+                      .reduce((sum: number, r: any) => sum + (r.totalCapacity || r.totalBenches * (r.seatsPerBench || 2)), 0)}
+                  </strong>{' '}
+                  सिट क्षमता उपलब्ध छ।
+                </span>
+              </div>
+              <span className="text-[10px] bg-white border border-purple-300 px-2 py-0.5 rounded-md font-bold text-purple-900 font-mono">
+                {selectedShift} SHIFT READY
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Generate Button Footer */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
           <div className="text-[11px] text-gray-500 font-nepali">
             💡 प्रणालीले एकापसमा नजिक नहुने गरी (Anti-cheating) बायाँ र दायाँ बेन्चमा फरक कक्षाका विद्यार्थीहरूलाई
@@ -565,9 +865,14 @@ export default function ExamSeatPlanningPage() {
 
           <button
             type="button"
-            disabled={autoGenerateMutation.isPending || !selectedExamId || selectedClassIds.length === 0}
+            disabled={
+              autoGenerateMutation.isPending ||
+              !selectedExamId ||
+              selectedClassIds.length === 0 ||
+              rooms.length === 0
+            }
             onClick={() => autoGenerateMutation.mutate()}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-6 py-2.5 font-bold text-white shadow-md hover:from-blue-800 hover:to-indigo-800 transition disabled:opacity-50 text-xs shrink-0"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 px-6 py-2.5 font-bold text-white shadow-md hover:from-purple-800 hover:to-blue-800 transition disabled:opacity-50 text-xs shrink-0"
           >
             {autoGenerateMutation.isPending ? (
               <>
@@ -577,23 +882,38 @@ export default function ExamSeatPlanningPage() {
             ) : (
               <>
                 <Sparkles size={16} />
-                <span>Generate {selectedShift} Seat Plan (सिट योजना तयार गर्नुहोस्)</span>
+                <span>Generate Smart {selectedShift} Seat Plan (सिट योजना तयार गर्नुहोस्)</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* Visual Benches Grid */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
-            <Layers size={16} />
-            <span>Room & Bench Visual Layout — {selectedShift} Shift ({seatPlans.length} Students)</span>
-          </h2>
-          <span className="text-xs font-bold text-gray-600">
-            Shift: <strong className="text-blue-700 font-mono">{selectedShift}</strong>
-          </span>
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      {/* ─── STEP 3: VISUAL LAYOUT & BENCH CARDS ────────────────────────────── */}
+      {/* ═════════════════════════════════════════════════════════════════════════ */}
+      <div className="rounded-3xl border border-gray-200/90 bg-white p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-emerald-700 text-white font-black text-sm flex items-center justify-center shadow-xs">
+              ३
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-gray-900 flex items-center gap-2 uppercase tracking-wide">
+                <Layers size={16} className="text-emerald-700" />
+                <span>STEP 3: Visual Bench & Door Plan — {selectedShift} Shift</span>
+              </h2>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                प्रत्येक कोठा र बेन्च अनुसार विद्यार्थीहरूको सिट नक्सा
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1 font-bold text-emerald-900 text-xs">
+              Total Seated: <strong>{seatPlans.length}</strong> Students
+            </span>
+          </div>
         </div>
 
         {isSeatsLoading ? (
@@ -602,11 +922,11 @@ export default function ExamSeatPlanningPage() {
             <p className="mt-2 text-xs">Loading seat plans for {selectedShift} shift...</p>
           </div>
         ) : seatPlans.length === 0 ? (
-          <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center space-y-3">
+          <div className="rounded-2xl border border-gray-100 bg-slate-50/50 p-12 text-center space-y-3">
             <Grid size={36} className="mx-auto text-gray-300" />
             <h3 className="text-sm font-bold text-gray-700">No Seat Plan Generated for {selectedShift} Shift Yet</h3>
             <p className="text-xs text-gray-400 max-w-md mx-auto">
-              Select an exam, choose the shift ({selectedShift}), check classes above, then click &quot;Generate {selectedShift} Seat Plan&quot;.
+              Select an exam, choose the shift ({selectedShift}), check classes above, then click &quot;Generate Smart {selectedShift} Seat Plan&quot;.
             </p>
           </div>
         ) : (
@@ -619,7 +939,7 @@ export default function ExamSeatPlanningPage() {
                 <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                   <div className="flex items-center gap-1.5 font-mono font-bold text-[#1e3a5f]">
                     <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                      Room {seat.room?.roomNo || '1'}
+                      {seat.room?.roomNo || 'Room 1'}
                     </span>
                     <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-[11px]">
                       Bench #{seat.benchNo}
@@ -641,102 +961,13 @@ export default function ExamSeatPlanningPage() {
                   <p className="text-[11px] font-semibold text-emerald-700">
                     Class: {seat.student?.classEnrollment?.[0]?.class?.name || '—'} (Roll: {seat.rollNo || '—'})
                   </p>
-                  <p className="text-[10px] font-mono text-gray-400">ID: {seat.student?.studentId}</p>
+                  <p className="text-[10px] font-mono text-gray-400">EMIS ID: {seat.student?.studentId}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-
-      {/* ─── MODAL: ADD EXAM ROOM ─────────────────────────────────────────── */}
-      {isAddRoomModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 text-xs">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-              <h3 className="text-base font-bold text-[#1e3a5f] flex items-center gap-2">
-                <Building size={16} />
-                <span>Add Exam Room (नयाँ परीक्षा कोठा)</span>
-              </h3>
-              <button onClick={() => setIsAddRoomModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Room Number / Name *</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. 101, Hall A"
-                  value={newRoom.roomNo}
-                  onChange={(e) => setNewRoom({ ...newRoom, roomNo: e.target.value })}
-                  className="erp-input font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Building / Block</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Main Block, Science Wing"
-                  value={newRoom.building}
-                  onChange={(e) => setNewRoom({ ...newRoom, building: e.target.value })}
-                  className="erp-input"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Total Benches</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newRoom.totalBenches}
-                    onChange={(e) => setNewRoom({ ...newRoom, totalBenches: e.target.value })}
-                    className="erp-input font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Seats per Bench</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="4"
-                    value={newRoom.seatsPerBench}
-                    onChange={(e) => setNewRoom({ ...newRoom, seatsPerBench: e.target.value })}
-                    className="erp-input font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-blue-50 p-3 text-[11px] text-blue-800">
-                Total Capacity: <strong>{parseInt(newRoom.totalBenches || '0') * parseInt(newRoom.seatsPerBench || '2')}</strong> Students per shift.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setIsAddRoomModalOpen(false)}
-                className="px-4 py-2 font-bold text-gray-500 hover:text-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={createRoomMutation.isPending || !newRoom.roomNo}
-                onClick={() => createRoomMutation.mutate()}
-                className="rounded-xl bg-[#1e3a5f] px-5 py-2 font-bold text-white shadow hover:bg-[#2a5280] transition disabled:opacity-50"
-              >
-                {createRoomMutation.isPending ? 'Saving...' : 'Save Room'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -51,13 +51,42 @@ router.post('/rooms', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCH
   }
 });
 
-// DELETE /api/seat-plans/rooms/:id
-router.delete('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+// POST /api/seat-plans/rooms/seed-default — auto-create standard examination rooms
+router.post('/rooms/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    await prisma.examSeatPlan.deleteMany({ where: { roomId: id } });
-    await prisma.examRoom.delete({ where: { id } });
-    return res.json({ success: true, message: 'परीक्षा कोठा सफलतापूर्वक हटाइयो!' });
+    const existing = await prisma.examRoom.findMany();
+    const existingNames = new Set(existing.map(r => r.roomNo));
+
+    const defaultRooms = [
+      { roomNo: 'Room 101', building: 'Main Building', totalBenches: 15, seatsPerBench: 2 },
+      { roomNo: 'Room 102', building: 'Main Building', totalBenches: 15, seatsPerBench: 2 },
+      { roomNo: 'Room 103', building: 'Main Building', totalBenches: 15, seatsPerBench: 2 },
+      { roomNo: 'Room 201', building: 'Secondary Wing', totalBenches: 18, seatsPerBench: 2 },
+      { roomNo: 'Room 202', building: 'Secondary Wing', totalBenches: 18, seatsPerBench: 2 },
+      { roomNo: 'Main Exam Hall', building: 'Auditorium Block', totalBenches: 30, seatsPerBench: 2 },
+    ];
+
+    const toCreate = defaultRooms
+      .filter(r => !existingNames.has(r.roomNo))
+      .map(r => ({
+        ...r,
+        totalCapacity: r.totalBenches * r.seatsPerBench,
+      }));
+
+    if (toCreate.length > 0) {
+      await prisma.examRoom.createMany({ data: toCreate });
+    }
+
+    const allRooms = await prisma.examRoom.findMany({
+      where: { isActive: true },
+      orderBy: { roomNo: 'asc' },
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: allRooms,
+      message: `${toCreate.length} वटा मानक परीक्षा कोठाहरू स्वतः थपिए!`,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
