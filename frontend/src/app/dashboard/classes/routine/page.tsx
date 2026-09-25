@@ -15,6 +15,8 @@ import {
   Sparkles,
   ArrowLeft,
   Users,
+  Copy,
+  Layers,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -43,7 +45,7 @@ export default function ClassRoutinePage() {
   const queryClient = useQueryClient();
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedDay, setSelectedDay] = useState('SUNDAY');
-  const [viewMode, setViewMode] = useState<'class-grid' | 'master-teacher'>('class-grid');
+  const [copyTargetDay, setCopyTargetDay] = useState('ALL');
 
   // Routine Matrix state: [periodNumber] -> { subjectId, teacherId, roomNo }
   const [routineGrid, setRoutineGrid] = useState<Record<string, { subjectId: string; teacherId: string; roomNo: string }>>({});
@@ -118,7 +120,14 @@ export default function ClassRoutinePage() {
     }
   }, [routineData]);
 
-  // Check teacher conflict
+  const selectedClassObj = classesData?.find((c: any) => c.id.toString() === selectedClassId);
+
+  // Filter subjects strictly to those assigned to this specific class
+  const classSubjects = (selectedClassObj?.subjects && selectedClassObj.subjects.length > 0)
+    ? selectedClassObj.subjects.map((cs: any) => cs.subject || subjectsData?.find((s: any) => s.id === cs.subjectId)).filter(Boolean)
+    : subjectsData || [];
+
+  // Check teacher conflict across other classes
   const checkConflict = (day: string, period: number, teacherIdStr: string) => {
     if (!teacherIdStr || !allRoutinesData) return null;
     const tid = parseInt(teacherIdStr);
@@ -130,6 +139,31 @@ export default function ClassRoutinePage() {
         r.classId.toString() !== selectedClassId
     );
     return conflict ? conflict.class?.name || 'Another Class' : null;
+  };
+
+  // Copy routine from selectedDay to other days
+  const handleCopyRoutine = () => {
+    setRoutineGrid((prev) => {
+      const next = { ...prev };
+      const targetDays = copyTargetDay === 'ALL'
+        ? DAYS.map((d) => d.key).filter((k) => k !== selectedDay)
+        : [copyTargetDay];
+
+      targetDays.forEach((targetKey) => {
+        PERIODS.forEach((p) => {
+          const sourceKey = `${selectedDay}_${p.num}`;
+          const destKey = `${targetKey}_${p.num}`;
+          if (next[sourceKey]) {
+            next[destKey] = { ...next[sourceKey] };
+          }
+        });
+      });
+      return next;
+    });
+
+    const srcName = DAYS.find((d) => d.key === selectedDay)?.name?.split(' ')[0] || selectedDay;
+    const targetName = copyTargetDay === 'ALL' ? 'सबै दिनहरू (All Days)' : DAYS.find((d) => d.key === copyTargetDay)?.name?.split(' ')[0];
+    toast.success(`${srcName} को तालिका ${targetName} मा सफलतापूर्वक प्रतिलिपि (Copied) गरियो!`);
   };
 
   // Batch Save Routine Mutation
@@ -184,7 +218,16 @@ export default function ClassRoutinePage() {
     }));
   };
 
-  const selectedClassObj = classesData?.find((c: any) => c.id.toString() === selectedClassId);
+  // When subject is changed, automatically select its assigned teacher if configured for this class
+  const handleSubjectChange = (day: string, periodNum: number, subId: string) => {
+    handleCellChange(day, periodNum, 'subjectId', subId);
+    if (subId && selectedClassObj?.subjects) {
+      const match = selectedClassObj.subjects.find((cs: any) => cs.subjectId.toString() === subId);
+      if (match?.teacherId) {
+        handleCellChange(day, periodNum, 'teacherId', match.teacherId.toString());
+      }
+    }
+  };
 
   const printClassRoutine = () => {
     if (!selectedClassObj) return;
@@ -242,8 +285,8 @@ export default function ClassRoutinePage() {
         </head>
         <body>
           <div class="header">
-            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
-            <div style="font-size: 11px; color: #555;">Class Routine & Timetable (दैनिक समय तालिका) • Academic Session 2081/82</div>
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट (स्था. २००७)</div>
+            <div style="font-size: 11px; color: #555;">Class Routine & Timetable (दैनिक समय तालिका) • Academic Session 2083/84</div>
           </div>
 
           <div class="meta">
@@ -297,7 +340,7 @@ export default function ClassRoutinePage() {
             <span>Class Routine & Timetable Maker (दैनिक समय तालिका)</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            कक्षागत घण्टी तालिका, शिक्षक क्ल्यास (Conflict) नियन्त्रण र दैनिक रुटिन व्यवस्थापन
+            कक्षागत विषय छनौट, दिन अनुसार रुटिन प्रतिलिपि (Copy Routine), शिक्षक क्ल्यास नियन्त्रण र A4 प्रिन्ट
           </p>
         </div>
 
@@ -344,13 +387,48 @@ export default function ClassRoutinePage() {
             <button
               key={d.key}
               onClick={() => setSelectedDay(d.key)}
-              className={`rounded-lg px-3 py-1.5 transition text-[11px] ${
+              className={`rounded-lg px-3 py-1.5 transition text-[11px] font-bold ${
                 selectedDay === d.key ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               {d.name.split(' ')[0]}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Routine Quick Tools Bar: Copy Routine */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-blue-50/70 border border-blue-200 p-3.5 px-5 rounded-2xl text-xs">
+        <div className="flex items-center gap-2 text-[#1e3a5f] font-bold">
+          <Copy size={16} className="text-blue-700" />
+          <span>Copy Routine (अर्को दिनमा दोहोर्याउनुहोस्):</span>
+          <span className="text-gray-600 font-normal">
+            {DAYS.find((d) => d.key === selectedDay)?.name?.split(' ')[0]} को तालिकालाई
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={copyTargetDay}
+            onChange={(e) => setCopyTargetDay(e.target.value)}
+            className="rounded-xl border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-800"
+          >
+            <option value="ALL">सबै दिनहरूमा प्रतिलिपि (All Other Days)</option>
+            {DAYS.filter((d) => d.key !== selectedDay).map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={handleCopyRoutine}
+            className="inline-flex items-center gap-1 bg-[#1e3a5f] hover:bg-[#2a5280] text-white px-4 py-1.5 rounded-xl font-bold transition shadow-2xs"
+          >
+            <Copy size={13} />
+            <span>Copy Now</span>
+          </button>
         </div>
       </div>
 
@@ -362,7 +440,7 @@ export default function ClassRoutinePage() {
               {DAYS.find((d) => d.key === selectedDay)?.name} — Period Allocation
             </h3>
             <p className="text-[11px] text-gray-500">
-              कक्षा {selectedClassObj?.name} को लागि विषय तथा विषय शिक्षक तोक्नुहोस्
+              कक्षा {selectedClassObj?.name} का लागि सूचीकृत विषय ({classSubjects.length} विषय) तथा विषय शिक्षक तोक्नुहोस्
             </p>
           </div>
           <span className="text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1 rounded-lg">
@@ -402,20 +480,20 @@ export default function ClassRoutinePage() {
                   </div>
                 )}
 
-                {/* Subject Selector */}
+                {/* Subject Selector (filtered strictly to this class list) */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                    Subject (विषय)
+                    Subject (कक्षाका सूचीकृत विषय)
                   </label>
                   <select
                     value={cell.subjectId}
-                    onChange={(e) => handleCellChange(selectedDay, period.num, 'subjectId', e.target.value)}
+                    onChange={(e) => handleSubjectChange(selectedDay, period.num, e.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-white p-2 text-xs font-bold text-gray-800 focus:border-[#1e3a5f] focus:outline-hidden"
                   >
                     <option value="">-- No Class / Free --</option>
-                    {subjectsData?.map((sub: any) => (
+                    {classSubjects.map((sub: any) => (
                       <option key={sub.id} value={sub.id}>
-                        {sub.name} ({sub.code || '—'})
+                        {sub.name} {sub.code ? `(${sub.code})` : ''}
                       </option>
                     ))}
                   </select>
@@ -424,7 +502,7 @@ export default function ClassRoutinePage() {
                 {/* Teacher Selector */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                    Teacher (शिक्षक)
+                    Teacher (तोकिएका शिक्षक)
                   </label>
                   <select
                     value={cell.teacherId}

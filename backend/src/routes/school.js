@@ -7,7 +7,12 @@ const router = express.Router();
 // GET /api/school/profile
 router.get('/profile', authenticate, async (req, res) => {
   try {
-    const school = await prisma.school.findFirst();
+    let school = await prisma.school.findFirst();
+    if (school) {
+      if (!school.estYear) school.estYear = '2007';
+      if (!school.principalName) school.principalName = 'प्रेमलाल प्रसाद राउत';
+      if (!school.address) school.address = 'वृन्दावन न.पा.-२, विश्रामपुर, रौतहट';
+    }
     return res.json({ success: true, data: school });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

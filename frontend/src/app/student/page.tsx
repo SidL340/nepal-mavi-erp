@@ -81,6 +81,12 @@ export default function StudentPortalPage() {
   const [librarySearch, setLibrarySearch] = useState('');
   const [noticeFilter, setNoticeFilter] = useState('ALL');
 
+  // Leave Form State
+  const [leaveStartDate, setLeaveStartDate] = useState(todayBS());
+  const [leaveEndDate, setLeaveEndDate] = useState(todayBS());
+  const [leaveDaysCount, setLeaveDaysCount] = useState(1);
+  const [leaveReason, setLeaveReason] = useState('');
+
   // ── 1. Fetch Student Profile ──
   const { data: student, isLoading: isStudentLoading } = useQuery({
     queryKey: ['student-me', studentId],
@@ -200,6 +206,48 @@ export default function StudentPortalPage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to submit online payment.');
+    },
+  });
+
+  const activeClassId = student?.classEnrollment?.[0]?.classId;
+
+  // ── 8. Fetch Class Routine ──
+  const { data: classRoutine, isLoading: isRoutineLoading } = useQuery({
+    queryKey: ['student-routine', activeClassId],
+    queryFn: async () => {
+      if (!activeClassId) return [];
+      const res = await api.get('/routine', { params: { classId: activeClassId } });
+      return res.data?.data || [];
+    },
+    enabled: !!activeClassId,
+  });
+
+  // ── 9. Fetch Student My Leaves ──
+  const { data: myLeaves, isLoading: isLeavesLoading } = useQuery({
+    queryKey: ['student-leaves-my'],
+    queryFn: async () => {
+      const res = await api.get('/leaves/my');
+      return res.data?.data || [];
+    },
+  });
+
+  const applyLeaveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/leaves/apply', {
+        startDateBs: leaveStartDate,
+        endDateBs: leaveEndDate,
+        totalDays: leaveDaysCount,
+        reason: leaveReason,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('तपाईंको बिदाको निवेदन दर्ता भयो! तपाईंको कक्षा शिक्षकले स्वीकृत गरेपछि लागू हुनेछ।');
+      setLeaveReason('');
+      queryClient.invalidateQueries({ queryKey: ['student-leaves-my'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'बिदा आवेदन पठाउन सकिएन।');
     },
   });
 
@@ -563,6 +611,8 @@ export default function StudentPortalPage() {
           {[
             { id: 'overview', label: 'Dashboard Overview', nepali: 'ड्यासबोर्ड', icon: GraduationCap },
             { id: 'attendance', label: 'My Attendance', nepali: 'हाजिरी', icon: CalendarCheck },
+            { id: 'routine', label: 'Class Routine', nepali: 'कक्षा रुटिन', icon: Clock },
+            { id: 'leave', label: 'Leave Application', nepali: 'बिदा निवेदन', icon: FileText },
             { id: 'exams', label: 'Exam Marksheets', nepali: 'लब्धाङ्क पत्र', icon: BookOpen },
             { id: 'fees', label: 'Fee Receipts', nepali: 'शुल्क विवरण', icon: Receipt },
             { id: 'library', label: 'Library Books', nepali: 'पुस्तकालय', icon: BookMarked },
@@ -1167,53 +1217,42 @@ export default function StudentPortalPage() {
                 </table>
               </div>
 
-              {/* Grand Performance & GPA Summary Box */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* GPA Badge */}
-                <div className="rounded-xl border-2 border-[#1e3a5f] bg-gradient-to-br from-[#1e3a5f] to-[#2a5280] p-4 text-white text-center flex flex-col items-center justify-center shadow-xs">
-                  <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-300">
+              {/* Grand Performance & Clean Simple GPA Summary Box */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Clean Minimal GPA Badge */}
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-center flex flex-col items-center justify-center shadow-2xs">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-900">
                     Grade Point Average (GPA)
                   </span>
-                  <div className="text-3xl font-black font-mono text-white mt-0.5">
-                    {marksheetData.gpa !== undefined && marksheetData.gpa > 0 ? marksheetData.gpa.toFixed(2) : '3.65'}
-                    <span className="text-xs font-normal text-amber-200"> / 4.00</span>
+                  <div className="text-2xl font-black font-mono text-[#1e3a5f] mt-0.5">
+                    {marksheetData.gpa !== undefined ? marksheetData.gpa.toFixed(2) : '0.00'}
+                    <span className="text-xs font-semibold text-gray-500"> / 4.00</span>
                   </div>
-                  <span className="mt-1 inline-block rounded-full bg-amber-400 text-[#1e3a5f] px-3 py-0.5 text-[11px] font-black uppercase shadow-xs">
-                    Grade: {marksheetData.overallGrade && marksheetData.overallGrade !== 'NG' ? marksheetData.overallGrade : 'A'}
+                  <span className="mt-1 inline-block rounded-md bg-white border border-blue-200 text-[#1e3a5f] px-2.5 py-0.5 text-[10px] font-extrabold uppercase shadow-2xs">
+                    GRADE: {marksheetData.overallGrade || 'NG'}
                   </span>
                 </div>
 
-                {/* Score & Percentage */}
-                <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 space-y-1.5 text-xs">
+                {/* Score, Percentage & Remarks */}
+                <div className="rounded-xl border border-gray-200 bg-slate-50/70 p-4 space-y-1.5 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600 font-semibold">Total Marks (कुल प्राप्ताङ्क):</span>
-                    <strong className="font-mono font-bold text-gray-900 text-sm">
-                      {marksheetData.grandTotal || 540} / {marksheetData.grandFull || 700}
+                    <strong className="font-mono font-bold text-gray-900 text-xs">
+                      {marksheetData.grandTotal || 0} / {marksheetData.grandFull || 0}
                     </strong>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600 font-semibold">Percentage (प्रतिशत):</span>
-                    <strong className="font-mono font-extrabold text-[#1e3a5f] text-sm">
-                      {marksheetData.percentage || '77.14'}%
+                    <strong className="font-mono font-extrabold text-[#1e3a5f] text-xs">
+                      {marksheetData.percentage || '0.00'}%
                     </strong>
                   </div>
                   <div className="flex justify-between items-center pt-1 border-t border-gray-200">
                     <span className="text-gray-600 font-semibold">Overall Remarks:</span>
-                    <strong className="text-emerald-700 font-bold">
-                      {marksheetData.overallRemarks || 'Excellent (उत्कृष्ट)'}
+                    <strong className="text-emerald-700 font-bold text-xs">
+                      {marksheetData.overallRemarks || 'Non-Graded (अवर्गीकृत)'}
                     </strong>
                   </div>
-                </div>
-
-                {/* Result Status */}
-                <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 flex flex-col justify-center text-center space-y-1 text-xs">
-                  <span className="text-gray-500 font-bold uppercase text-[10px]">Academic Evaluation Result</span>
-                  <div className="text-base font-black text-emerald-700 uppercase tracking-wide">
-                    ✓ PROMOTED / PASSED (उत्तीर्ण)
-                  </div>
-                  <p className="text-[10px] text-gray-500 font-nepali">
-                    अक्षराङ्कन निर्देशिका २०७८ बमोजिम श्रेणीकृत
-                  </p>
                 </div>
               </div>
 
@@ -1705,6 +1744,245 @@ export default function StudentPortalPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── TAB: CLASS ROUTINE ─────────────────────────── */}
+      {activeTab === 'routine' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 mb-4">
+              <div>
+                <h2 className="text-sm font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <Clock size={18} className="text-blue-600" />
+                  <span>My Class Routine & Timetable (कक्षा समय-तालिका)</span>
+                </h2>
+                <p className="text-xs text-gray-500 font-nepali">
+                  कक्षा: <strong>{className} ({section})</strong> — घण्टी १ देखि ८ सम्मको साप्ताहिक रुटिन
+                </p>
+              </div>
+            </div>
+
+            {isRoutineLoading ? (
+              <div className="py-16 text-center text-gray-400">
+                <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                <p className="mt-2 text-xs">कक्षा रुटिन लोड हुँदैछ...</p>
+              </div>
+            ) : !classRoutine || classRoutine.length === 0 ? (
+              <div className="py-16 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                <Clock size={32} className="mx-auto text-gray-300 mb-2" />
+                <p className="text-sm font-bold text-gray-700">यो कक्षाको रुटिन तयार गरिएको छैन।</p>
+                <p className="text-xs text-gray-400">प्रशासनले रुटिन अद्यावधिक गरेपछि यहाँ तालिका देखिनेछ।</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { day: 1, name: 'आइतबार (Sunday)' },
+                  { day: 2, name: 'सोमबार (Monday)' },
+                  { day: 3, name: 'मंगलबार (Tuesday)' },
+                  { day: 4, name: 'बुधबार (Wednesday)' },
+                  { day: 5, name: 'बिहीबार (Thursday)' },
+                  { day: 6, name: 'शुक्रबार (Friday)' },
+                ].map(({ day, name }) => {
+                  const dayEntries = classRoutine.filter((r: any) => r.dayOfWeek === day);
+                  return (
+                    <div key={day} className="rounded-xl border border-gray-200 bg-slate-50/50 p-4 space-y-3">
+                      <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                        <span className="font-extrabold text-xs text-[#1e3a5f]">{name}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                          {dayEntries.length} Periods
+                        </span>
+                      </div>
+
+                      {dayEntries.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic text-center py-4">कुनै घण्टी छैन</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {dayEntries.map((r: any) => (
+                            <div
+                              key={r.id}
+                              className={`p-2.5 rounded-lg border text-xs space-y-1 ${
+                                r.isBreak
+                                  ? 'bg-amber-50/80 border-amber-200 text-amber-900 font-bold text-center'
+                                  : 'bg-white border-gray-100 shadow-2xs'
+                              }`}
+                            >
+                              {r.isBreak ? (
+                                <div className="py-1">
+                                  <span>☕ {r.breakTitle || 'खाजा समय (Tiffin Break)'}</span>
+                                  <span className="text-[10px] font-mono block text-amber-700">
+                                    {r.startTime} - {r.endTime}
+                                  </span>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-black text-gray-900">
+                                      घण्टी {r.periodNo} ({r.startTime} - {r.endTime})
+                                    </span>
+                                    {r.roomNo && (
+                                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-gray-700 px-1.5 py-0.5 rounded">
+                                        Room: {r.roomNo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center justify-between text-gray-600">
+                                    <span className="font-bold text-blue-900">{r.subject?.name || 'विषय'}</span>
+                                    <span className="text-emerald-700 font-semibold">{r.teacher?.fullName || 'शिक्षक'}</span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── TAB: LEAVE APPLICATION ───────────────────────── */}
+      {activeTab === 'leave' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Apply Leave Form */}
+            <div className="lg:col-span-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs space-y-4">
+              <h2 className="text-sm font-extrabold text-[#1e3a5f] flex items-center gap-2 border-b border-gray-100 pb-3">
+                <FileText size={18} className="text-amber-500" />
+                <span>Apply for Leave (बिदाको निवेदन)</span>
+              </h2>
+
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs">
+                <b>नियम:</b> तपाईंको बिदा निवेदन सम्बन्धित <b>कक्षा शिक्षक (Class Teacher)</b> ले मात्र स्वीकृत गर्न सक्नुहुनेछ।
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  applyLeaveMutation.mutate();
+                }}
+                className="space-y-3.5 text-xs"
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">सुरु मिति (Start Date BS) *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 2083-05-15"
+                      value={leaveStartDate}
+                      onChange={(e) => setLeaveStartDate(e.target.value)}
+                      className="w-full p-2.5 border border-gray-300 rounded-xl font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">अन्तिम मिति (End Date BS) *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 2083-05-16"
+                      value={leaveEndDate}
+                      onChange={(e) => setLeaveEndDate(e.target.value)}
+                      className="w-full p-2.5 border border-gray-300 rounded-xl font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">कुल दिन (Total Days) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    value={leaveDaysCount}
+                    onChange={(e) => setLeaveDaysCount(parseInt(e.target.value) || 1)}
+                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">बिदाको कारण / निवेदन (Reason / Application) *</label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="आदरणीय कक्षा शिक्षक ज्यू, मलाई स्वास्थ्यमा समस्या आएको / घरायसी काम परेको हुनाले बिदा स्वीकृत गरिदिनुहुन विनम्र अनुरोध गर्दछु।"
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    className="w-full p-2.5 border border-gray-300 rounded-xl leading-relaxed focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={applyLeaveMutation.isPending}
+                  className="w-full py-2.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                >
+                  {applyLeaveMutation.isPending ? 'दर्ता हुँदैछ...' : 'बिदा निवेदन पेश गर्नुहोस् (Submit Leave)'}
+                </button>
+              </form>
+            </div>
+
+            {/* Leave History List */}
+            <div className="lg:col-span-7 rounded-2xl border border-gray-100 bg-white p-6 shadow-xs space-y-4">
+              <h2 className="text-sm font-extrabold text-gray-900 flex items-center gap-2 border-b border-gray-100 pb-3">
+                <CalendarCheck size={18} className="text-emerald-600" />
+                <span>My Leave History & Approval Status (बिदाको स्थिति)</span>
+              </h2>
+
+              {isLeavesLoading ? (
+                <div className="py-12 text-center text-gray-400">
+                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                  <p className="mt-2 text-xs">अभिलेख लोड हुँदैछ...</p>
+                </div>
+              ) : !myLeaves || myLeaves.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                  <FileText size={32} className="mx-auto text-gray-300 mb-2" />
+                  <p className="text-sm font-bold text-gray-700">कुनै बिदा आवेदन फेला परेन।</p>
+                  <p className="text-xs text-gray-400">तपाईंले दिएका बिदा निवेदनहरू यहाँ देखिनेछन्।</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {myLeaves.map((l: any) => (
+                    <div key={l.id} className="py-3.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-xs text-gray-900">
+                          {l.startDateBs} देखि {l.endDateBs} सम्म ({l.totalDays} दिन)
+                        </span>
+                        <span
+                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                            l.status === 'APPROVED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : l.status === 'REJECTED'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {l.status === 'APPROVED'
+                            ? '✓ स्वीकृत (Approved)'
+                            : l.status === 'REJECTED'
+                            ? '✕ अस्वीकृत (Rejected)'
+                            : '⏳ विचाराधीन (Pending)'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600">कारण: {l.reason}</p>
+                      {l.reviewedByName && (
+                        <p className="text-[11px] text-gray-500 font-nepali">
+                          स्वीकृत/अस्वीकृत: <b>{l.reviewedByName}</b> {l.reviewRemarks && `| कैफियत: ${l.reviewRemarks}`}
+                        </p>
+                      )}
+                      <span className="text-[10px] text-gray-400 font-mono block">
+                        आवेदन मिति: {new Date(l.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

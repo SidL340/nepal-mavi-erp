@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -20,6 +20,10 @@ import {
   FileSpreadsheet,
   Receipt,
   Award,
+  Mail,
+  Eye,
+  EyeOff,
+  UserCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import AcademicCalendar from '@/components/dashboard/AcademicCalendar';
@@ -27,6 +31,7 @@ import AcademicCalendar from '@/components/dashboard/AcademicCalendar';
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const router = useRouter();
+  const [showFunds, setShowFunds] = useState(false);
 
   useEffect(() => {
     if (user?.role === 'TEACHER') {
@@ -97,7 +102,7 @@ export default function DashboardPage() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-amber-400/20 border border-amber-300/30 px-3 py-1 text-xs font-semibold text-amber-300 mb-2">
               <Calendar size={13} />
-              <span>BS {todayBSFormatted()} | Academic Year: {data?.academicYear?.year || '2081-82'}</span>
+              <span>BS {todayBSFormatted()} | Academic Year: {data?.academicYear?.year || '2083-84'}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
               Nepal School ERP Dashboard
@@ -116,13 +121,113 @@ export default function DashboardPage() {
               <span>New Admission (नयाँ भर्ना)</span>
             </Link>
             <Link
-              href="/dashboard/attendance"
+              href="/dashboard/email"
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-bold text-white transition"
             >
-              <Calendar size={15} />
-              <span>Take Attendance</span>
+              <Mail size={15} />
+              <span>School Webmail (इमेल)</span>
             </Link>
           </div>
+        </div>
+      </div>
+
+      {/* ─── QUICK ACCESS (शीघ्र कार्यहरू) AT VERY TOP ─────────────────── */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-extrabold text-gray-900 flex items-center gap-2">
+            <School className="text-[#1e3a5f]" size={18} />
+            <span>Quick Management Actions (शीघ्र कार्यहरू)</span>
+          </h2>
+          <span className="text-[11px] text-gray-400 font-nepali">दैनिक मुख्य कार्यहरू</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5">
+          <Link
+            href="/dashboard/students?tab=admission"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <Users size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">New Admission</span>
+            <span className="text-[10px] text-gray-400 font-nepali">नयाँ भर्ना</span>
+          </Link>
+
+          <Link
+            href="/dashboard/classes/routine"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <Calendar size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">Class Routine</span>
+            <span className="text-[10px] text-gray-400 font-nepali">कक्षा रुटिन</span>
+          </Link>
+
+          <Link
+            href="/dashboard/letters"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-teal-300 hover:bg-teal-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <FileSpreadsheet size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">Letterpad</span>
+            <span className="text-[10px] text-gray-400 font-nepali">लेटरप्याड/चलानी</span>
+          </Link>
+
+          <Link
+            href="/dashboard/email"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-sky-300 hover:bg-sky-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <Mail size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">School Mail</span>
+            <span className="text-[10px] text-gray-400 font-nepali">विद्यालय इमेल</span>
+          </Link>
+
+          <Link
+            href="/dashboard/certificates"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-emerald-300 hover:bg-emerald-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <Award size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">Certificates</span>
+            <span className="text-[10px] text-gray-400 font-nepali">प्रमाणपत्र ढाँचा</span>
+          </Link>
+
+          <Link
+            href="/dashboard/finance/fees"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-amber-300 hover:bg-amber-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <Receipt size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">Fee Receipt</span>
+            <span className="text-[10px] text-gray-400 font-nepali">रसिद काट्ने</span>
+          </Link>
+
+          <Link
+            href="/dashboard/exams"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-purple-300 hover:bg-purple-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <Award size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">Seat / Marks</span>
+            <span className="text-[10px] text-gray-400 font-nepali">सिट प्लान/नतिजा</span>
+          </Link>
+
+          <Link
+            href="/dashboard/attendance"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-rose-300 hover:bg-rose-50/50 transition text-center group"
+          >
+            <div className="h-9 w-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <UserCheck size={17} />
+            </div>
+            <span className="text-xs font-bold text-gray-800">Attendance</span>
+            <span className="text-[10px] text-gray-400 font-nepali">हाजिरी/बिदा</span>
+          </Link>
         </div>
       </div>
 
@@ -173,7 +278,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ─── 2. KEY ATTENDANCE & STUDENT STATUS + FINANCIAL LIQUIDITY ─────── */}
+      {/* ─── 2. KEY ATTENDANCE & STUDENT STATUS + PROTECTED FUNDS SUMMARY ─────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Active Students & Absentees */}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs hover:shadow-md transition">
@@ -195,21 +300,23 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Bank & Cash Balances */}
+        {/* Teachers & Faculty Status */}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Liquid Funds (बैंक + नगद)</span>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <Wallet size={20} />
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Teachers (शिक्षक/कर्मचारी)</span>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+              <GraduationCap size={20} />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-extrabold text-emerald-800">
-              रू {isSummaryLoading ? '...' : (totalBankBal + cashOnHand).toLocaleString()}
-            </span>
+            <span className="text-3xl font-extrabold text-indigo-950">{teachersTotal}</span>
+            <span className="text-xs text-gray-500 font-nepali">कुल शिक्षक</span>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs border-t border-gray-50 pt-2 text-gray-600">
-            <span>Bank: <b className="text-gray-900">रू {totalBankBal.toLocaleString()}</b> | Cash: <b className="text-gray-900">रू {cashOnHand.toLocaleString()}</b></span>
+            <span>राहत/स्थायी: <b className="text-gray-900">{rastriyaTeachers}</b> | निजी: <b className="text-gray-900">{nijiTeachers}</b></span>
+            <Link href="/dashboard/teachers" className="font-semibold text-indigo-600 hover:underline inline-flex items-center">
+              Staff <ArrowUpRight size={12} />
+            </Link>
           </div>
         </div>
 
@@ -223,11 +330,11 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3 flex flex-col gap-1">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-500">विद्यार्थी बक्यौता (Receivable):</span>
+              <span className="text-gray-500">विद्यार्थी बक्यौता:</span>
               <span className="font-bold text-amber-700">रू {totalReceivables.toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-500">पार्टी तिर्नुपर्ने (Payable):</span>
+              <span className="text-gray-500">पार्टी तिर्नुपर्ने:</span>
               <span className="font-bold text-rose-700">रू {totalPayables.toLocaleString()}</span>
             </div>
           </div>
@@ -237,122 +344,40 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Net Financial Position */}
+        {/* Liquid Funds (with Privacy Toggle to hide by default) */}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs hover:shadow-md transition">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Financial Position</span>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-              <School size={20} />
-            </div>
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Liquid Funds (बैंक + नगद)</span>
+            <button
+              onClick={() => setShowFunds(!showFunds)}
+              title={showFunds ? 'गोप्य राख्नुहोस् (Hide Funds)' : 'हेर्नुहोस् (Show Funds)'}
+              className="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-lg transition cursor-pointer"
+            >
+              {showFunds ? <EyeOff size={14} /> : <Eye size={14} />}
+              <span>{showFunds ? 'Hide' : 'Show'}</span>
+            </button>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className={`text-2xl font-extrabold ${netPosition >= 0 ? 'text-purple-950' : 'text-rose-600'}`}>
-              रू {isSummaryLoading ? '...' : netPosition.toLocaleString()}
-            </span>
+            {showFunds ? (
+              <span className="text-2xl font-extrabold text-emerald-800">
+                रू {isSummaryLoading ? '...' : (totalBankBal + cashOnHand).toLocaleString()}
+              </span>
+            ) : (
+              <span className="text-2xl font-extrabold text-gray-400 tracking-widest">
+                ••••••••••
+              </span>
+            )}
           </div>
           <div className="mt-3 flex items-center justify-between text-xs border-t border-gray-50 pt-2 text-gray-600">
-            <span>सम्पत्ति - दायित्व शुद्ध स्थिति</span>
-            <Link href="/dashboard/finance/reports" className="font-semibold text-purple-700 hover:underline inline-flex items-center">
+            {showFunds ? (
+              <span>Bank: <b className="text-gray-900">रू {totalBankBal.toLocaleString()}</b> | Cash: <b className="text-gray-900">रू {cashOnHand.toLocaleString()}</b></span>
+            ) : (
+              <span className="text-[11px] text-gray-400">Funds protected from public view</span>
+            )}
+            <Link href="/dashboard/finance/reports" className="font-semibold text-emerald-700 hover:underline inline-flex items-center">
               Reports <ArrowUpRight size={12} />
             </Link>
           </div>
-        </div>
-      </div>
-
-      {/* ─── 3. QUICK ACCESS ACTION HUB ───────────────────────────────────── */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xs">
-        <h2 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <School className="text-[#1e3a5f]" size={18} />
-          <span>Quick Management Actions (शीघ्र कार्यहरू)</span>
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-8 gap-3">
-          <Link
-            href="/dashboard/students?tab=admission"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Users size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">New Admission</span>
-            <span className="text-[10px] text-gray-400 font-nepali">नयाँ भर्ना</span>
-          </Link>
-
-          <Link
-            href="/dashboard/classes/routine"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Calendar size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">Class Routine</span>
-            <span className="text-[10px] text-gray-400 font-nepali">कक्षा रुटिन</span>
-          </Link>
-
-          <Link
-            href="/dashboard/exams"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-purple-200 hover:bg-purple-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Award size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">Seat Planning</span>
-            <span className="text-[10px] text-gray-400 font-nepali">सिट प्लान/Admit</span>
-          </Link>
-
-          <Link
-            href="/dashboard/letters"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-teal-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <FileSpreadsheet size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">School Letterpad</span>
-            <span className="text-[10px] text-gray-400 font-nepali">लेटरप्याड/चलानी</span>
-          </Link>
-
-          <Link
-            href="/dashboard/certificates"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Award size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">Certificates</span>
-            <span className="text-[10px] text-gray-400 font-nepali">प्रमाणपत्र ढाँचा</span>
-          </Link>
-
-          <Link
-            href="/dashboard/finance/fees"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-amber-200 hover:bg-amber-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Receipt size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">Fee Receipt</span>
-            <span className="text-[10px] text-gray-400 font-nepali">रसिद काट्ने</span>
-          </Link>
-
-          <Link
-            href="/dashboard/finance/budget"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-rose-200 hover:bg-rose-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <TrendingUp size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">Budget Report</span>
-            <span className="text-[10px] text-gray-400 font-nepali">वार्षिक/मासिक बजेट</span>
-          </Link>
-
-          <Link
-            href="/dashboard/finance/payroll"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-sky-200 hover:bg-sky-50/50 transition text-center group"
-          >
-            <div className="h-10 w-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Wallet size={18} />
-            </div>
-            <span className="text-xs font-bold text-gray-800">Teacher Payroll</span>
-            <span className="text-[10px] text-gray-400 font-nepali">तलब एकमुष्ट निकासा</span>
-          </Link>
         </div>
       </div>
 

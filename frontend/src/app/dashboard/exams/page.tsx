@@ -2319,53 +2319,42 @@ export default function ExamsPage() {
                 </table>
               </div>
 
-              {/* Grand Performance & GPA Summary Box */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* GPA Badge */}
-                <div className="rounded-xl border-2 border-[#1e3a5f] bg-gradient-to-br from-[#1e3a5f] to-[#2a5280] p-4 text-white text-center flex flex-col items-center justify-center shadow-xs">
-                  <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-300">
+              {/* Grand Performance & Clean Simple GPA Summary Box */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Clean Minimal GPA Badge */}
+                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-center flex flex-col items-center justify-center shadow-2xs">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-900">
                     Grade Point Average (GPA)
                   </span>
-                  <div className="text-3xl font-black font-mono text-white mt-0.5">
-                    {selectedMarksheet.gpa !== undefined ? selectedMarksheet.gpa.toFixed(2) : '3.60'}
-                    <span className="text-xs font-normal text-amber-200"> / 4.00</span>
+                  <div className="text-2xl font-black font-mono text-[#1e3a5f] mt-0.5">
+                    {selectedMarksheet.gpa !== undefined ? selectedMarksheet.gpa.toFixed(2) : '0.00'}
+                    <span className="text-xs font-semibold text-gray-500"> / 4.00</span>
                   </div>
-                  <span className="mt-1 inline-block rounded-full bg-amber-400 text-[#1e3a5f] px-3 py-0.5 text-[11px] font-black uppercase shadow-xs">
-                    Grade: {selectedMarksheet.overallGrade || 'A'}
+                  <span className="mt-1 inline-block rounded-md bg-white border border-blue-200 text-[#1e3a5f] px-2.5 py-0.5 text-[10px] font-extrabold uppercase shadow-2xs">
+                    GRADE: {selectedMarksheet.overallGrade || 'NG'}
                   </span>
                 </div>
 
-                {/* Score & Percentage */}
-                <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 space-y-1.5 text-xs">
+                {/* Score, Percentage & Remarks */}
+                <div className="rounded-xl border border-gray-200 bg-slate-50/70 p-4 space-y-1.5 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600 font-semibold">Total Marks (कुल प्राप्ताङ्क):</span>
-                    <strong className="font-mono font-bold text-gray-900 text-sm">
+                    <strong className="font-mono font-bold text-gray-900 text-xs">
                       {selectedMarksheet.grandTotal} / {selectedMarksheet.grandFull}
                     </strong>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600 font-semibold">Percentage (प्रतिशत):</span>
-                    <strong className="font-mono font-extrabold text-[#1e3a5f] text-sm">
+                    <strong className="font-mono font-extrabold text-[#1e3a5f] text-xs">
                       {selectedMarksheet.percentage}%
                     </strong>
                   </div>
                   <div className="flex justify-between items-center pt-1 border-t border-gray-200">
                     <span className="text-gray-600 font-semibold">Overall Remarks:</span>
-                    <strong className="text-emerald-700 font-bold">
-                      {selectedMarksheet.overallRemarks || 'Excellent (उत्कृष्ट)'}
+                    <strong className="text-emerald-700 font-bold text-xs">
+                      {selectedMarksheet.overallRemarks || 'Non-Graded (अवर्गीकृत)'}
                     </strong>
                   </div>
-                </div>
-
-                {/* Result Status */}
-                <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 flex flex-col justify-center text-center space-y-1 text-xs">
-                  <span className="text-gray-500 font-bold uppercase text-[10px]">Academic Evaluation Result</span>
-                  <div className="text-base font-black text-emerald-700 uppercase tracking-wide">
-                    ✓ PROMOTED / PASSED (उत्तीर्ण)
-                  </div>
-                  <p className="text-[10px] text-gray-500 font-nepali">
-                    अक्षराङ्कन निर्देशिका २०७८ बमोजिम श्रेणीकृत
-                  </p>
                 </div>
               </div>
 
@@ -2938,53 +2927,42 @@ export default function ExamsPage() {
                       </table>
                     </div>
 
-                    {/* Grand Performance & GPA Summary Box */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {/* GPA Badge */}
-                      <div className="rounded-xl border-2 border-[#1e3a5f] bg-gradient-to-br from-[#1e3a5f] to-[#2a5280] p-4 text-white text-center flex flex-col items-center justify-center shadow-xs">
-                        <span className="text-[10px] uppercase font-extrabold tracking-wider text-amber-300">
+                    {/* Grand Performance & Clean Simple GPA Summary Box */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Clean Minimal GPA Badge */}
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-center flex flex-col items-center justify-center shadow-2xs">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-blue-900">
                           Grade Point Average (GPA)
                         </span>
-                        <div className="text-3xl font-black font-mono text-white mt-0.5">
-                          {sheet.gpa !== undefined ? sheet.gpa.toFixed(2) : '3.60'}
-                          <span className="text-xs font-normal text-amber-200"> / 4.00</span>
+                        <div className="text-2xl font-black font-mono text-[#1e3a5f] mt-0.5">
+                          {sheet.gpa !== undefined ? sheet.gpa.toFixed(2) : '0.00'}
+                          <span className="text-xs font-semibold text-gray-500"> / 4.00</span>
                         </div>
-                        <span className="mt-1 inline-block rounded-full bg-amber-400 text-[#1e3a5f] px-3 py-0.5 text-[11px] font-black uppercase shadow-xs">
-                          Grade: {sheet.overallGrade || 'A'}
+                        <span className="mt-1 inline-block rounded-md bg-white border border-blue-200 text-[#1e3a5f] px-2.5 py-0.5 text-[10px] font-extrabold uppercase shadow-2xs">
+                          GRADE: {sheet.overallGrade || 'NG'}
                         </span>
                       </div>
 
-                      {/* Score & Percentage */}
-                      <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 space-y-1.5 text-xs">
+                      {/* Score, Percentage & Remarks */}
+                      <div className="rounded-xl border border-gray-200 bg-slate-50/70 p-4 space-y-1.5 text-xs">
                         <div className="flex justify-between items-center">
                           <span className="text-gray-600 font-semibold">Total Marks (कुल प्राप्ताङ्क):</span>
-                          <strong className="font-mono font-bold text-gray-900 text-sm">
+                          <strong className="font-mono font-bold text-gray-900 text-xs">
                             {sheet.grandTotal} / {sheet.grandFull}
                           </strong>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-gray-600 font-semibold">Percentage (प्रतिशत):</span>
-                          <strong className="font-mono font-extrabold text-[#1e3a5f] text-sm">
+                          <strong className="font-mono font-extrabold text-[#1e3a5f] text-xs">
                             {sheet.percentage}%
                           </strong>
                         </div>
                         <div className="flex justify-between items-center pt-1 border-t border-gray-200">
                           <span className="text-gray-600 font-semibold">Overall Remarks:</span>
-                          <strong className="text-emerald-700 font-bold">
-                            {sheet.overallRemarks || 'Excellent (उत्कृष्ट)'}
+                          <strong className="text-emerald-700 font-bold text-xs">
+                            {sheet.overallRemarks || 'Non-Graded (अवर्गीकृत)'}
                           </strong>
                         </div>
-                      </div>
-
-                      {/* Result Status */}
-                      <div className="rounded-xl border border-gray-200 bg-slate-50 p-4 flex flex-col justify-center text-center space-y-1 text-xs">
-                        <span className="text-gray-500 font-bold uppercase text-[10px]">Academic Evaluation Result</span>
-                        <div className="text-base font-black text-emerald-700 uppercase tracking-wide">
-                          ✓ PROMOTED / PASSED (उत्तीर्ण)
-                        </div>
-                        <p className="text-[10px] text-gray-500 font-nepali">
-                          अक्षराङ्कन निर्देशिका २०७८ बमोजिम श्रेणीकृत
-                        </p>
                       </div>
                     </div>
 

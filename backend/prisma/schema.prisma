@@ -121,6 +121,7 @@ model Teacher {
   attendanceEntries   Attendance[]
   markEntries         MarkEntry[]
   routines            ClassRoutine[]
+  leaveRequests       LeaveRequest[]
 }
 
 // ─── STUDENTS ────────────────────────────────────────────────────────────────
@@ -173,6 +174,7 @@ model Student {
   certificates    Certificate[]
   feeDues         StudentFeeDue[]
   seatPlans       ExamSeatPlan[]
+  leaveRequests   LeaveRequest[]
 }
 
 // ─── CLASS & SECTION ────────────────────────────────────────────────────────
@@ -196,6 +198,7 @@ model Class {
   notices         Notice[]         @relation("ClassNotices")
   feeStructures   ClassFeeStructure[]
   routines        ClassRoutine[]
+  leaveRequests   LeaveRequest[]
 }
 
 model ClassEnrollment {
@@ -880,4 +883,50 @@ model Budget {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 }
+
+// ─── LEAVE MANAGEMENT (TEACHER & STUDENT) ────────────────────────────────────
+
+model LeaveRequest {
+  id              Int       @id @default(autoincrement())
+  applicantType   String    // "TEACHER" or "STUDENT"
+  teacherId       Int?
+  teacher         Teacher?  @relation(fields: [teacherId], references: [id])
+  studentId       Int?
+  student         Student?  @relation(fields: [studentId], references: [id])
+  classId         Int?
+  class           Class?    @relation(fields: [classId], references: [id])
+  startDateBs     String    // e.g. "2083-05-01"
+  endDateBs       String    // e.g. "2083-05-03"
+  totalDays       Int       @default(1)
+  reason          String    @db.Text
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedByRole  String?   // "ADMIN" or "CLASS_TEACHER"
+  reviewedByName  String?   // Name of approver
+  reviewedById    Int?      // User ID or Teacher ID
+  reviewRemarks   String?
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ─── SCHOOL WEBMAIL / EMAIL CENTER ──────────────────────────────────────────
+
+model SchoolEmail {
+  id                Int      @id @default(autoincrement())
+  folder            String   @default("INBOX") // INBOX, SENT, DRAFT, TRASH
+  fromAddress       String
+  fromName          String?
+  toAddress         String
+  toName            String?
+  ccAddress         String?
+  subject           String
+  body              String   @db.Text
+  isRead            Boolean  @default(false)
+  isStarred         Boolean  @default(false)
+  attachments       String?  // JSON stringified array of attachments [{name, size, url}]
+  receivedOrSentAt  DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
 

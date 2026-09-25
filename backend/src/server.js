@@ -46,6 +46,8 @@ app.use('/api/routine',     require('./routes/routine'));
 app.use('/api/seat-plans',  require('./routes/seatPlans'));
 app.use('/api/budget',      require('./routes/budget'));
 app.use('/api/finance-reports', require('./routes/financeReports'));
+app.use('/api/leaves',      require('./routes/leaves'));
+app.use('/api/email',       require('./routes/email'));
 
 // ── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -75,13 +77,25 @@ app.listen(PORT, '0.0.0.0', async () => {
     // Ensure school profile exists
     await prisma.school.upsert({
       where: { id: 1 },
-      update: {},
+      update: {
+        estYear: '2007',
+        principalName: 'प्रेमलाल प्रसाद राउत',
+        nameNepali: 'श्री नेपाल माध्यमिक विद्यालय',
+        address: 'वृन्दावन न.पा.-२, विश्रामपुर, रौतहट',
+      },
       create: {
         name: 'Shree Nepal Secondary School',
         nameNepali: 'श्री नेपाल माध्यमिक विद्यालय',
-        address: 'Nepal',
+        address: 'वृन्दावन न.पा.-२, विश्रामपुर, रौतहट',
+        district: 'रौतहट',
+        province: 'मधेश प्रदेश',
+        emisCode: '320160005',
+        phone: '9855040000',
+        email: 'nepalmavi@gmail.com',
         level: 'Secondary',
         type: 'Community',
+        estYear: '2007',
+        principalName: 'प्रेमलाल प्रसाद राउत',
       },
     });
 
