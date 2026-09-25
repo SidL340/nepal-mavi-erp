@@ -54,7 +54,8 @@ async function runImapSync(user, pass) {
     const totalMessages = status.messages || 0;
 
     if (totalMessages > 0) {
-      const fromSeq = Math.max(1, totalMessages - 29);
+      // Fetch up to 200 recent emails
+      const fromSeq = Math.max(1, totalMessages - 199);
       for await (let message of client.fetch(`${fromSeq}:*`, { envelope: true, source: true, flags: true })) {
         try {
           const parsed = await simpleParser(message.source);
@@ -64,7 +65,7 @@ async function runImapSync(user, pass) {
           const toAddress = parsed.to?.value?.[0]?.address || user;
           const toName = parsed.to?.value?.[0]?.name || null;
           const date = parsed.date || new Date();
-          const textBody = parsed.text || parsed.html || '';
+          const richHtmlBody = parsed.html || parsed.textAsHtml || parsed.text || '';
 
           const existing = await prisma.schoolEmail.findFirst({
             where: {
@@ -83,7 +84,7 @@ async function runImapSync(user, pass) {
                 toAddress,
                 toName,
                 subject,
-                body: textBody,
+                body: richHtmlBody,
                 isRead: message.flags?.has('\\Seen') || false,
                 receivedOrSentAt: date,
               },
@@ -222,7 +223,7 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), a
     const { folder = 'INBOX', search, starredOnly } = req.query;
     const where = {};
 
-    if (folder && folder !== 'STARRED') {
+    if (folder && folder !== 'STARRED' && folder !== 'ALL') {
       where.folder = folder;
     }
     if (folder === 'STARRED' || starredOnly === 'true') {
@@ -408,11 +409,8 @@ router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTAN
 
 // POST /api/email/sync — fetch recent incoming real emails from Gmail via IMAP
 router.post('/sync', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
-  const { ImapFlow } = require('imapflow');
-  const { simpleParser } = require('mailparser');
-
-  const user = process.env.IMAP_USER || process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com';
-  const pass = process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD;
+  const user = activeEmailSession.email || process.env.IMAP_USER || process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com';
+  const pass = activeEmailSession.password || process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD;
 
   if (!pass) {
     return res.status(400).json({
@@ -421,72 +419,8 @@ router.post('/sync', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
     });
   }
 
-  const client = new ImapFlow({
-    host: 'imap.gmail.com',
-    port: 993,
-    secure: true,
-    auth: {
-      user,
-      pass,
-    },
-    logger: false,
-  });
-
-  let syncedCount = 0;
-  let lock;
-
   try {
-    await client.connect();
-    lock = await client.getMailboxLock('INBOX');
-
-    const status = await client.status('INBOX', { messages: true });
-    const totalMessages = status.messages || 0;
-
-    if (totalMessages > 0) {
-      const fromSeq = Math.max(1, totalMessages - 29);
-      for await (let message of client.fetch(`${fromSeq}:*`, { envelope: true, source: true, flags: true })) {
-        try {
-          const parsed = await simpleParser(message.source);
-          const subject = parsed.subject || '(बिना विषय / No Subject)';
-          const fromAddress = parsed.from?.value?.[0]?.address || 'unknown@domain.com';
-          const fromName = parsed.from?.value?.[0]?.name || parsed.from?.text || fromAddress;
-          const toAddress = parsed.to?.value?.[0]?.address || user;
-          const toName = parsed.to?.value?.[0]?.name || null;
-          const date = parsed.date || new Date();
-          const textBody = parsed.text || parsed.html || '';
-
-          const existing = await prisma.schoolEmail.findFirst({
-            where: {
-              fromAddress,
-              subject,
-              receivedOrSentAt: date,
-            },
-          });
-
-          if (!existing) {
-            await prisma.schoolEmail.create({
-              data: {
-                folder: 'INBOX',
-                fromAddress,
-                fromName,
-                toAddress,
-                toName,
-                subject,
-                body: textBody,
-                isRead: message.flags?.has('\\Seen') || false,
-                receivedOrSentAt: date,
-              },
-            });
-            syncedCount++;
-          }
-        } catch (itemErr) {
-          console.warn('Error parsing single email message:', itemErr.message);
-        }
-      }
-    }
-
-    if (lock) lock.release();
-    await client.logout();
+    const syncedCount = await runImapSync(user, pass);
 
     return res.json({
       success: true,
@@ -496,11 +430,6 @@ router.post('/sync', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
       syncedCount,
     });
   } catch (err) {
-    if (lock) {
-      try { lock.release(); } catch (_) {}
-    }
-    try { await client.logout(); } catch (_) {}
-
     console.error('IMAP Sync Error:', err.message);
 
     const isAuthError = err.message.includes('Invalid credentials') || 
@@ -523,4 +452,5 @@ router.post('/sync', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
 });
 
 module.exports = router;
+
 

@@ -30,14 +30,19 @@ import {
   EyeOff,
   ShieldCheck,
   HelpCircle,
+  Printer,
+  Forward,
+  Layers,
+  FileCode,
 } from 'lucide-react';
 
 export default function SchoolEmailPage() {
   const queryClient = useQueryClient();
-  const [selectedFolder, setSelectedFolder] = useState<'INBOX' | 'SENT' | 'STARRED' | 'TRASH'>('INBOX');
+  const [selectedFolder, setSelectedFolder] = useState<'INBOX' | 'SENT' | 'STARRED' | 'TRASH' | 'ALL'>('INBOX');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'html' | 'text'>('html');
 
   // Authentication State
   const [authEmail, setAuthEmail] = useState('nepalsecondaryschool.bdn@gmail.com');
@@ -478,6 +483,23 @@ export default function SchoolEmailPage() {
 
             <button
               onClick={() => {
+                setSelectedFolder('ALL');
+                setSelectedEmail(null);
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                selectedFolder === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Layers size={16} />
+                <span>All Mail (सबै इमेलहरू)</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
                 setSelectedFolder('SENT');
                 setSelectedEmail(null);
               }}
@@ -543,7 +565,7 @@ export default function SchoolEmailPage() {
         {/* Right Main Panel: List or Detailed View */}
         <div className="md:col-span-9 flex flex-col">
           {/* Top Search Filter & Actions */}
-          <div className="p-3.5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="p-3.5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3 bg-white">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={15} />
               <input
@@ -555,27 +577,32 @@ export default function SchoolEmailPage() {
               />
             </div>
 
-            {selectedFolder === 'TRASH' && emails.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('के तपाईं रद्दीटोकरी (Trash) का सबै इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ? यो फिर्ता आउने छैन।')) {
-                    emptyTrashMutation.mutate();
-                  }
-                }}
-                disabled={emptyTrashMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer"
-              >
-                <Trash2 size={14} />
-                <span>{emptyTrashMutation.isPending ? 'मेटाउँदै...' : 'Empty Trash (रद्दीटोकरी खाली गर्नुहोस्)'}</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-500 font-semibold px-2 py-1 rounded-lg bg-gray-100">
+                कुल: {emails.length}
+              </span>
+              {selectedFolder === 'TRASH' && emails.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('के तपाईं रद्दीटोकरी (Trash) का सबै इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ? यो फिर्ता आउने छैन।')) {
+                      emptyTrashMutation.mutate();
+                    }
+                  }}
+                  disabled={emptyTrashMutation.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                  <span>{emptyTrashMutation.isPending ? 'मेटाउँदै...' : 'Empty Trash'}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Content Area */}
           {selectedEmail ? (
-            /* Detailed Email View */
-            <div className="flex-1 p-6 flex flex-col justify-between">
+            /* Detailed Email View in Actual Gmail Format */
+            <div className="flex-1 p-6 flex flex-col justify-between overflow-y-auto">
               <div>
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
                   <button
@@ -587,6 +614,34 @@ export default function SchoolEmailPage() {
                   </button>
 
                   <div className="flex items-center gap-2">
+                    {/* Format Mode Toggle */}
+                    <div className="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs">
+                      <button
+                        onClick={() => setViewMode('html')}
+                        className={`px-2.5 py-1 rounded-md font-bold transition ${
+                          viewMode === 'html' ? 'bg-white text-blue-600 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                      >
+                        HTML ढाँचा (Gmail)
+                      </button>
+                      <button
+                        onClick={() => setViewMode('text')}
+                        className={`px-2.5 py-1 rounded-md font-bold transition ${
+                          viewMode === 'text' ? 'bg-white text-blue-600 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+                        }`}
+                      >
+                        Plain Text
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => window.print()}
+                      className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition cursor-pointer"
+                      title="Print Email"
+                    >
+                      <Printer size={17} />
+                    </button>
+
                     <button
                       onClick={() => starMutation.mutate(selectedEmail.id)}
                       className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-amber-500 transition cursor-pointer"
@@ -615,23 +670,24 @@ export default function SchoolEmailPage() {
                   </div>
                 </div>
 
-                {/* Email Subject & Header */}
-                <h2 className="text-lg font-extrabold text-gray-900 mb-4">{selectedEmail.subject}</h2>
+                {/* Email Subject */}
+                <h2 className="text-xl font-extrabold text-gray-900 mb-4">{selectedEmail.subject}</h2>
 
-                <div className="flex items-start justify-between bg-slate-50 rounded-xl p-4 mb-6 border border-slate-100">
+                {/* Authentic Header Card */}
+                <div className="flex items-start justify-between bg-slate-50/80 rounded-2xl p-4 mb-6 border border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                      <User size={20} />
+                    <div className="h-11 w-11 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm uppercase shadow-xs">
+                      {(selectedEmail.fromName || selectedEmail.fromAddress || 'M')[0]}
                     </div>
                     <div>
-                      <div className="text-xs font-extrabold text-gray-900">
-                        {selectedEmail.fromName || selectedEmail.fromAddress}
+                      <div className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                        <span>{selectedEmail.fromName || selectedEmail.fromAddress}</span>
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          &lt;{selectedEmail.fromAddress}&gt;
+                        </span>
                       </div>
-                      <div className="text-[11px] text-gray-500">
-                        From: &lt;{selectedEmail.fromAddress}&gt;
-                      </div>
-                      <div className="text-[11px] text-gray-500">
-                        To: &lt;{selectedEmail.toAddress}&gt;
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        To: <span className="font-semibold text-gray-700">{selectedEmail.toAddress}</span>
                         {selectedEmail.ccAddress && ` | CC: ${selectedEmail.ccAddress}`}
                       </div>
                     </div>
@@ -643,13 +699,20 @@ export default function SchoolEmailPage() {
                   </div>
                 </div>
 
-                {/* Email Body */}
-                <div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-line leading-relaxed font-sans text-xs sm:text-sm bg-white p-2">
-                  {selectedEmail.body}
-                </div>
+                {/* Email Body: Rich HTML Format or Text */}
+                {viewMode === 'html' && /<[a-z][\s\S]*>/i.test(selectedEmail.body || '') ? (
+                  <div
+                    className="p-4 bg-white rounded-xl border border-gray-100 overflow-x-auto min-h-[250px] font-sans text-sm text-gray-800 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
+                  />
+                ) : (
+                  <div className="p-4 bg-white rounded-xl border border-gray-100 text-gray-800 whitespace-pre-line leading-relaxed font-sans text-xs sm:text-sm">
+                    {selectedEmail.body}
+                  </div>
+                )}
               </div>
 
-              {/* Bottom Quick Reply */}
+              {/* Bottom Quick Actions: Reply, Forward */}
               <div className="mt-8 pt-4 border-t border-gray-100 flex items-center gap-3">
                 <button
                   onClick={() => {
@@ -667,15 +730,32 @@ export default function SchoolEmailPage() {
                   <Send size={14} />
                   <span>जवाफ दिनुहोस् (Reply)</span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    setComposeForm({
+                      toAddress: '',
+                      toName: '',
+                      ccAddress: '',
+                      subject: selectedEmail.subject.startsWith('Fwd:') ? selectedEmail.subject : `Fwd: ${selectedEmail.subject}`,
+                      body: `\n\n---------- Forwarded message ---------\nFrom: ${selectedEmail.fromAddress}\nSubject: ${selectedEmail.subject}\nDate: ${selectedEmail.receivedOrSentAt}\n\n${selectedEmail.body}`,
+                    });
+                    setIsComposeOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold transition cursor-pointer"
+                >
+                  <Forward size={14} />
+                  <span>अगाडि पठाउनुहोस् (Forward)</span>
+                </button>
               </div>
             </div>
           ) : (
             /* Email List Table */
-            <div className="flex-1 divide-y divide-gray-100 overflow-y-auto">
+            <div className="flex-1 divide-y divide-gray-100 overflow-y-auto max-h-[620px]">
               {isLoading ? (
                 <div className="py-20 text-center text-gray-400">
                   <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                  <p className="mt-2 text-xs">इमेलहरू लोड हुँदैछन्...</p>
+                  <p className="mt-2 text-xs font-nepali">सबै इमेलहरू लोड हुँदैछन्...</p>
                 </div>
               ) : emails.length === 0 ? (
                 <div className="py-24 text-center text-gray-400">
@@ -684,63 +764,71 @@ export default function SchoolEmailPage() {
                   <p className="text-xs text-gray-400">यो फोल्डर खाली छ वा खोजिएको शब्द मिलेन।</p>
                 </div>
               ) : (
-                emails.map((item: any) => (
-                  <div
-                    key={item.id}
-                    onClick={() => handleOpenEmail(item)}
-                    className={`flex items-center gap-3 p-3.5 hover:bg-blue-50/40 cursor-pointer transition group ${
-                      !item.isRead ? 'bg-blue-50/20 font-bold' : ''
-                    }`}
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        starMutation.mutate(item.id);
-                      }}
-                      className="text-gray-300 hover:text-amber-500 transition cursor-pointer"
+                emails.map((item: any) => {
+                  const initial = (item.fromName || item.fromAddress || 'M')[0].toUpperCase();
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => handleOpenEmail(item)}
+                      className={`flex items-center gap-3 p-3.5 hover:bg-blue-50/50 cursor-pointer transition group border-l-4 ${
+                        !item.isRead ? 'border-l-blue-600 bg-blue-50/20 font-bold' : 'border-l-transparent'
+                      }`}
                     >
-                      <Star
-                        size={16}
-                        className={item.isStarred ? 'fill-amber-400 text-amber-500' : ''}
-                      />
-                    </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          starMutation.mutate(item.id);
+                        }}
+                        className="text-gray-300 hover:text-amber-500 transition cursor-pointer shrink-0"
+                      >
+                        <Star
+                          size={16}
+                          className={item.isStarred ? 'fill-amber-400 text-amber-500' : ''}
+                        />
+                      </button>
 
-                    <div className="w-40 sm:w-48 truncate text-xs text-gray-900">
-                      {selectedFolder === 'SENT'
-                        ? `To: ${item.toName || item.toAddress}`
-                        : item.fromName || item.fromAddress}
+                      {/* Avatar */}
+                      <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 uppercase">
+                        {initial}
+                      </div>
+
+                      <div className="w-36 sm:w-44 truncate text-xs text-gray-900 shrink-0">
+                        {selectedFolder === 'SENT'
+                          ? `To: ${item.toName || item.toAddress}`
+                          : item.fromName || item.fromAddress}
+                      </div>
+
+                      <div className="flex-1 truncate text-xs text-gray-700">
+                        <span className="font-semibold text-gray-900 mr-2">{item.subject}</span>
+                        <span className="text-gray-400 font-normal">
+                          — {(item.body || '').replace(/<[^>]*>?/gm, '').substring(0, 80)}...
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] text-gray-400 whitespace-nowrap shrink-0">
+                        {new Date(item.receivedOrSentAt).toLocaleDateString('ne-NP')}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const isTrash = item.folder === 'TRASH' || selectedFolder === 'TRASH';
+                          const promptMsg = isTrash
+                            ? 'के तपाईं यो इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ?'
+                            : 'के तपाईं यो इमेल रद्दीटोकरी (Trash) मा सार्न चाहनुहुन्छ?';
+                          if (confirm(promptMsg)) {
+                            deleteMutation.mutate({ id: item.id, permanent: isTrash });
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition shrink-0"
+                        title={item.folder === 'TRASH' ? 'Permanently Delete' : 'Move to Trash'}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-
-                    <div className="flex-1 truncate text-xs text-gray-700">
-                      <span className="font-semibold text-gray-900 mr-2">{item.subject}</span>
-                      <span className="text-gray-400 font-normal">
-                        — {item.body?.substring(0, 70)}...
-                      </span>
-                    </div>
-
-                    <div className="text-[11px] text-gray-400 whitespace-nowrap">
-                      {new Date(item.receivedOrSentAt).toLocaleDateString()}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const isTrash = item.folder === 'TRASH' || selectedFolder === 'TRASH';
-                        const promptMsg = isTrash
-                          ? 'के तपाईं यो इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ?'
-                          : 'के तपाईं यो इमेल रद्दीटोकरी (Trash) मा सार्न चाहनुहुन्छ?';
-                        if (confirm(promptMsg)) {
-                          deleteMutation.mutate({ id: item.id, permanent: isTrash });
-                        }
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                      title={item.folder === 'TRASH' ? 'Permanently Delete' : 'Move to Trash'}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
