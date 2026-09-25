@@ -26,6 +26,7 @@ import {
   PhoneCall,
   UserCheck,
   Send,
+  CheckSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -45,7 +46,8 @@ export default function TeacherPortalPage() {
   const { user } = useAuthStore();
   const teacherId = user?.teacher?.id;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'routine' | 'leaves' | 'students_leave'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'routine' | 'leaves' | 'students_leave'>('overview');
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
   const [dailyLog, setDailyLog] = useState('');
   const [selectedClassLog, setSelectedClassLog] = useState('');
 
@@ -146,6 +148,48 @@ export default function TeacherPortalPage() {
   const studentLeaves = classPendingLeavesData?.data || [];
   const myAssignedClasses = classesData?.filter((c: any) => c.classTeacherId === teacherId) || [];
   const pendingStudentLeavesCount = studentLeaves.filter((l: any) => l.status === 'PENDING').length;
+
+  // 7. Fetch Assigned Tasks & Duties
+  const { data: myTasksData, isLoading: isMyTasksLoading } = useQuery({
+    queryKey: ['my-staff-tasks'],
+    queryFn: async () => {
+      const res = await api.get('/staff-tasks');
+      return res.data?.data || [];
+    },
+  });
+
+  // 8. Fetch Teacher Detailed Profile (with Incharge Role)
+  const { data: teacherDetails } = useQuery({
+    queryKey: ['teacher-details', teacherId],
+    queryFn: async () => {
+      if (!teacherId) return null;
+      const res = await api.get(`/teachers/${teacherId}`);
+      return res.data?.data || null;
+    },
+    enabled: !!teacherId,
+  });
+
+  const myTasks: any[] = myTasksData || [];
+  const pendingTasksCount = myTasks.filter((t) => t.status !== 'COMPLETED').length;
+
+  // Quick Task Status Update Mutation
+  const updateTaskStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const res = await api.patch(`/staff-tasks/${id}/status`, {
+        status,
+        completedAtBs: status === 'COMPLETED' ? todayBS() : null,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Task status updated!');
+      queryClient.invalidateQueries({ queryKey: ['my-staff-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-details'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update task status');
+    },
+  });
 
   // Mutations
   const updateProfileMutation = useMutation({
@@ -309,8 +353,30 @@ export default function TeacherPortalPage() {
               <ExternalLink size={11} />
             </a>
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
             <h1 className="text-2xl font-extrabold">Welcome, {displayName}!</h1>
+            {teacherDetails?.inchargeRole && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {teacherDetails.inchargeRole
+                  .split(',')
+                  .map((r: string) => r.trim())
+                  .filter(Boolean)
+                  .map((rk: string) => (
+                    <span
+                      key={rk}
+                      className="px-2.5 py-0.5 bg-amber-400 text-[#1e3a5f] font-extrabold rounded-lg text-xs flex items-center gap-1 shadow-xs border border-amber-300"
+                    >
+                      <Award size={13} />
+                      <span>{rk}</span>
+                    </span>
+                  ))}
+                {teacherDetails.inchargeTitle && (
+                  <span className="text-xs text-amber-200 font-bold">
+                    ({teacherDetails.inchargeTitle})
+                  </span>
+                )}
+              </div>
+            )}
             <button
               onClick={() => {
                 const tObj = (user?.teacher as any) || {};
@@ -321,33 +387,40 @@ export default function TeacherPortalPage() {
                 setEditPanNo(tObj.panNo || '');
                 setIsEditProfileModalOpen(true);
               }}
-              className="ml-auto px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold rounded-lg text-[10px] flex items-center gap-1.5 shadow-xs transition"
+              className="ml-auto px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold rounded-lg text-[10px] flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <span>✏️ Edit Profile</span>
             </button>
           </div>
           <p className="text-xs text-blue-200 mt-0.5 font-nepali">
-            शिक्षक पोर्टल: दैनिक हाजिरी, प्राप्ताङ्क प्रविष्टि, कक्षा रुटिन, बिदा आवेदन तथा विद्यार्थी बिदा स्वीकृति
+            शिक्षक तथा कर्मचारी पोर्टल: दैनिक कार्य जिम्मेवारी, कक्षा रुटिन, बिदा आवेदन तथा विद्यार्थी बिदा स्वीकृति
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={() => setActiveTab('tasks')}
+            className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <CheckSquare size={14} />
+            <span>My Tasks ({pendingTasksCount} Pending)</span>
+          </button>
+          <button
             onClick={() => setIsLeaveModalOpen(true)}
-            className="rounded-xl bg-amber-400 hover:bg-amber-300 px-3.5 py-2 text-xs font-bold text-[#1e3a5f] transition shadow-sm inline-flex items-center gap-1.5"
+            className="rounded-xl bg-amber-400 hover:bg-amber-300 px-3.5 py-2 text-xs font-bold text-[#1e3a5f] transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
           >
             <FileText size={14} />
             <span>Apply for Leave (बिदाको निवेदन)</span>
           </button>
           <button
             onClick={() => setIsProblemModalOpen(true)}
-            className="rounded-xl bg-rose-500/90 hover:bg-rose-600 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm"
+            className="rounded-xl bg-rose-500/90 hover:bg-rose-600 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
           >
-            ⚠️ Report Issue to Admin
+            ⚠️ Report Issue
           </button>
           <button
             onClick={() => setIsNoticeModalOpen(true)}
-            className="rounded-xl bg-white/20 hover:bg-white/30 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm"
+            className="rounded-xl bg-white/20 hover:bg-white/30 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
           >
             📢 Send Notice
           </button>
@@ -369,6 +442,23 @@ export default function TeacherPortalPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab('tasks')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+            activeTab === 'tasks'
+              ? 'bg-purple-700 text-white shadow-xs'
+              : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
+          }`}
+        >
+          <CheckSquare size={15} />
+          <span>My Tasks & Incharge Duties (जिम्मेवारी तथा कार्यहरू)</span>
+          {pendingTasksCount > 0 && (
+            <span className="h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
+              {pendingTasksCount}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('routine')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
             activeTab === 'routine'
@@ -377,7 +467,7 @@ export default function TeacherPortalPage() {
           }`}
         >
           <Clock size={15} />
-          <span>My Teaching Timetable (मेरो घण्टी तालिका)</span>
+          <span>My Timetable (घण्टी तालिका)</span>
         </button>
 
         <button
@@ -389,7 +479,7 @@ export default function TeacherPortalPage() {
           }`}
         >
           <FileText size={15} />
-          <span>My Leave Applications (मेरो बिदा)</span>
+          <span>My Leaves (मेरो बिदा)</span>
         </button>
 
         {myAssignedClasses.length > 0 && (
@@ -402,7 +492,7 @@ export default function TeacherPortalPage() {
             }`}
           >
             <UserCheck size={15} />
-            <span>Student Leave Approvals (विद्यार्थी बिदा स्वीकृति)</span>
+            <span>Student Leaves (विद्यार्थी बिदा)</span>
             {pendingStudentLeavesCount > 0 && (
               <span className="h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
                 {pendingStudentLeavesCount}
@@ -592,6 +682,179 @@ export default function TeacherPortalPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── TAB: MY ASSIGNED TASKS & INCHARGE DUTIES ───────────────────────── */}
+      {activeTab === 'tasks' && (
+        <div className="space-y-4">
+          {/* Incharge Role Header Card */}
+          {teacherDetails?.inchargeRole ? (
+            <div className="rounded-2xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-purple-950 font-extrabold text-xs rounded-lg mb-1.5">
+                  <Award size={14} />
+                  <span>Your Special Incharge Role (तपाईंको विभागीय जिम्मेवारी)</span>
+                </div>
+                <h2 className="text-xl font-extrabold">
+                  {teacherDetails.inchargeTitle || teacherDetails.inchargeRole}
+                </h2>
+                <p className="text-xs text-purple-200 mt-0.5 font-nepali">
+                  विद्यालय प्रशासनद्वारा तपाईंलाई तोकिएका मुख्य जिम्मेवारी तथा कार्यहरू तल दिइएका छन्। कार्य सम्पन्न भएपछि स्थिति परिवर्तन गर्नुहोस्।
+                </p>
+              </div>
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <span className="bg-white/20 px-3 py-1.5 rounded-xl text-white font-bold">
+                  {myTasks.filter((t) => t.status === 'COMPLETED').length} / {myTasks.length} Done
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <CheckSquare size={18} className="text-purple-700" />
+                  <span>My Assigned Tasks & Duties (मेरा कार्य जिम्मेवारीहरू)</span>
+                </h2>
+                <p className="text-xs text-gray-500">
+                  प्रशासनबाट तपाईंलाई तोकिएका कार्यहरूको प्रगति स्थिति अद्यावधिक गर्नुहोस्।
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Filter Status Buttons */}
+          <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-gray-100 shadow-2xs">
+            <span className="text-xs font-bold text-gray-500 px-2">Filter:</span>
+            {(['ALL', 'PENDING', 'IN_PROGRESS', 'COMPLETED'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setTaskStatusFilter(st)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  taskStatusFilter === st
+                    ? 'bg-[#1e3a5f] text-white'
+                    : 'bg-slate-100 text-gray-600 hover:bg-slate-200'
+                }`}
+              >
+                {st === 'ALL' ? `All (${myTasks.length})` : st}
+              </button>
+            ))}
+          </div>
+
+          {/* Task Cards List */}
+          {isMyTasksLoading ? (
+            <div className="py-16 text-center text-gray-400">
+              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+              <p className="mt-2 text-xs">कार्यहरू लोड हुँदैछन्...</p>
+            </div>
+          ) : myTasks.length === 0 ? (
+            <div className="py-16 text-center text-gray-400 border border-dashed border-gray-200 rounded-2xl bg-white">
+              <CheckSquare size={36} className="mx-auto text-gray-300 mb-2" />
+              <p className="text-sm font-bold text-gray-700">कुनै कार्य जिम्मेवारी बाँकी छैन!</p>
+              <p className="text-xs text-gray-400">प्रशासनले कार्य तोकेपछि यहाँ सूची देखिनेछ।</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myTasks
+                .filter((t) => (taskStatusFilter === 'ALL' ? true : t.status === taskStatusFilter))
+                .map((task: any) => {
+                  const isCompleted = task.status === 'COMPLETED';
+                  const isInProgress = task.status === 'IN_PROGRESS';
+                  const isUrgent = task.priority === 'URGENT';
+
+                  return (
+                    <div
+                      key={task.id}
+                      className={`p-4 rounded-2xl border transition bg-white shadow-2xs space-y-3 ${
+                        isCompleted ? 'border-emerald-200 bg-emerald-50/20' : 'border-gray-200 hover:border-purple-300'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3
+                              className={`text-sm font-extrabold text-gray-900 ${
+                                isCompleted ? 'line-through text-gray-400' : ''
+                              }`}
+                            >
+                              {task.title}
+                            </h3>
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 uppercase">
+                              {task.category}
+                            </span>
+                            <span
+                              className={`rounded px-2 py-0.5 text-[10px] font-extrabold ${
+                                isUrgent
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : task.priority === 'HIGH'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-blue-50 text-blue-800'
+                              }`}
+                            >
+                              {task.priority}
+                            </span>
+                          </div>
+
+                          {task.description && (
+                            <p className="text-xs text-gray-600 font-nepali">{task.description}</p>
+                          )}
+
+                          <div className="flex items-center gap-3 text-xs text-gray-500 pt-1 font-mono">
+                            <span>📅 Due: <b>{task.dueDateBs || '—'}</b></span>
+                            {task.remarks && <span className="text-purple-800 font-sans font-semibold">Note: {task.remarks}</span>}
+                          </div>
+                        </div>
+
+                        {/* Status Change Action */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() =>
+                              updateTaskStatusMutation.mutate({
+                                id: task.id,
+                                status: isCompleted ? 'PENDING' : isInProgress ? 'COMPLETED' : 'IN_PROGRESS',
+                              })
+                            }
+                            disabled={updateTaskStatusMutation.isPending}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs transition cursor-pointer ${
+                              isCompleted
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                : isInProgress
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                            }`}
+                          >
+                            {isCompleted ? <Check size={14} /> : <Clock size={14} />}
+                            <span>
+                              {isCompleted
+                                ? 'Completed (सम्पन्न भयो ✓)'
+                                : isInProgress
+                                ? 'In Progress (सञ्चालनमा)'
+                                : 'Mark In Progress'}
+                            </span>
+                          </button>
+
+                          {!isCompleted && (
+                            <button
+                              onClick={() =>
+                                updateTaskStatusMutation.mutate({
+                                  id: task.id,
+                                  status: 'COMPLETED',
+                                })
+                              }
+                              disabled={updateTaskStatusMutation.isPending}
+                              className="px-3 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold transition cursor-pointer"
+                              title="Mark as Completed directly"
+                            >
+                              ✓ Done
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       )}
 

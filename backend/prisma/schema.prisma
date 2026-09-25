@@ -102,10 +102,13 @@ model Teacher {
   nagarikLaganiKoshNo String?
   citizenshipNo       String?
   type                String   @default("RASTRIYA") // RASTRIYA, NIJI_SROTH
+  isTeachingStaff     Boolean  @default(true) // Teaching vs Non-teaching staff
   taha                String?  // Grade level e.g. "श्रेणी-अ"
-  shreni              String?  // Shreni
+  shreni              String?  // Shreni / Category
   post                String?  // Post title
   designation         String?  // Class teacher, Subject teacher, etc.
+  inchargeRole        String?  // EXAM_INCHARGE, LIBRARIAN, ACCOUNTANT, DISCIPLINE_INCHARGE, ECA_INCHARGE, LAB_INCHARGE, ACADEMIC_COORDINATOR, OTHER
+  inchargeTitle       String?  // Custom incharge title e.g. "परीक्षा प्रमुख"
   dateOfJoiningBs     String?
   dateOfJoiningAd     DateTime?
   dateOfRetirementBs  String?
@@ -122,6 +125,7 @@ model Teacher {
   markEntries         MarkEntry[]
   routines            ClassRoutine[]
   leaveRequests       LeaveRequest[]
+  tasks               StaffTask[] @relation("StaffAssignedTasks")
 }
 
 // ─── STUDENTS ────────────────────────────────────────────────────────────────
@@ -927,6 +931,27 @@ model SchoolEmail {
   receivedOrSentAt  DateTime @default(now())
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+// ─── STAFF INCHARGE TASKS & DUTIES ──────────────────────────────────────────
+
+model StaffTask {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String?   @db.Text
+  category        String    @default("GENERAL") // "EXAM", "LIBRARY", "ACCOUNT", "ACADEMIC", "DISCIPLINE", "ECA", "ADMIN", "GENERAL"
+  assignedToId    Int
+  assignedTo      Teacher   @relation("StaffAssignedTasks", fields: [assignedToId], references: [id], onDelete: Cascade)
+  assignedById    Int?
+  priority        String    @default("MEDIUM") // "LOW", "MEDIUM", "HIGH", "URGENT"
+  status          String    @default("PENDING") // "PENDING", "IN_PROGRESS", "COMPLETED", "ON_HOLD", "CANCELLED"
+  dueDateBs       String?   // e.g. "2083-05-15"
+  dueDateAd       DateTime?
+  completedAtBs   String?
+  completedAtAd   DateTime?
+  remarks         String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 

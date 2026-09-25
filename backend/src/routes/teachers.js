@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
 const { authenticate, authorize } = require('../middleware/auth');
+const { DEFAULT_INCHARGE_TASKS } = require('./staff-tasks');
 
 const router = express.Router();
 
@@ -13,9 +14,12 @@ function generatePassword(length = 8) {
 // GET /api/teachers
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { type, category, search } = req.query;
+    const { type, category, inchargeRole, search } = req.query;
     const where = { isActive: true };
     if (type) where.type = type;
+    if (inchargeRole) {
+      where.inchargeRole = { contains: inchargeRole };
+    }
     if (category) {
       if (category === 'NON_TEACHING') {
         where.shreni = 'NON_TEACHING';
@@ -34,6 +38,7 @@ router.get('/', authenticate, async (req, res) => {
         { panNo: { contains: search } },
         { phone: { contains: search } },
         { post: { contains: search } },
+        { inchargeTitle: { contains: search } },
       ];
     }
     const teachers = await prisma.teacher.findMany({
@@ -42,6 +47,10 @@ router.get('/', authenticate, async (req, res) => {
         user: { select: { id: true, username: true, role: true, isActive: true } },
         subjects: { include: { subject: true } },
         classTeacherOf: { select: { id: true, name: true, section: true } },
+        tasks: {
+          select: { id: true, title: true, status: true, priority: true, category: true, dueDateBs: true },
+          orderBy: { createdAt: 'desc' },
+        },
       },
       orderBy: { fullName: 'asc' },
     });
@@ -62,6 +71,7 @@ router.get('/:id', authenticate, async (req, res) => {
         subjects: { include: { subject: true } },
         classTeacherOf: true,
         payrolls: { orderBy: { createdAt: 'desc' }, take: 10 },
+        tasks: { orderBy: { createdAt: 'desc' } },
       },
     });
     if (!teacher) return res.status(404).json({ success: false, message: 'Staff/Teacher not found.' });
@@ -79,6 +89,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
       fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
       panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
       type, taha, shreni, post, designation, photoUrl,
+      isTeachingStaff,
       dateOfJoiningBs, dateOfRetirementBs, subjectIds, role
     } = req.body;
 
@@ -86,9 +97,16 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
     const plainPassword = generatePassword();
     const passwordHash = await bcrypt.hash(plainPassword, 12);
 
-    const userRole = role && ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER', 'LIBRARIAN', 'STUDENT'].includes(role)
-      ? role
-      : (shreni === 'NON_TEACHING' && post?.toLowerCase().includes('account') ? 'ACCOUNTANT' : 'TEACHER');
+    let userRole = role;
+    if (!userRole || !['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER', 'LIBRARIAN', 'STUDENT'].includes(userRole)) {
+      if (shreni === 'NON_TEACHING' && post?.toLowerCase().includes('account')) {
+        userRole = 'ACCOUNTANT';
+      } else if (shreni === 'NON_TEACHING' && post?.toLowerCase().includes('library')) {
+        userRole = 'LIBRARIAN';
+      } else {
+        userRole = 'TEACHER';
+      }
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -99,6 +117,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
           userId: user.id, fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
           panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
           type: type || 'RASTRIYA',
+          isTeachingStaff: isTeachingStaff !== undefined ? Boolean(isTeachingStaff) : (shreni !== 'NON_TEACHING'),
           taha,
           shreni: shreni || 'TEACHING',
           post: post || (shreni === 'NON_TEACHING' ? 'कार्यालय सहयोगी' : 'शिक्षक'),
@@ -121,6 +140,96 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// POST /api/teachers/:id/assign-role - Assign Special Incharge Roles (Checkboxes) & auto create tasks
+router.post('/:id/assign-role', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const teacherId = parseInt(req.params.id);
+    const { inchargeRoles, inchargeRole, inchargeTitle, syncUserRole, autoCreateTasks, dueDateBs } = req.body;
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: teacherId },
+      include: { user: true },
+    });
+    if (!teacher) return res.status(404).json({ success: false, message: 'Staff member not found.' });
+
+    // Extract roles array from multi-select checkboxes or string
+    let rolesArray = [];
+    if (Array.isArray(inchargeRoles)) {
+      rolesArray = inchargeRoles.filter(Boolean);
+    } else if (typeof inchargeRole === 'string' && inchargeRole.trim() && inchargeRole !== 'NONE') {
+      rolesArray = inchargeRole.split(',').map(r => r.trim()).filter(Boolean);
+    }
+
+    const rolesString = rolesArray.length > 0 ? rolesArray.join(',') : null;
+
+    // Update teacher record
+    const updated = await prisma.teacher.update({
+      where: { id: teacherId },
+      data: {
+        inchargeRole: rolesString,
+        inchargeTitle: inchargeTitle || null,
+      },
+    });
+
+    // Sync user role if requested
+    if (syncUserRole && teacher.userId) {
+      let targetRole = null;
+      if (rolesArray.includes('ACCOUNTANT')) targetRole = 'ACCOUNTANT';
+      else if (rolesArray.includes('LIBRARIAN')) targetRole = 'LIBRARIAN';
+      else if (rolesArray.includes('ADMIN') || rolesArray.includes('EXAM_INCHARGE')) targetRole = 'ADMIN';
+
+      if (targetRole) {
+        await prisma.user.update({
+          where: { id: teacher.userId },
+          data: { role: targetRole },
+        });
+      }
+    }
+
+    // Auto-create standard tasks for ALL selected roles
+    let createdTasksCount = 0;
+    if (autoCreateTasks && rolesArray.length > 0) {
+      const allNewTasks = [];
+      for (const r of rolesArray) {
+        if (DEFAULT_INCHARGE_TASKS[r]) {
+          allNewTasks.push(...DEFAULT_INCHARGE_TASKS[r]);
+        }
+      }
+
+      if (allNewTasks.length > 0) {
+        const created = await prisma.$transaction(
+          allNewTasks.map((tpl) =>
+            prisma.staffTask.create({
+              data: {
+                title: tpl.title,
+                description: tpl.description,
+                category: tpl.category,
+                priority: tpl.priority,
+                status: 'PENDING',
+                assignedToId: teacherId,
+                assignedById: req.user.id,
+                dueDateBs: dueDateBs || null,
+              },
+            })
+          )
+        );
+        createdTasksCount = created.length;
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: updated,
+      roles: rolesArray,
+      createdTasksCount,
+      message: `Incharge Roles updated successfully! ${createdTasksCount > 0 ? `(${createdTasksCount} duties/tasks auto-assigned)` : ''}`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Failed to assign incharge role: ' + err.message });
   }
 });
 
@@ -175,6 +284,9 @@ router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (re
 
     // Delete teacher subject mappings
     await prisma.teacherSubject.deleteMany({ where: { teacherId } });
+
+    // Delete staff tasks
+    await prisma.staffTask.deleteMany({ where: { assignedToId: teacherId } });
 
     // Delete teacher record
     await prisma.teacher.delete({ where: { id: teacherId } });
