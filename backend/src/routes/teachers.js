@@ -13,19 +13,33 @@ function generatePassword(length = 8) {
 // GET /api/teachers
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { type, search } = req.query;
+    const { type, category, search } = req.query;
     const where = { isActive: true };
     if (type) where.type = type;
+    if (category) {
+      if (category === 'NON_TEACHING') {
+        where.shreni = 'NON_TEACHING';
+      } else if (category === 'TEACHING') {
+        where.OR = [
+          { shreni: 'TEACHING' },
+          { shreni: null },
+          { shreni: '' },
+        ];
+      }
+    }
     if (search) {
       where.OR = [
         { fullName: { contains: search } },
+        { fullNameNepali: { contains: search } },
         { panNo: { contains: search } },
+        { phone: { contains: search } },
+        { post: { contains: search } },
       ];
     }
     const teachers = await prisma.teacher.findMany({
       where,
       include: {
-        user: { select: { username: true, isActive: true } },
+        user: { select: { id: true, username: true, role: true, isActive: true } },
         subjects: { include: { subject: true } },
         classTeacherOf: { select: { id: true, name: true, section: true } },
       },
@@ -50,7 +64,7 @@ router.get('/:id', authenticate, async (req, res) => {
         payrolls: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
     });
-    if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found.' });
+    if (!teacher) return res.status(404).json({ success: false, message: 'Staff/Teacher not found.' });
     return res.json({ success: true, data: teacher });
   } catch (err) {
     console.error(err);
@@ -65,25 +79,34 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
       fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
       panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
       type, taha, shreni, post, designation, photoUrl,
-      dateOfJoiningBs, dateOfRetirementBs, subjectIds
+      dateOfJoiningBs, dateOfRetirementBs, subjectIds, role
     } = req.body;
 
-    const username = (fullName.toLowerCase().replace(/\s+/g, '.') + '.' + Date.now()).slice(0, 20);
+    const username = (fullName.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.') + '.' + Date.now().toString().slice(-4)).slice(0, 20);
     const plainPassword = generatePassword();
     const passwordHash = await bcrypt.hash(plainPassword, 12);
 
+    const userRole = role && ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER', 'LIBRARIAN', 'STUDENT'].includes(role)
+      ? role
+      : (shreni === 'NON_TEACHING' && post?.toLowerCase().includes('account') ? 'ACCOUNTANT' : 'TEACHER');
+
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { username, passwordHash, role: 'TEACHER', mustChangePassword: true },
+        data: { username, passwordHash, role: userRole, mustChangePassword: true },
       });
       const teacher = await tx.teacher.create({
         data: {
           userId: user.id, fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
           panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
-          type: type || 'RASTRIYA', taha, shreni, post, designation, photoUrl: photoUrl || null,
+          type: type || 'RASTRIYA',
+          taha,
+          shreni: shreni || 'TEACHING',
+          post: post || (shreni === 'NON_TEACHING' ? 'कार्यालय सहयोगी' : 'शिक्षक'),
+          designation,
+          photoUrl: photoUrl || null,
           dateOfJoiningBs, dateOfRetirementBs,
-          subjects: subjectIds ? {
-            create: subjectIds.map(sid => ({ subjectId: sid }))
+          subjects: (subjectIds && subjectIds.length > 0) ? {
+            create: subjectIds.map(sid => ({ subjectId: parseInt(sid) }))
           } : undefined,
         },
       });
@@ -97,7 +120,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: false, message: 'Server error.' });
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
   }
 });
 
@@ -109,21 +132,31 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden: You can only edit your own details.' });
     }
 
-    const { subjectIds, ...rest } = req.body;
+    const { subjectIds, role, ...rest } = req.body;
     const teacher = await prisma.teacher.update({
       where: { id: teacherId },
       data: rest,
     });
-    if (subjectIds && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
-      await prisma.teacherSubject.deleteMany({ where: { teacherId: teacher.id } });
-      await prisma.teacherSubject.createMany({
-        data: subjectIds.map(sid => ({ teacherId: teacher.id, subjectId: sid })),
+
+    if (role && teacher.userId && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
+      await prisma.user.update({
+        where: { id: teacher.userId },
+        data: { role },
       });
     }
-    return res.json({ success: true, data: teacher, message: 'Teacher details updated successfully!' });
+
+    if (subjectIds !== undefined && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
+      await prisma.teacherSubject.deleteMany({ where: { teacherId: teacher.id } });
+      if (Array.isArray(subjectIds) && subjectIds.length > 0) {
+        await prisma.teacherSubject.createMany({
+          data: subjectIds.map(sid => ({ teacherId: teacher.id, subjectId: parseInt(sid) })),
+        });
+      }
+    }
+    return res.json({ success: true, data: teacher, message: 'Staff details updated successfully!' });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: false, message: 'Server error.' });
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
   }
 });
 
