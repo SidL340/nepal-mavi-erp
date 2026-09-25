@@ -87,6 +87,14 @@ export default function StudentPortalPage() {
   const [leaveDaysCount, setLeaveDaysCount] = useState(1);
   const [leaveReason, setLeaveReason] = useState('');
 
+  // Edit Leave State
+  const [editingLeave, setEditingLeave] = useState<any>(null);
+  const [isEditLeaveModalOpen, setIsEditLeaveModalOpen] = useState(false);
+  const [editLeaveStartDate, setEditLeaveStartDate] = useState('');
+  const [editLeaveEndDate, setEditLeaveEndDate] = useState('');
+  const [editLeaveDaysCount, setEditLeaveDaysCount] = useState(1);
+  const [editLeaveReason, setEditLeaveReason] = useState('');
+
   // ── 1. Fetch Student Profile ──
   const { data: student, isLoading: isStudentLoading } = useQuery({
     queryKey: ['student-me', studentId],
@@ -248,6 +256,36 @@ export default function StudentPortalPage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'बिदा आवेदन पठाउन सकिएन।');
+    },
+  });
+
+  const updateLeaveMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await api.put(`/leaves/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('बिदाको निवेदन सफलतापूर्वक परिमार्जन गरियो!');
+      setIsEditLeaveModalOpen(false);
+      setEditingLeave(null);
+      queryClient.invalidateQueries({ queryKey: ['student-leaves-my'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'बिदा परिमार्जन गर्न सकिएन।');
+    },
+  });
+
+  const deleteLeaveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/leaves/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('तपाईंको बिदाको निवेदन रद्द गरियो।');
+      queryClient.invalidateQueries({ queryKey: ['student-leaves-my'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'बिदा रद्द गर्न सकिएन।');
     },
   });
 
@@ -1949,26 +1987,58 @@ export default function StudentPortalPage() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {myLeaves.map((l: any) => (
-                    <div key={l.id} className="py-3.5 space-y-1">
+                    <div key={l.id} className="py-3.5 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-xs text-gray-900">
                           {l.startDateBs} देखि {l.endDateBs} सम्म ({l.totalDays} दिन)
                         </span>
-                        <span
-                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-                            l.status === 'APPROVED'
-                              ? 'bg-emerald-100 text-emerald-800'
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
+                              l.status === 'APPROVED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : l.status === 'REJECTED'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {l.status === 'APPROVED'
+                              ? '✓ स्वीकृत (Approved)'
                               : l.status === 'REJECTED'
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {l.status === 'APPROVED'
-                            ? '✓ स्वीकृत (Approved)'
-                            : l.status === 'REJECTED'
-                            ? '✕ अस्वीकृत (Rejected)'
-                            : '⏳ विचाराधीन (Pending)'}
-                        </span>
+                              ? '✕ अस्वीकृत (Rejected)'
+                              : '⏳ विचाराधीन (Pending)'}
+                          </span>
+                          {l.status === 'PENDING' && (
+                            <div className="flex items-center gap-1.5 ml-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLeave(l);
+                                  setEditLeaveStartDate(l.startDateBs);
+                                  setEditLeaveEndDate(l.endDateBs);
+                                  setEditLeaveDaysCount(l.totalDays || 1);
+                                  setEditLeaveReason(l.reason);
+                                  setIsEditLeaveModalOpen(true);
+                                }}
+                                className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-md text-[11px] font-bold transition flex items-center gap-1"
+                              >
+                                ✏️ सम्पादन (Edit)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm('के तपाईं यो बिदाको निवेदन रद्द गर्न चाहनुहुन्छ?')) {
+                                    deleteLeaveMutation.mutate(l.id);
+                                  }
+                                }}
+                                disabled={deleteLeaveMutation.isPending}
+                                className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-md text-[11px] font-bold transition flex items-center gap-1 disabled:opacity-50"
+                              >
+                                🗑️ रद्द (Cancel)
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-gray-600">कारण: {l.reason}</p>
                       {l.reviewedByName && (
@@ -1984,6 +2054,111 @@ export default function StudentPortalPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── EDIT LEAVE MODAL (STUDENT) ─────────────────────────────────── */}
+      {isEditLeaveModalOpen && editingLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-[#1e3a5f]">बिदाको निवेदन सम्पादन (Edit Leave)</h3>
+                <p className="text-[11px] text-gray-500">कक्षा शिक्षकले निर्णय लिनु अघि परिमार्जन गर्नुहोस्</p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsEditLeaveModalOpen(false);
+                  setEditingLeave(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateLeaveMutation.mutate({
+                  id: editingLeave.id,
+                  data: {
+                    startDateBs: editLeaveStartDate,
+                    endDateBs: editLeaveEndDate,
+                    totalDays: editLeaveDaysCount,
+                    reason: editLeaveReason,
+                  },
+                });
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">सुरु मिति (Start Date BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editLeaveStartDate}
+                    onChange={(e) => setEditLeaveStartDate(e.target.value)}
+                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">अन्तिम मिति (End Date BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editLeaveEndDate}
+                    onChange={(e) => setEditLeaveEndDate(e.target.value)}
+                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">कुल दिन (Total Days) *</label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={editLeaveDaysCount}
+                  onChange={(e) => setEditLeaveDaysCount(parseInt(e.target.value) || 1)}
+                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">बिदाको कारण / निवेदन *</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={editLeaveReason}
+                  onChange={(e) => setEditLeaveReason(e.target.value)}
+                  className="w-full p-2.5 border border-gray-300 rounded-xl leading-relaxed focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditLeaveModalOpen(false);
+                    setEditingLeave(null);
+                  }}
+                  className="px-4 py-2 border rounded-xl font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateLeaveMutation.isPending}
+                  className="px-5 py-2 bg-[#1e3a5f] hover:bg-[#2a5280] text-white font-bold rounded-xl shadow-xs disabled:opacity-60"
+                >
+                  {updateLeaveMutation.isPending ? 'सुरक्षित हुँदैछ...' : 'परिमार्जन सुरक्षित गर्नुहोस् (Update)'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

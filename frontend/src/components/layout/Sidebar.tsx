@@ -76,7 +76,7 @@ const navConfig: (NavItem | NavSection)[] = [
       { label: 'Attendance', nepaliLabel: 'हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Leave Approvals', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Exams & Marks', nepaliLabel: 'परीक्षा र लब्धाङ्क', href: '/dashboard/exams', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
-      { label: 'Seat Planning', nepaliLabel: 'परीक्षा सिट योजना', href: '/dashboard/exams/seat-planning', icon: Grid, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+      { label: 'Seat Planning', nepaliLabel: 'परीक्षा सिट योजना', href: '/dashboard/exams/seat-planning', icon: Grid, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Certificates', nepaliLabel: 'प्रमाणपत्र (CC/TC)', href: '/dashboard/certificates', icon: Award, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
     ],

@@ -67,6 +67,14 @@ export default function TeacherPortalPage() {
   const [leaveDaysCount, setLeaveDaysCount] = useState(1);
   const [leaveReason, setLeaveReason] = useState('');
 
+  // Edit Teacher Leave State
+  const [editingLeave, setEditingLeave] = useState<any>(null);
+  const [isEditLeaveModalOpen, setIsEditLeaveModalOpen] = useState(false);
+  const [editLeaveStartDate, setEditLeaveStartDate] = useState('');
+  const [editLeaveEndDate, setEditLeaveEndDate] = useState('');
+  const [editLeaveDaysCount, setEditLeaveDaysCount] = useState(1);
+  const [editLeaveReason, setEditLeaveReason] = useState('');
+
   // Notice Form State
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeBody, setNoticeBody] = useState('');
@@ -179,6 +187,36 @@ export default function TeacherPortalPage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'बिदा आवेदन पठाउन सकिएन।');
+    },
+  });
+
+  const updateLeaveMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await api.put(`/leaves/${id}`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('बिदाको निवेदन सफलतापूर्वक परिमार्जन गरियो!');
+      setIsEditLeaveModalOpen(false);
+      setEditingLeave(null);
+      queryClient.invalidateQueries({ queryKey: ['my-leaves'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'बिदा परिमार्जन गर्न सकिएन।');
+    },
+  });
+
+  const deleteLeaveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/leaves/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('तपाईंको बिदा आवेदन रद्द गरियो।');
+      queryClient.invalidateQueries({ queryKey: ['my-leaves'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'बिदा रद्द गर्न सकिएन।');
     },
   });
 
@@ -704,9 +742,42 @@ export default function TeacherPortalPage() {
                       )}
                     </div>
 
-                    <span className="text-[11px] text-gray-400">
-                      दर्ता मिति: {new Date(l.createdAt).toLocaleDateString()}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-gray-400 font-mono">
+                        दर्ता मिति: {new Date(l.createdAt).toLocaleDateString()}
+                      </span>
+
+                      {l.status === 'PENDING' && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLeave(l);
+                              setEditLeaveStartDate(l.startDateBs);
+                              setEditLeaveEndDate(l.endDateBs);
+                              setEditLeaveDaysCount(l.totalDays || 1);
+                              setEditLeaveReason(l.reason);
+                              setIsEditLeaveModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                          >
+                            ✏️ सम्पादन (Edit)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm('के तपाईं यो बिदाको निवेदन रद्द गर्न चाहनुहुन्छ?')) {
+                                deleteLeaveMutation.mutate(l.id);
+                              }
+                            }}
+                            disabled={deleteLeaveMutation.isPending}
+                            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            🗑️ रद्द (Cancel)
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -901,6 +972,113 @@ export default function TeacherPortalPage() {
                   className="rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 font-bold text-white disabled:opacity-60 cursor-pointer"
                 >
                   {applyLeaveMutation.isPending ? 'दर्ता हुँदैछ...' : 'बिदा निवेदन बुझाउनुहोस् (Submit)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: EDIT TEACHER LEAVE ────────────────────────────────────── */}
+      {isEditLeaveModalOpen && editingLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-[#1e3a5f]">Edit Teacher Leave (बिदाको निवेदन सम्पादन)</h3>
+                <p className="text-xs text-gray-500">प्रशासनले निर्णय लिनु अघि विवरण परिमार्जन गर्नुहोस्</p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsEditLeaveModalOpen(false);
+                  setEditingLeave(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateLeaveMutation.mutate({
+                  id: editingLeave.id,
+                  data: {
+                    startDateBs: editLeaveStartDate,
+                    endDateBs: editLeaveEndDate,
+                    totalDays: editLeaveDaysCount,
+                    reason: editLeaveReason,
+                  },
+                });
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">सुरु मिति (Start Date BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 2083-05-10"
+                    value={editLeaveStartDate}
+                    onChange={(e) => setEditLeaveStartDate(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">अन्तिम मिति (End Date BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 2083-05-12"
+                    value={editLeaveEndDate}
+                    onChange={(e) => setEditLeaveEndDate(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">कुल दिन संख्या (Total Days) *</label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={editLeaveDaysCount}
+                  onChange={(e) => setEditLeaveDaysCount(parseInt(e.target.value) || 1)}
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">बिदाको कारण / निवेदन (Reason / Application) *</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={editLeaveReason}
+                  onChange={(e) => setEditLeaveReason(e.target.value)}
+                  className="erp-input leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditLeaveModalOpen(false);
+                    setEditingLeave(null);
+                  }}
+                  className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateLeaveMutation.isPending}
+                  className="rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 font-bold text-white disabled:opacity-60 cursor-pointer"
+                >
+                  {updateLeaveMutation.isPending ? 'सुरक्षित हुँदैछ...' : 'परिमार्जन सुरक्षित गर्नुहोस् (Update)'}
                 </button>
               </div>
             </form>

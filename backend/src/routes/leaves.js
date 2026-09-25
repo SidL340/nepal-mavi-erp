@@ -272,6 +272,52 @@ router.post('/:id/review', authenticate, async (req, res) => {
   }
 });
 
+// PUT /api/leaves/:id — Edit / Modify pending leave application
+router.put('/:id', authenticate, async (req, res) => {
+  try {
+    const leaveId = parseInt(req.params.id);
+    const { startDateBs, endDateBs, totalDays, reason } = req.body;
+
+    const leave = await prisma.leaveRequest.findUnique({ where: { id: leaveId } });
+    if (!leave) return res.status(404).json({ success: false, message: 'आवेदन फेला परेन।' });
+
+    if (leave.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: 'स्वीकृत वा अस्वीकृत भइसकेको आवेदन सम्पादन गर्न मिल्दैन।' });
+    }
+
+    if (req.user.role === 'TEACHER') {
+      const teacher = await prisma.teacher.findUnique({ where: { userId: req.user.id } });
+      if (!teacher || leave.teacherId !== teacher.id) {
+        return res.status(403).json({ success: false, message: 'अधिकार छैन।' });
+      }
+    } else if (req.user.role === 'STUDENT') {
+      const student = await prisma.student.findUnique({ where: { userId: req.user.id } });
+      if (!student || leave.studentId !== student.id) {
+        return res.status(403).json({ success: false, message: 'अधिकार छैन।' });
+      }
+    }
+
+    const updated = await prisma.leaveRequest.update({
+      where: { id: leaveId },
+      data: {
+        startDateBs: startDateBs ? String(startDateBs).trim() : leave.startDateBs,
+        endDateBs: endDateBs ? String(endDateBs).trim() : leave.endDateBs,
+        totalDays: totalDays ? parseInt(totalDays) : leave.totalDays,
+        reason: reason ? String(reason).trim() : leave.reason,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'बिदा आवेदन सफलतापूर्वक परिमार्जन गरियो!',
+      data: updated,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // DELETE /api/leaves/:id — Delete / Cancel leave request
 router.delete('/:id', authenticate, async (req, res) => {
   try {
