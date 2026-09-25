@@ -254,23 +254,44 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
         .filter(Boolean)
     : [];
 
-  // Check teacher conflict across other classes
-  const checkConflict = (day: string, period: number, teacherIdStr: string) => {
+  // Check teacher conflict across other classes (returns full conflict details)
+  const checkConflict = (day: string, period: number, teacherIdStr: string | number) => {
     if (!teacherIdStr || !allRoutinesData) return null;
-    const tid = parseInt(teacherIdStr);
+    const tid = parseInt(teacherIdStr.toString());
+    if (!tid) return null;
+
     const dayIntMap: Record<string, number> = {
       'SUNDAY': 1, 'MONDAY': 2, 'TUESDAY': 3, 'WEDNESDAY': 4, 'THURSDAY': 5, 'FRIDAY': 6, 'SATURDAY': 7
     };
-    const dayInt = dayIntMap[day] || 1;
+    const targetDayInt = dayIntMap[day?.toUpperCase()] || (typeof day === 'number' ? day : 1);
 
-    const conflict = allRoutinesData.find(
-      (r: any) =>
-        (r.dayOfWeek === day || r.dayOfWeek === dayInt) &&
-        (r.periodNo === period || r.periodNumber === period) &&
-        r.teacherId === tid &&
-        r.classId.toString() !== selectedClassId
-    );
-    return conflict ? conflict.class?.name || 'अर्को कक्षा' : null;
+    const conflict = allRoutinesData.find((r: any) => {
+      if (r.classId?.toString() === selectedClassId?.toString()) return false;
+      if (parseInt(r.teacherId) !== tid) return false;
+
+      const rPeriod = parseInt(r.periodNo || r.periodNumber);
+      if (rPeriod !== period) return false;
+
+      const rDayInt = typeof r.dayOfWeek === 'number' ? r.dayOfWeek : dayIntMap[r.dayOfWeek?.toUpperCase()] || 0;
+      const isDayMatch = (rDayInt === targetDayInt) || (typeof r.dayOfWeek === 'string' && r.dayOfWeek.toUpperCase() === day.toUpperCase());
+      return isDayMatch;
+    });
+
+    if (!conflict) return null;
+
+    return {
+      className: conflict.class?.name || 'अर्को कक्षा',
+      teacherName: conflict.teacher?.fullName || 'शिक्षक',
+      subjectName: conflict.subject?.name || '',
+      periodNo: period,
+      day: day,
+    };
+  };
+
+  // Helper to check if a specific teacher is busy in a slot (returns conflicting class name or null)
+  const getTeacherConflictForSlot = (day: string, period: number, teacherId: string | number) => {
+    const res = checkConflict(day, period, teacherId);
+    return res ? res.className : null;
   };
 
   // Add new period to class
@@ -410,6 +431,53 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     toast.success(`घण्टी ${periodNum} चयनित ${checkedDays.length} दिनहरूमा लागू गरियो!`);
   };
 
+  // Copy a single period across specific chosen days (e.g. Sun-Tue, Wed-Fri)
+  const handleApplySinglePeriodToSpecificDays = (periodNum: number, targetDays: string[]) => {
+    if (!targetDays || targetDays.length === 0) return;
+
+    const sourceKey = `${selectedDay}_${periodNum}`;
+    const sourceCell = routineGrid[sourceKey];
+    if (!sourceCell || (!sourceCell.subjectId && !sourceCell.teacherId)) {
+      toast.error('यो पिरियडमा कुनै विषय वा शिक्षक तोकिएको छैन।');
+      return;
+    }
+
+    setRoutineGrid((prev) => {
+      const next = { ...prev };
+      targetDays.forEach((targetDay) => {
+        const destKey = `${targetDay}_${periodNum}`;
+        next[destKey] = { ...sourceCell };
+      });
+      return next;
+    });
+
+    const daysLabel = targetDays.map((k) => DAYS.find((d) => d.key === k)?.short || k).join(', ');
+    toast.success(`घण्टी ${periodNum} (${daysLabel}) दिनहरूमा सफलतापूर्वक लागू गरियो!`);
+  };
+
+  // List all conflicts currently in routineGrid across the entire week
+  const currentGridConflicts = React.useMemo(() => {
+    const conflictsList: { dayKey: string; dayShort: string; periodNum: number; conflict: any }[] = [];
+    DAYS.forEach((d) => {
+      periods.forEach((p) => {
+        const key = `${d.key}_${p.num}`;
+        const cell = routineGrid[key];
+        if (cell && cell.teacherId) {
+          const conf = checkConflict(d.key, p.num, cell.teacherId);
+          if (conf) {
+            conflictsList.push({
+              dayKey: d.key,
+              dayShort: d.short,
+              periodNum: p.num,
+              conflict: conf,
+            });
+          }
+        }
+      });
+    });
+    return conflictsList;
+  }, [routineGrid, periods, allRoutinesData, selectedClassId]);
+
   // Sync Timings Mutation — applies current period timings to ALL classes
   const syncTimingsMutation = useMutation({
     mutationFn: async () => {
@@ -472,6 +540,24 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
   const saveRoutineMutation = useMutation({
     mutationFn: async () => {
       if (!selectedClassId) throw new Error('Please select a class');
+
+      // Conflict warning check before saving
+      if (currentGridConflicts.length > 0) {
+        const conflictDescriptions = currentGridConflicts
+          .slice(0, 5)
+          .map((c) => `• ${c.conflict.teacherName} (${c.dayShort}, घण्टी ${c.periodNum}) ➜ ${c.conflict.className}`)
+          .join('\n');
+
+        const proceed = confirm(
+          `⚠️ शिक्षक समय द्वन्द्व भेटियो (Teacher Schedule Conflicts Detected):\n\n${conflictDescriptions}${
+            currentGridConflicts.length > 5 ? `\n... र थप ${currentGridConflicts.length - 5} वटा` : ''
+          }\n\nके तपाईं यद्यपि यो रुटिन सेभ गर्न अगाडि बढ्न चाहनुहुन्छ?`
+        );
+        if (!proceed) {
+          throw new Error('रुटिन सेभ रद्द गरियो। कृपया शिक्षकको समय जुधेको सच्याउनुहोस्।');
+        }
+      }
+
       const entries: any[] = [];
 
       DAYS.forEach((d) => {
@@ -520,6 +606,17 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
         [field]: val,
       },
     }));
+
+    if (field === 'teacherId' && val) {
+      const conflict = checkConflict(day, periodNum, val);
+      if (conflict) {
+        const dayNepali = DAYS.find((d) => d.key === day)?.short || day;
+        toast.error(
+          `⚠️ शिक्षक जुध्यो (Conflict)! ${conflict.teacherName} ${dayNepali} को घण्टी ${periodNum} मा पहिले नै '${conflict.className}' मा तोकिनुभएको छ।`,
+          { duration: 5000, id: `conflict-teacher-${day}-${periodNum}` }
+        );
+      }
+    }
   };
 
   // When subject is changed, automatically fetch and select its assigned teacher for this class
@@ -541,11 +638,20 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
       };
     });
 
-    if (subId && matchedSubject?.assignedTeacherName) {
-      toast.success(
-        `'${matchedSubject.name}' को शिक्षक '${matchedSubject.assignedTeacherName}' स्वतः छानियो!`,
-        { id: `auto-teacher-${periodNum}`, duration: 2500 }
-      );
+    if (subId && assignedTeacherId) {
+      const conflict = checkConflict(day, periodNum, assignedTeacherId);
+      const dayNepali = DAYS.find((d) => d.key === day)?.short || day;
+      if (conflict) {
+        toast.error(
+          `⚠️ शिक्षक जुध्यो (Conflict)! ${conflict.teacherName} ${dayNepali} को घण्टी ${periodNum} मा पहिले नै '${conflict.className}' मा व्यस्त हुनुहुन्छ।`,
+          { duration: 5000, id: `conflict-${day}-${periodNum}` }
+        );
+      } else if (matchedSubject?.assignedTeacherName) {
+        toast.success(
+          `'${matchedSubject.name}' को शिक्षक '${matchedSubject.assignedTeacherName}' स्वतः छानियो!`,
+          { id: `auto-teacher-${periodNum}`, duration: 2500 }
+        );
+      }
     }
   };
 
@@ -1084,12 +1190,24 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
               const cell = routineGrid[key] || { subjectId: '', teacherId: '', roomNo: '' };
               const conflictInfo = checkConflict(selectedDay, period.num, cell.teacherId);
 
+              // Gather other days assignments for this period to help with alternating/split subjects
+              const otherDaysSummary = DAYS
+                .filter((d) => d.key !== selectedDay)
+                .map((d) => {
+                  const oKey = `${d.key}_${period.num}`;
+                  const oCell = routineGrid[oKey];
+                  const oSub = subjectsData?.find((s: any) => s.id.toString() === oCell?.subjectId);
+                  const oTeach = teachersData?.find((t: any) => t.id.toString() === oCell?.teacherId);
+                  return oSub ? { dayShort: d.short, dayKey: d.key, subName: oSub.name, teachName: oTeach?.fullName?.split(' ')[0] } : null;
+                })
+                .filter(Boolean);
+
               return (
                 <div
                   key={period.num}
                   className={`rounded-2xl border p-4 space-y-3 transition relative flex flex-col justify-between ${
                     conflictInfo
-                      ? 'border-red-400 bg-red-50/40 ring-1 ring-red-300'
+                      ? 'border-red-400 bg-red-50/50 ring-2 ring-red-300 shadow-xs'
                       : cell.subjectId
                       ? 'border-blue-200 bg-blue-50/20'
                       : 'border-gray-200 bg-slate-50/50 hover:bg-white'
@@ -1099,7 +1217,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                     {/* Period Badge & Timing */}
                     <div className="flex items-center justify-between">
                       <span className="font-extrabold text-xs text-[#1e3a5f] bg-white px-2.5 py-0.5 rounded-lg border border-gray-200 shadow-2xs">
-                        Period {period.num}
+                        घण्टी {period.num} (Period {period.num})
                       </span>
                       <span className="text-[10px] font-mono text-gray-500 font-semibold">
                         {period.startTime} - {period.endTime}
@@ -1123,36 +1241,53 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                       <select
                         value={cell.subjectId}
                         onChange={(e) => handleSubjectChange(selectedDay, period.num, e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white p-2 text-xs font-bold text-gray-800 focus:border-[#1e3a5f] focus:outline-hidden"
+                        className={`w-full rounded-xl border p-2 text-xs font-bold text-gray-800 focus:border-[#1e3a5f] focus:outline-hidden ${
+                          cell.subjectId ? 'bg-white border-blue-300' : 'bg-white border-gray-200'
+                        }`}
                       >
                         <option value="">-- खाली / No Class --</option>
-                        {classSubjects.map((sub: any) => (
-                          <option key={sub.id} value={sub.id}>
-                            {sub.name} {sub.code ? `(${sub.code})` : ''} {sub.assignedTeacherName ? `— 👤 ${sub.assignedTeacherName}` : ''}
-                          </option>
-                        ))}
+                        {classSubjects.map((sub: any) => {
+                          const isTeacherBusy = sub.assignedTeacherId ? getTeacherConflictForSlot(selectedDay, period.num, sub.assignedTeacherId) : null;
+                          return (
+                            <option key={sub.id} value={sub.id}>
+                              {sub.name} {sub.code ? `(${sub.code})` : ''} 
+                              {sub.assignedTeacherName ? ` — 👤 ${sub.assignedTeacherName}` : ''}
+                              {isTeacherBusy ? ` [⚠️ ${isTeacherBusy} मा व्यस्त]` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
 
-                    {/* Teacher Selector */}
+                    {/* Teacher Selector with collision indicators */}
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1 flex items-center justify-between">
                         <span>Teacher (तोकिएका शिक्षक)</span>
-                        {cell.teacherId && (
-                          <span className="text-[9px] text-emerald-700 font-bold">✓ शिक्षक छानियो</span>
+                        {cell.teacherId && !conflictInfo && (
+                          <span className="text-[9px] text-emerald-700 font-bold">✓ शिक्षक उपलब्ध</span>
+                        )}
+                        {conflictInfo && (
+                          <span className="text-[9px] text-red-700 font-bold">⚠️ समय जुध्यो</span>
                         )}
                       </label>
                       <select
                         value={cell.teacherId}
                         onChange={(e) => handleCellChange(selectedDay, period.num, 'teacherId', e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white p-2 text-xs font-semibold text-gray-800 focus:border-[#1e3a5f] focus:outline-hidden"
+                        className={`w-full rounded-xl border p-2 text-xs font-semibold text-gray-800 focus:border-[#1e3a5f] focus:outline-hidden ${
+                          conflictInfo
+                            ? 'bg-red-50 border-red-400 text-red-900 font-bold'
+                            : 'bg-white border-gray-200'
+                        }`}
                       >
                         <option value="">-- शिक्षक छान्नुहोस् --</option>
-                        {teachersData?.map((t: any) => (
-                          <option key={t.id} value={t.id}>
-                            {t.fullName}
-                          </option>
-                        ))}
+                        {teachersData?.map((t: any) => {
+                          const busyClass = getTeacherConflictForSlot(selectedDay, period.num, t.id);
+                          return (
+                            <option key={t.id} value={t.id}>
+                              {t.fullName} {busyClass ? ` [⚠️ ${busyClass} मा व्यस्त]` : ' ✓ उपलब्ध'}
+                            </option>
+                          );
+                        })}
                       </select>
 
                       {/* Auto-Assigned Teacher Helper Info */}
@@ -1182,24 +1317,64 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                       })()}
                     </div>
 
-                    {/* Conflict Alert Banner */}
+                    {/* Prominent Conflict Alert Banner */}
                     {conflictInfo && (
-                      <div className="rounded-xl bg-red-100 border border-red-300 p-2 text-[10px] font-bold text-red-800 flex items-start gap-1.5 animate-pulse">
-                        <AlertTriangle size={14} className="text-red-600 shrink-0 mt-0.5" />
-                        <span>समय जुध्यो! शिक्षक {conflictInfo} मा पढाउँदै हुनुहुन्छ।</span>
+                      <div className="rounded-xl bg-red-100 border border-red-300 p-2 text-[10px] font-bold text-red-900 flex items-start gap-1.5 animate-pulse">
+                        <AlertTriangle size={15} className="text-red-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <div className="font-extrabold text-red-950">समय जुध्यो (Teacher Conflict)!</div>
+                          <div>
+                            शिक्षक <strong>{conflictInfo.teacherName}</strong> यस दिनको घण्टी {period.num} मा पहिले नै <strong>'{conflictInfo.className}'</strong> मा व्यस्त हुनुहुन्छ।
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alternating/Different Subjects Across the Week Preview */}
+                    {otherDaysSummary.length > 0 && (
+                      <div className="rounded-lg bg-slate-100 border border-gray-200 p-1.5 text-[10px] text-gray-600 space-y-0.5">
+                        <div className="font-bold text-gray-700 flex items-center justify-between">
+                          <span>📅 अन्य दिनका विषय (Other Days):</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {otherDaysSummary.map((od: any, idx: number) => (
+                            <span key={idx} className="px-1.5 py-0.5 bg-white rounded border border-gray-200 text-[9px] font-semibold text-[#1e3a5f]">
+                              {od.dayShort}: <strong>{od.subName}</strong> {od.teachName ? `(${od.teachName})` : ''}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Quick Period Repeat to Checked Days */}
-                  <div className="pt-2 border-t border-gray-100/80 mt-2">
+                  {/* Quick Multi-Day Split & Repeat Controls */}
+                  <div className="pt-2 border-t border-gray-100/80 mt-2 space-y-1.5">
+                    <div className="text-[9px] font-bold text-gray-500 uppercase">यो घण्टी अन्य दिनमा लागू गर्नुहोस्:</div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleApplySinglePeriodToSpecificDays(period.num, ['SUNDAY', 'MONDAY', 'TUESDAY'])}
+                        className="text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-1 px-1 rounded-lg transition text-center cursor-pointer"
+                        title="Apply to Sunday, Monday, Tuesday"
+                      >
+                        आइत-मंग (Sun-Tue)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplySinglePeriodToSpecificDays(period.num, ['WEDNESDAY', 'THURSDAY', 'FRIDAY'])}
+                        className="text-[9px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 py-1 px-1 rounded-lg transition text-center cursor-pointer"
+                        title="Apply to Wednesday, Thursday, Friday"
+                      >
+                        बुध-शुक्र (Wed-Fri)
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleApplySinglePeriodToCheckedDays(period.num)}
-                      className="w-full text-[10px] font-bold text-blue-700 hover:text-blue-900 hover:bg-blue-50/80 py-1 rounded-lg transition text-center cursor-pointer"
+                      className="w-full text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50/60 hover:bg-blue-100/80 py-1 rounded-lg transition text-center cursor-pointer border border-blue-100"
                       title={`Apply Period ${period.num} to all checked days`}
                     >
-                      ↳ चयनित दिनहरूमा यो घण्टी दोहोर्‍याउनुहोस्
+                      ↳ चेक गरिएका दिनहरूमा लागू
                     </button>
                   </div>
                 </div>
@@ -1212,13 +1387,13 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
       {/* ─── TAB 2: FULL WEEKLY TIMETABLE MATRIX (सम्पूर्ण साप्ताहिक समय तालिका) ─── */}
       {viewTab === 'timetable' && (
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 gap-3">
             <div>
               <h3 className="text-base font-extrabold text-[#1e3a5f]">
                 {selectedClassObj?.name} — Full Weekly Timetable Matrix (सम्पूर्ण साप्ताहिक तालिका)
               </h3>
               <p className="text-xs text-gray-500 font-nepali">
-                साताको सबै दिनहरू र घण्टीहरूको एकीकृत तालिका
+                कुनै पनि कोठा (Cell) मा क्लिक गरी सो दिनको रुटिन तुरुन्तै सम्पादन गर्न सक्नुहुन्छ।
               </p>
             </div>
             <button
@@ -1230,7 +1405,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
             </button>
           </div>
 
-          <div className="overflow-x-auto border border-gray-200 rounded-2xl">
+          <div className="overflow-x-auto border border-gray-200 rounded-2xl shadow-2xs">
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="bg-[#1e3a5f] text-white">
@@ -1245,28 +1420,52 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {DAYS.map((d) => (
-                  <tr key={d.key} className="hover:bg-blue-50/30 transition">
-                    <td className="p-3 font-extrabold text-[#1e3a5f] bg-slate-50 border-r border-gray-200">
-                      {d.name.split(' ')[0]}
-                      <div className="text-[10px] text-gray-400 font-normal">{d.short}</div>
+                  <tr key={d.key} className="hover:bg-blue-50/20 transition">
+                    <td
+                      onClick={() => {
+                        setSelectedDay(d.key);
+                        setViewTab('editor');
+                      }}
+                      className="p-3 font-extrabold text-[#1e3a5f] bg-slate-50 border-r border-gray-200 cursor-pointer hover:bg-blue-100 transition"
+                      title="Click to edit this day in Editor"
+                    >
+                      <div>{d.name.split(' ')[0]}</div>
+                      <div className="text-[10px] text-gray-400 font-normal">{d.short} (सम्पादन ✍️)</div>
                     </td>
                     {periods.map((p) => {
                       const key = `${d.key}_${p.num}`;
                       const cell = routineGrid[key];
                       const sub = subjectsData?.find((s: any) => s.id.toString() === cell?.subjectId);
                       const teach = teachersData?.find((t: any) => t.id.toString() === cell?.teacherId);
+                      const cellConflict = checkConflict(d.key, p.num, cell?.teacherId);
 
                       return (
-                        <td key={p.num} className="p-2.5 border-r border-gray-100 text-center align-middle">
+                        <td
+                          key={p.num}
+                          onClick={() => {
+                            setSelectedDay(d.key);
+                            setViewTab('editor');
+                          }}
+                          className={`p-2.5 border-r border-gray-100 text-center align-middle cursor-pointer transition ${
+                            cellConflict
+                              ? 'bg-red-100/70 hover:bg-red-100'
+                              : sub
+                              ? 'hover:bg-blue-50/60'
+                              : 'hover:bg-gray-50'
+                          }`}
+                          title={cellConflict ? `⚠️ ${cellConflict.teacherName} ${cellConflict.className} मा व्यस्त` : 'क्लिक गरी सम्पादन गर्नुहोस्'}
+                        >
                           {sub ? (
                             <div className="space-y-0.5">
                               <div className="font-bold text-gray-900">{sub.name}</div>
                               {teach && (
-                                <div className="text-[10px] text-blue-700 font-medium">{teach.fullName}</div>
+                                <div className={`text-[10px] font-medium ${cellConflict ? 'text-red-800 font-bold' : 'text-blue-700'}`}>
+                                  {cellConflict ? `⚠️ ${teach.fullName} (${cellConflict.className})` : teach.fullName}
+                                </div>
                               )}
                             </div>
                           ) : (
-                            <span className="text-gray-300 font-light">—</span>
+                            <span className="text-gray-300 font-light">+ खाली</span>
                           )}
                         </td>
                       );
