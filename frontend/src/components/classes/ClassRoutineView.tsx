@@ -138,6 +138,21 @@ export function getShiftPeriods(shiftId: string): PeriodConfig[] {
   return defaultShift ? defaultShift.periods : SCHOOL_SHIFTS[0].periods;
 }
 
+export function getActiveDefaultPeriods(): PeriodConfig[] {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('school_default_routine_timings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error('Failed to parse school_default_routine_timings', e);
+      }
+    }
+  }
+  return getShiftPeriods('day');
+}
+
 export const STANDARD_SCHOOL_TIMINGS: PeriodConfig[] = SCHOOL_SHIFTS[0].periods;
 const DEFAULT_PERIODS: PeriodConfig[] = SCHOOL_SHIFTS[0].periods;
 
@@ -147,8 +162,8 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
   const [selectedDay, setSelectedDay] = useState('SUNDAY');
   const [viewTab, setViewTab] = useState<'editor' | 'timetable'>('editor');
 
-  // Dynamic Periods configuration
-  const [periods, setPeriods] = useState<PeriodConfig[]>(() => getShiftPeriods('day'));
+  // Dynamic Periods configuration (persists active school timings across classes and reloads)
+  const [periods, setPeriods] = useState<PeriodConfig[]>(() => getActiveDefaultPeriods());
 
   // Days Checkbox state for repeating/applying routine
   const [checkedDays, setCheckedDays] = useState<string[]>([
@@ -260,38 +275,39 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
       // Adjust period list if routine has custom count
       const periodCount = Math.max(maxPeriod, 4);
-      setPeriods(() => {
+      setPeriods((prevPeriods) => {
+        const fallbackList = (prevPeriods && prevPeriods.length > 0) ? prevPeriods : getActiveDefaultPeriods();
         const newPeriods: PeriodConfig[] = [];
         for (let i = 1; i <= periodCount; i++) {
           const loaded = loadedPeriodsMap[i];
-          const std = STANDARD_SCHOOL_TIMINGS[i - 1];
+          const fallback = fallbackList[i - 1] || STANDARD_SCHOOL_TIMINGS[i - 1];
 
           // Guard against old corrupted 04:00 PM on period 5
           const isCorruptedTime = (i === 5 && loaded?.startTime?.startsWith('04:'));
 
           const validStartTime = (!isCorruptedTime && loaded?.startTime && loaded.startTime.trim().length > 0 && !loaded.startTime.startsWith('Period'))
             ? loaded.startTime
-            : (std?.startTime || `10:${i * 40} AM`);
+            : (fallback?.startTime || `10:${i * 40} AM`);
 
           const validEndTime = (!isCorruptedTime && loaded?.endTime && loaded.endTime.trim().length > 0)
             ? loaded.endTime
-            : (std?.endTime || '');
+            : (fallback?.endTime || '');
 
           newPeriods.push({
             num: i,
             startTime: validStartTime,
             endTime: validEndTime,
-            hasBreakAfter: loaded?.isBreak !== undefined ? loaded.isBreak : (std?.hasBreakAfter || (i === 4)),
-            breakTitle: loaded?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
-            breakTime: (i === 4 ? '01:30 - 01:55 PM' : ''),
+            hasBreakAfter: loaded?.isBreak !== undefined ? loaded.isBreak : (fallback?.hasBreakAfter || (i === 4)),
+            breakTitle: loaded?.breakTitle || fallback?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
+            breakTime: fallback?.breakTime || (i === 4 ? '01:30 - 01:55 PM' : ''),
           });
         }
         return newPeriods;
       });
     } else if (routineData && routineData.length === 0) {
-      // Clear grid for unconfigured class
+      // Clear grid for unconfigured class, but DO NOT reset active period timings!
       setRoutineGrid({});
-      setPeriods(DEFAULT_PERIODS);
+      setPeriods((prev) => (prev && prev.length > 0 ? prev : getActiveDefaultPeriods()));
     }
   }, [routineData]);
 
@@ -468,9 +484,13 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
   // Update Period timing or Break settings
   const handleUpdatePeriodConfig = (num: number, updates: Partial<PeriodConfig>) => {
-    setPeriods((prev) =>
-      prev.map((p) => (p.num === num ? { ...p, ...updates } : p))
-    );
+    setPeriods((prev) => {
+      const updated = prev.map((p) => (p.num === num ? { ...p, ...updates } : p));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('school_default_routine_timings', JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   // Toggle single day checkbox
