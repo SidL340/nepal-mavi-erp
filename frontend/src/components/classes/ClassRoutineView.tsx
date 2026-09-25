@@ -804,8 +804,8 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
         const teach = teachersData?.find((t: any) => t.id.toString() === cell?.teacherId);
         return `
           <td style="border: 1px solid #1e3a5f; padding: 6px 4px; text-align: center; vertical-align: middle; font-size: 10px;">
-            <div style="font-weight: bold; color: #1e3a5f;">${sub?.name || '—'}</div>
-            <div style="font-size: 9px; color: #4b5563;">${teach?.fullName?.split(' ')[0] || ''}</div>
+            <div style="font-weight: bold; color: #1e3a5f; font-size: 10.5px; margin-bottom: 2px;">${sub?.name || '—'}</div>
+            <div style="font-size: 9.5px; color: #374151; font-weight: 600;">${teach?.fullName || ''}</div>
           </td>
         `;
       }).join('');
@@ -1280,7 +1280,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                   const oCell = routineGrid[oKey];
                   const oSub = subjectsData?.find((s: any) => s.id.toString() === oCell?.subjectId);
                   const oTeach = teachersData?.find((t: any) => t.id.toString() === oCell?.teacherId);
-                  return oSub ? { dayShort: d.short, dayKey: d.key, subName: oSub.name, teachName: oTeach?.fullName?.split(' ')[0] } : null;
+                  return oSub ? { dayShort: d.short, dayKey: d.key, subName: oSub.name, teachName: oTeach?.fullName || '' } : null;
                 })
                 .filter(Boolean);
 
