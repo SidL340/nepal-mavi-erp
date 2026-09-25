@@ -214,23 +214,46 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
       setRoutineGrid(grid);
 
       // Adjust period list if routine has custom count
-      if (maxPeriod > 0) {
-        setPeriods((prev) => {
-          const newPeriods: PeriodConfig[] = [];
-          for (let i = 1; i <= Math.max(maxPeriod, 4); i++) {
-            const existing = prev.find((p) => p.num === i);
-            const loaded = loadedPeriodsMap[i];
-            newPeriods.push({
-              num: i,
-              startTime: loaded?.startTime || existing?.startTime || `Period ${i}`,
-              endTime: loaded?.endTime || existing?.endTime || '',
-              hasBreakAfter: existing?.hasBreakAfter || (i === 4),
-              breakTitle: existing?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
-              breakTime: existing?.breakTime || (i === 4 ? '01:15 - 01:45 PM' : ''),
-            });
-          }
-          return newPeriods;
-        });
+      const periodCount = Math.max(maxPeriod, 4);
+      setPeriods((prev) => {
+        const newPeriods: PeriodConfig[] = [];
+        for (let i = 1; i <= periodCount; i++) {
+          const existing = prev.find((p) => p.num === i);
+          const loaded = loadedPeriodsMap[i];
+          const std = DEFAULT_PERIODS[i - 1];
+
+          const validStartTime = (loaded?.startTime && loaded.startTime.trim().length > 0 && !loaded.startTime.startsWith('Period'))
+            ? loaded.startTime
+            : (existing?.startTime && !existing.startTime.startsWith('Period') ? existing.startTime : (std?.startTime || `Period ${i}`));
+
+          const validEndTime = (loaded?.endTime && loaded.endTime.trim().length > 0)
+            ? loaded.endTime
+            : (existing?.endTime || (std?.endTime || ''));
+
+          newPeriods.push({
+            num: i,
+            startTime: validStartTime,
+            endTime: validEndTime,
+            hasBreakAfter: loaded?.isBreak !== undefined ? loaded.isBreak : (existing?.hasBreakAfter ?? (i === 4)),
+            breakTitle: loaded?.breakTitle || existing?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
+            breakTime: existing?.breakTime || (i === 4 ? '01:30 - 01:55 PM' : ''),
+          });
+        }
+        return newPeriods;
+      });
+    } else if (routineData && routineData.length === 0) {
+      // Clear grid for unconfigured class
+      setRoutineGrid({});
+      // Keep standard school periods
+      const savedDefault = typeof window !== 'undefined' ? localStorage.getItem('school_default_routine_timings') : null;
+      if (savedDefault) {
+        try {
+          setPeriods(JSON.parse(savedDefault));
+        } catch {
+          setPeriods(DEFAULT_PERIODS);
+        }
+      } else {
+        setPeriods(DEFAULT_PERIODS);
       }
     }
   }, [routineData]);
@@ -266,12 +289,23 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     const targetDayInt = dayIntMap[day?.toUpperCase()] || (typeof day === 'number' ? day : 1);
 
     const conflict = allRoutinesData.find((r: any) => {
+      // 1. MUST be another class (NEVER match the current selected class)
       if (r.classId?.toString() === selectedClassId?.toString()) return false;
-      if (parseInt(r.teacherId) !== tid) return false;
+      
+      // 2. MUST NOT be a break item
+      if (r.isBreak) return false;
 
+      // 3. MUST match the exact teacher
+      if (!r.teacherId || parseInt(r.teacherId) !== tid) return false;
+
+      // 4. MUST have a real subject or teacher entry (ignore empty slots)
+      if (!r.subjectId && !r.teacherId) return false;
+
+      // 5. MUST match the exact Period Number
       const rPeriod = parseInt(r.periodNo || r.periodNumber);
       if (rPeriod !== period) return false;
 
+      // 6. MUST match the exact Day of the week
       const rDayInt = typeof r.dayOfWeek === 'number' ? r.dayOfWeek : dayIntMap[r.dayOfWeek?.toUpperCase()] || 0;
       const isDayMatch = (rDayInt === targetDayInt) || (typeof r.dayOfWeek === 'string' && r.dayOfWeek.toUpperCase() === day.toUpperCase());
       return isDayMatch;
@@ -906,27 +940,8 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
             </p>
           </div>
 
-          {/* Preset, Copy and Bulk Sync Actions */}
+          {/* Copy and Bulk Sync Actions */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Presets Dropdown */}
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  handleLoadPreset(e.target.value);
-                  e.target.value = '';
-                }
-              }}
-              className="rounded-xl border border-gray-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-white focus:outline-hidden cursor-pointer"
-            >
-              <option value="" disabled>📋 समय ढाँचाहरू (Presets)...</option>
-              {TIMING_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-
             {/* Copy From Another Class */}
             <select
               defaultValue=""
