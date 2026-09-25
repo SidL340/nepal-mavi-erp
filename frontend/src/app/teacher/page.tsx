@@ -360,6 +360,21 @@ export default function TeacherPortalPage() {
     return (teacherRoutine || []).filter((r: any) => r.dayOfWeek === selectedRoutineDay && !r.isBreak);
   }, [teacherRoutine, selectedRoutineDay]);
 
+  // Routine periods specifically for today
+  const todayRoutinePeriods = React.useMemo(() => {
+    return (teacherRoutine || [])
+      .filter((r: any) => r.dayOfWeek === todayDayNum && !r.isBreak)
+      .sort((a: any, b: any) => (a.periodNo || 0) - (b.periodNo || 0));
+  }, [teacherRoutine, todayDayNum]);
+
+  // Only days that have routine periods scheduled for this teacher (Show ONLY which is checked / scheduled!)
+  const activeTeacherRoutineDays = React.useMemo(() => {
+    const daysWithPeriods = [1, 2, 3, 4, 5, 6, 7].filter((day) =>
+      (teacherRoutine || []).some((r: any) => r.dayOfWeek === day && !r.isBreak)
+    );
+    return daysWithPeriods.length > 0 ? daysWithPeriods : [1, 2, 3, 4, 5, 6];
+  }, [teacherRoutine]);
+
   // Quick Task Status Update Mutation
   const updateTaskStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
@@ -518,7 +533,7 @@ export default function TeacherPortalPage() {
       return;
     }
 
-    const weekDays = [1, 2, 3, 4, 5, 6];
+    const weekDays = activeTeacherRoutineDays;
     const daysHtml = weekDays.map((d) => {
       const dayEntries = (teacherRoutine || []).filter((r: any) => r.dayOfWeek === d);
       const rows = dayEntries.length > 0
@@ -1200,8 +1215,91 @@ export default function TeacherPortalPage() {
               </div>
             </div>
 
-            {/* School Announcements */}
+            {/* Right Column: Today's Timetable on the Side & School Announcements */}
             <div className="lg:col-span-5 space-y-4">
+              {/* Today's Timetable Side Card */}
+              <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-white via-blue-50/20 to-indigo-50/20 p-5 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-blue-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1e3a5f] text-white shadow-2xs">
+                      <Clock size={16} />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-extrabold text-[#1e3a5f]">
+                        आजको घण्टी तालिका (Today's Timetable)
+                      </h2>
+                      <p className="text-[10px] text-gray-500 font-nepali">
+                        {DAYS_MAP[todayDayNum]} • कुल {todayRoutinePeriods.length} घण्टी
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => switchTab('routine')}
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition cursor-pointer"
+                  >
+                    Full Routine ↗
+                  </button>
+                </div>
+
+                {todayRoutinePeriods.length === 0 ? (
+                  <div className="p-4 text-center border border-dashed border-gray-200 rounded-xl bg-slate-50/60 space-y-1">
+                    <Sparkles size={20} className="mx-auto text-amber-500" />
+                    <p className="text-xs font-bold text-gray-700">आज कुनै कक्षा तालिका छैन (No Class Today)</p>
+                    <p className="text-[10px] text-gray-400">विश्रामको समय वा अतिरिक्त क्रियाकलाप</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {todayRoutinePeriods.map((r: any) => (
+                      <div
+                        key={r.id}
+                        className="p-2.5 rounded-xl bg-white border border-gray-200/90 shadow-2xs text-xs space-y-1 hover:border-blue-300 transition"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[#1e3a5f] bg-blue-50 px-2 py-0.5 rounded text-[11px]">
+                            घण्टी {r.periodNo}
+                          </span>
+                          <span className="text-[10px] font-mono font-semibold text-gray-500">
+                            {r.startTime} - {r.endTime}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-gray-900">
+                            {r.class?.name} {r.class?.section ? `(${r.class?.section})` : ''}
+                          </span>
+                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-100">
+                            {r.subject?.name || 'विषय'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-gray-500 flex items-center justify-between pt-0.5 border-t border-gray-50">
+                          {r.roomNo ? (
+                            <span className="text-amber-800 font-mono font-bold bg-amber-50 px-1.5 py-0.2 rounded">
+                              Room: {r.roomNo}
+                            </span>
+                          ) : <span />}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLogFormClassId(String(r.classId));
+                              setLogFormSubjectId(String(r.subjectId || ''));
+                              setLogFormSubjectName(r.subject?.name || '');
+                              setLogFormPeriodNo(r.periodNo || 1);
+                              setLogFormDateBs(todayBS());
+                              switchTab('daily_log');
+                            }}
+                            className="text-[10px] font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                          >
+                            Log Diary ✍️
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* School Announcements */}
               <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-xs space-y-3">
                 <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                   <School size={16} className="text-blue-600" />
@@ -1932,8 +2030,8 @@ export default function TeacherPortalPage() {
                 <span>☀️ आज ({SHORT_DAYS_MAP[todayDayNum] || 'Today'})</span>
               </button>
 
-              {/* 7 Days Buttons (Sun to Sat) */}
-              {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+              {/* Active Days Buttons (Strictly show checked / scheduled days) */}
+              {activeTeacherRoutineDays.map((d) => {
                 const count = (teacherRoutine || []).filter((r: any) => r.dayOfWeek === d && !r.isBreak).length;
                 const isSelected = selectedRoutineDay === d && routineViewMode === 'day';
                 const isToday = d === todayDayNum;
@@ -2077,9 +2175,9 @@ export default function TeacherPortalPage() {
                 )}
               </div>
             ) : (
-              /* ─── FULL WEEK VIEW ─── */
+              /* ─── FULL WEEK VIEW (Filtered to Checked / Scheduled Days) ─── */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+                {activeTeacherRoutineDays.map((day) => {
                   const dayEntries = teacherRoutine.filter((r: any) => r.dayOfWeek === day && !r.isBreak);
                   const isToday = day === todayDayNum;
 

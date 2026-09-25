@@ -42,6 +42,26 @@ import {
 } from 'lucide-react';
 import AcademicCalendar from '@/components/dashboard/AcademicCalendar';
 
+const DAYS_MAP: Record<number, string> = {
+  1: 'आइतबार (Sunday)',
+  2: 'सोमबार (Monday)',
+  3: 'मंगलबार (Tuesday)',
+  4: 'बुधबार (Wednesday)',
+  5: 'बिहीबार (Thursday)',
+  6: 'शुक्रबार (Friday)',
+  7: 'शनिबार (Saturday)',
+};
+
+const SHORT_DAYS_MAP: Record<number, string> = {
+  1: 'आइत (Sun)',
+  2: 'सोम (Mon)',
+  3: 'मंगल (Tue)',
+  4: 'बुध (Wed)',
+  5: 'बिही (Thu)',
+  6: 'शुक्र (Fri)',
+  7: 'शनि (Sat)',
+};
+
 // Helper for generating standard Symbol No in format: 2083<Class2d><Roll2d>
 function generateSymbolNo(year?: string, className?: string, rollNo?: number | string) {
   const y = (year || '2083').replace(/\D/g, '').slice(-4) || '2083';
@@ -58,9 +78,15 @@ export default function StudentPortalPage() {
   const searchParams = useSearchParams();
   const studentId = user?.student?.id;
 
-  // Active Tab: overview | attendance | exams | fees | library | notices | idcard
+  // Active Tab: overview | attendance | exams | fees | library | notices | idcard | routine
   const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<string>(tabFromUrl || 'overview');
+
+  const todayDayNum = React.useMemo(() => new Date().getDay() + 1, []); // 1 (Sun) to 7 (Sat)
+  const [selectedRoutineDay, setSelectedRoutineDay] = useState<number>(() => {
+    return new Date().getDay() + 1;
+  });
+  const [routineViewMode, setRoutineViewMode] = useState<'day' | 'week'>('day');
 
   useEffect(() => {
     if (tabFromUrl) {
@@ -241,6 +267,21 @@ export default function StudentPortalPage() {
     },
     enabled: !!activeClassId,
   });
+
+  // Only days that have routine periods scheduled for this class (Show ONLY which is checked / scheduled!)
+  const activeStudentRoutineDays = React.useMemo(() => {
+    const daysWithPeriods = [1, 2, 3, 4, 5, 6, 7].filter((day) =>
+      (classRoutine || []).some((r: any) => r.dayOfWeek === day && !r.isBreak)
+    );
+    return daysWithPeriods.length > 0 ? daysWithPeriods : [1, 2, 3, 4, 5, 6];
+  }, [classRoutine]);
+
+  // Routine periods for currently selected day
+  const routinePeriodsForDay = React.useMemo(() => {
+    return (classRoutine || [])
+      .filter((r: any) => r.dayOfWeek === selectedRoutineDay)
+      .sort((a: any, b: any) => (a.periodNo || 0) - (b.periodNo || 0));
+  }, [classRoutine, selectedRoutineDay]);
 
   // ── 9. Fetch Student My Leaves ──
   const { data: myLeaves, isLoading: isLeavesLoading } = useQuery({
@@ -559,6 +600,94 @@ export default function StudentPortalPage() {
             </div>
           </div>
 
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const triggerStudentRoutinePrint = () => {
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const daysToPrint = activeStudentRoutineDays;
+    const daysHtml = daysToPrint.map((d) => {
+      const dayEntries = (classRoutine || []).filter((r: any) => r.dayOfWeek === d);
+      const rows = dayEntries.length > 0
+        ? dayEntries.map((r: any) => {
+            if (r.isBreak) {
+              return `
+                <div style="border: 1px dashed #f59e0b; border-radius: 6px; padding: 4px 8px; margin-bottom: 5px; background: #fef3c7; text-align: center; color: #92400e; font-weight: bold; font-size: 10px;">
+                  ☕ ${r.breakTitle || 'खाजा समय (Break)'} (${r.startTime} - ${r.endTime})
+                </div>
+              `;
+            }
+            return `
+              <div style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; margin-bottom: 6px; background: #fff;">
+                <div style="display: flex; justify-content: space-between; font-weight: bold; color: #1e3a5f; font-size: 11px;">
+                  <span>Period ${r.periodNo} (${r.startTime} - ${r.endTime})</span>
+                  ${r.roomNo ? `<span style="font-size: 10px; color: #b45309; background: #fef3c7; padding: 1px 4px; border-radius: 3px;">Room: ${r.roomNo}</span>` : ''}
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 3px; color: #334155;">
+                  <span style="font-weight: 700; color: #1e3a5f;">${r.subject?.name || 'विषय'}</span>
+                  <span style="color: #047857; font-weight: 600;">${r.teacher?.fullName || ''}</span>
+                </div>
+              </div>
+            `;
+          }).join('')
+        : `<div style="text-align: center; color: #94a3b8; font-style: italic; font-size: 11px; padding: 10px;">कुनै घण्टी छैन</div>`;
+
+      return `
+        <div style="border: 1px solid #94a3b8; border-radius: 8px; padding: 10px; background: #f8fafc; break-inside: avoid;">
+          <div style="font-weight: 800; font-size: 13px; color: #1e3a5f; border-bottom: 2px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+            <span>${DAYS_MAP[d]}</span>
+            <span style="font-size: 11px; font-weight: normal; color: #475569;">${dayEntries.length} Periods</span>
+          </div>
+          ${rows}
+        </div>
+      `;
+    }).join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Class Routine - ${className} (${section})</title>
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; }
+            .meta { font-size: 12px; font-weight: bold; margin: 6px 0 12px 0; display: flex; justify-content: space-between; }
+            .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+            .footer { margin-top: 25px; display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट (स्था. २००७)</div>
+            <div style="font-size: 11px; color: #555;">Class Routine & Timetable (कक्षा समय-तालिका) • Academic Session 2083/84</div>
+          </div>
+          <div class="meta">
+            <div>कक्षा: <u>${className} (${section})</u></div>
+            <div>विद्यार्थी: <u>${displayName} (Roll: ${rollNo})</u></div>
+            <div>मुद्रण मिति: <u>BS ${todayBSFormatted()}</u></div>
+          </div>
+          <div class="grid">
+            ${daysHtml}
+          </div>
+          <div class="footer">
+            <div>कक्षा शिक्षक: __________________</div>
+            <div>शैक्षिक प्रमुख: __________________</div>
+            <div>प्रधानाध्यापक: __________________</div>
+          </div>
           <script>
             window.onload = function() { setTimeout(function() { window.print(); }, 400); };
           </script>
@@ -1915,46 +2044,251 @@ export default function StudentPortalPage() {
       {/* ─────────────────── TAB: CLASS ROUTINE ─────────────────────────── */}
       {activeTab === 'routine' && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 mb-4">
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-xs space-y-5">
+            {/* Header with Mode Switcher and Print */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
               <div>
-                <h2 className="text-sm font-extrabold text-[#1e3a5f] flex items-center gap-2">
-                  <Clock size={18} className="text-blue-600" />
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <Clock className="text-[#1e3a5f]" size={20} />
                   <span>My Class Routine & Timetable (कक्षा समय-तालिका)</span>
                 </h2>
-                <p className="text-xs text-gray-500 font-nepali">
-                  कक्षा: <strong>{className} ({section})</strong> — घण्टी १ देखि ८ सम्मको साप्ताहिक रुटिन
+                <p className="text-xs text-gray-500 font-nepali mt-0.5">
+                  कक्षा: <strong className="text-gray-800">{className} ({section})</strong> • दैनिक तथा साप्ताहिक घण्टी विभाजन, विषय तथा शिक्षक विवरण
                 </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* View Mode Switcher */}
+                <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setRoutineViewMode('day')}
+                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      routineViewMode === 'day'
+                        ? 'bg-[#1e3a5f] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <span>☀️ दिन अनुसार (Day View)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoutineViewMode('week')}
+                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      routineViewMode === 'week'
+                        ? 'bg-[#1e3a5f] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <span>📋 सम्पूर्ण हप्ता (Week View)</span>
+                  </button>
+                </div>
+
+                {/* Print Timetable */}
+                <button
+                  type="button"
+                  onClick={triggerStudentRoutinePrint}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition shadow-2xs cursor-pointer"
+                >
+                  <Printer size={14} className="text-blue-600" />
+                  <span>प्रिन्ट गर्नुहोस् (Print)</span>
+                </button>
               </div>
             </div>
 
+            {/* Day Selector Pills Bar (Strictly Checked / Scheduled Days) */}
+            <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-gray-200">
+              <span className="text-xs font-black text-[#1e3a5f] px-2 flex items-center gap-1">
+                <Calendar size={14} className="text-blue-600" />
+                <span>बार छान्नुहोस्:</span>
+              </span>
+
+              {/* Today shortcut pill */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRoutineDay(todayDayNum);
+                  setRoutineViewMode('day');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-2xs ${
+                  selectedRoutineDay === todayDayNum && routineViewMode === 'day'
+                    ? 'bg-amber-400 text-[#1e3a5f] ring-2 ring-amber-300'
+                    : 'bg-amber-100/70 hover:bg-amber-200 text-amber-900'
+                }`}
+              >
+                <span>☀️ आज ({SHORT_DAYS_MAP[todayDayNum] || 'Today'})</span>
+              </button>
+
+              {/* Active Days Buttons (Strictly show checked / scheduled days) */}
+              {activeStudentRoutineDays.map((d) => {
+                const count = (classRoutine || []).filter((r: any) => r.dayOfWeek === d && !r.isBreak).length;
+                const isSelected = selectedRoutineDay === d && routineViewMode === 'day';
+                const isToday = d === todayDayNum;
+
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRoutineDay(d);
+                      setRoutineViewMode('day');
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                      isSelected
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
+                        : isToday
+                        ? 'bg-white text-[#1e3a5f] border-amber-300 ring-1 ring-amber-300 hover:bg-amber-50'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{SHORT_DAYS_MAP[d]}</span>
+                    {count > 0 ? (
+                      <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {count}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-gray-400">विश्राम</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Loading & Empty states */}
             {isRoutineLoading ? (
               <div className="py-16 text-center text-gray-400">
                 <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                 <p className="mt-2 text-xs">कक्षा रुटिन लोड हुँदैछ...</p>
               </div>
             ) : !classRoutine || classRoutine.length === 0 ? (
-              <div className="py-16 text-center text-gray-400 border border-dashed border-gray-200 rounded-xl">
-                <Clock size={32} className="mx-auto text-gray-300 mb-2" />
+              <div className="py-16 text-center text-gray-400 border border-dashed border-gray-200 rounded-2xl bg-slate-50/50">
+                <Clock size={36} className="mx-auto text-gray-300 mb-2" />
                 <p className="text-sm font-bold text-gray-700">यो कक्षाको रुटिन तयार गरिएको छैन।</p>
                 <p className="text-xs text-gray-400">प्रशासनले रुटिन अद्यावधिक गरेपछि यहाँ तालिका देखिनेछ।</p>
               </div>
+            ) : routineViewMode === 'day' ? (
+              /* ─── SINGLE DAY VIEW ─── */
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-blue-50/80 border border-blue-200 px-4 py-3 rounded-2xl">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-blue-600 animate-ping" />
+                    <h3 className="text-sm font-black text-[#1e3a5f]">
+                      {DAYS_MAP[selectedRoutineDay]} को कक्षा तालिका
+                    </h3>
+                    {selectedRoutineDay === todayDayNum && (
+                      <span className="text-[10px] font-extrabold bg-amber-400 text-[#1e3a5f] px-2 py-0.5 rounded-full shadow-2xs">
+                        आज (Today)
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-blue-900 bg-white px-3 py-1 rounded-xl border border-blue-200">
+                    कुल {routinePeriodsForDay.filter((r: any) => !r.isBreak).length} घण्टी तालिका
+                  </span>
+                </div>
+
+                {routinePeriodsForDay.length === 0 ? (
+                  /* Special Friendly Empty Banner for Saturday / Sunday / Off Days */
+                  <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-2xl bg-gradient-to-b from-slate-50 to-white space-y-2">
+                    <Sparkles size={32} className="mx-auto text-amber-500 mb-1" />
+                    <p className="text-sm font-extrabold text-gray-800">
+                      {selectedRoutineDay === 7 || selectedRoutineDay === 1
+                        ? `✨ यस दिन (${DAYS_MAP[selectedRoutineDay]}) विद्यालयमा कक्षा सञ्चालन छैन (Holiday / No Class)!`
+                        : `✨ यस दिन (${DAYS_MAP[selectedRoutineDay]}) कुनै कक्षा तालिका छैन (Free Day)!`}
+                    </p>
+                    <p className="text-xs text-gray-500 font-nepali max-w-md mx-auto">
+                      अन्य दिनहरूको रुटिन हेर्न माथिका बारहरूमा क्लिक गर्नुहोस् वा सम्पूर्ण हप्ताको तालिका हेर्नुहोस्।
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {routinePeriodsForDay.map((r: any) => (
+                      <div
+                        key={r.id}
+                        className={`rounded-2xl border p-4 shadow-2xs space-y-3 transition ${
+                          r.isBreak
+                            ? 'bg-amber-50/90 border-amber-300 text-amber-950 ring-1 ring-amber-200'
+                            : 'bg-gradient-to-br from-white to-blue-50/30 border-blue-200 hover:border-blue-400'
+                        }`}
+                      >
+                        {r.isBreak ? (
+                          <div className="py-2 text-center space-y-1">
+                            <span className="text-sm font-black text-amber-900">
+                              ☕ {r.breakTitle || 'खाजा समय (Tiffin Break)'}
+                            </span>
+                            <span className="text-xs font-mono font-bold block text-amber-800">
+                              {r.startTime} - {r.endTime}
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                              <span className="font-black text-xs text-[#1e3a5f] bg-blue-100/70 px-2.5 py-0.5 rounded-lg">
+                                घण्टी {r.periodNo} (Period {r.periodNo})
+                              </span>
+                              <span className="text-[11px] font-mono font-bold text-gray-600">
+                                {r.startTime} - {r.endTime}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-extrabold text-gray-900">विषय (Subject):</span>
+                                <span className="text-xs font-black text-blue-900 bg-white px-2 py-0.5 rounded border border-gray-200">
+                                  {r.subject?.name || '—'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-extrabold text-gray-900">शिक्षक (Teacher):</span>
+                                <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  {r.teacher?.fullName || 'तोकिएको छैन'}
+                                </span>
+                              </div>
+                              {r.roomNo && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-extrabold text-gray-900">कोठा नं (Room):</span>
+                                  <span className="text-[11px] font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                    Room {r.roomNo}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
+              /* ─── FULL WEEK VIEW (Filtered to Checked / Scheduled Days) ─── */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { day: 1, name: 'आइतबार (Sunday)' },
-                  { day: 2, name: 'सोमबार (Monday)' },
-                  { day: 3, name: 'मंगलबार (Tuesday)' },
-                  { day: 4, name: 'बुधबार (Wednesday)' },
-                  { day: 5, name: 'बिहीबार (Thursday)' },
-                  { day: 6, name: 'शुक्रबार (Friday)' },
-                ].map(({ day, name }) => {
+                {activeStudentRoutineDays.map((day) => {
                   const dayEntries = classRoutine.filter((r: any) => r.dayOfWeek === day);
+                  const isToday = day === todayDayNum;
+
                   return (
-                    <div key={day} className="rounded-xl border border-gray-200 bg-slate-50/50 p-4 space-y-3">
-                      <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-                        <span className="font-extrabold text-xs text-[#1e3a5f]">{name}</span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    <div
+                      key={day}
+                      className={`rounded-2xl border p-4 space-y-3 transition ${
+                        isToday
+                          ? 'border-amber-300 bg-amber-50/30 ring-2 ring-amber-300 shadow-xs'
+                          : 'border-gray-200 bg-slate-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between border-b border-gray-200/80 pb-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-extrabold text-xs text-[#1e3a5f]">{DAYS_MAP[day]}</span>
+                          {isToday && (
+                            <span className="text-[9px] font-extrabold bg-amber-400 text-[#1e3a5f] px-1.5 py-0.2 rounded-full">
+                              आज
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          dayEntries.length > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'
+                        }`}>
                           {dayEntries.length} Periods
                         </span>
                       </div>
@@ -1966,15 +2300,15 @@ export default function StudentPortalPage() {
                           {dayEntries.map((r: any) => (
                             <div
                               key={r.id}
-                              className={`p-2.5 rounded-lg border text-xs space-y-1 ${
+                              className={`p-2.5 rounded-xl border text-xs space-y-1 ${
                                 r.isBreak
                                   ? 'bg-amber-50/80 border-amber-200 text-amber-900 font-bold text-center'
-                                  : 'bg-white border-gray-100 shadow-2xs'
+                                  : 'bg-white border-gray-200/90 shadow-2xs'
                               }`}
                             >
                               {r.isBreak ? (
-                                <div className="py-1">
-                                  <span>☕ {r.breakTitle || 'खाजा समय (Tiffin Break)'}</span>
+                                <div className="py-0.5">
+                                  <span>☕ {r.breakTitle || 'खाजा समय (Break)'}</span>
                                   <span className="text-[10px] font-mono block text-amber-700">
                                     {r.startTime} - {r.endTime}
                                   </span>
@@ -1986,7 +2320,7 @@ export default function StudentPortalPage() {
                                       घण्टी {r.periodNo} ({r.startTime} - {r.endTime})
                                     </span>
                                     {r.roomNo && (
-                                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-gray-700 px-1.5 py-0.5 rounded">
+                                      <span className="text-[10px] font-mono font-bold bg-amber-50 text-amber-800 px-1.5 py-0.2 rounded">
                                         Room: {r.roomNo}
                                       </span>
                                     )}
