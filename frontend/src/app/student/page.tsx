@@ -94,8 +94,9 @@ export default function StudentPortalPage() {
     }
   }, [tabFromUrl]);
 
-  // Selected Exam for Marksheet view
+  // Selected Exam for Marksheet/Routine view
   const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+  const [examViewSubTab, setExamViewSubTab] = useState<'routine' | 'marksheet'>('routine');
 
   // Selected Fee Receipt for modal view/print
   const [selectedReceiptForPrint, setSelectedReceiptForPrint] = useState<any>(null);
@@ -192,6 +193,17 @@ export default function StudentPortalPage() {
       if (!selectedExamId || !studentId) return null;
       const res = await api.get(`/exams/${selectedExamId}/marksheet/${studentId}`);
       return res.data?.data;
+    },
+    enabled: !!selectedExamId && !!studentId,
+  });
+
+  // ── 5.1 Fetch Seat Plan for Selected Exam & Student ──
+  const { data: studentSeatPlanData, isLoading: isStudentSeatLoading } = useQuery({
+    queryKey: ['student-seat-plan', selectedExamId, studentId],
+    queryFn: async () => {
+      if (!selectedExamId || !studentId) return null;
+      const res = await api.get(`/seat-plans?examId=${selectedExamId}&studentId=${studentId}`);
+      return res.data?.data?.[0] || null;
     },
     enabled: !!selectedExamId && !!studentId,
   });
@@ -470,6 +482,153 @@ export default function StudentPortalPage() {
             </div>
           </div>
 
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
+  const selectedExam = examsData?.find((e: any) => e.id === selectedExamId);
+
+  const triggerStudentAdmitCardPrint = () => {
+    if (!selectedExam) {
+      toast.error('Please select an exam first');
+      return;
+    }
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const currentExam = selectedExam;
+    const examName = currentExam.nameNepali || currentExam.name || 'Examination';
+    const examYear = currentExam.academicYear?.year || yearName || '2081';
+
+    // Find shift for this student's class
+    const examShifts = currentExam.shifts || [];
+    let matchedShift = examShifts.find((sh: any) => {
+      let cids: number[] = [];
+      try {
+        cids = typeof sh.classIds === 'string' ? JSON.parse(sh.classIds) : (sh.classIds || []);
+      } catch {
+        cids = [];
+      }
+      return cids.includes(activeClassId);
+    });
+
+    if (!matchedShift && examShifts.length > 0) {
+      matchedShift = examShifts[0];
+    }
+
+    const shiftDisplay = matchedShift
+      ? `${matchedShift.nameNepali || matchedShift.name} Shift (${matchedShift.startTime || ''} - ${matchedShift.endTime || ''})`
+      : `${currentExam.shift || 'DAY'} Shift`;
+
+    // Filter schedules for student's class
+    const classSchedules = (currentExam.schedules || []).filter(
+      (sch: any) => sch.classId === activeClassId
+    );
+
+    const routineRowsHtml = classSchedules.length > 0
+      ? classSchedules.map((sch: any) => `
+          <tr>
+            <td style="border: 1px solid #cbd5e1; padding: 5px; text-align: center; font-family: monospace; font-weight: bold;">${sch.examDateBs || sch.examDate || '—'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 5px; font-weight: bold; color: #0f172a;">${sch.subject?.name || sch.subjectName || 'Subject'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 5px; text-align: center;">${sch.startTime || matchedShift?.startTime || '07:00 AM'} - ${sch.endTime || matchedShift?.endTime || '10:00 AM'}</td>
+          </tr>
+        `).join('')
+      : `
+          <tr>
+            <td colspan="3" style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; color: #64748b; font-style: italic;">
+              Shift Timing: ${shiftDisplay}
+            </td>
+          </tr>
+        `;
+
+    const seat = studentSeatPlanData;
+    const seatLocationText = seat
+      ? `${seat.room?.roomNo || 'Room'} (${seat.room?.building || 'Main Block'}) • Bench #${seat.benchNo} (${seat.seatPosition} Seat)`
+      : 'Exam Hall / Notice Board Check';
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Admit Card - ${student?.fullName || displayName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 12mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .admit-card { border: 2.5px solid #1e3a5f; padding: 16px 20px; border-radius: 10px; background: #fffdfa; }
+            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+            .school-name { font-size: 16px; font-weight: 900; color: #1e3a5f; }
+            .admit-badge { font-size: 12px; font-weight: 900; background: #1e3a5f; color: #fff; display: inline-block; padding: 2px 14px; border-radius: 4px; margin-top: 5px; text-transform: uppercase; }
+            .body-grid { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 14px; }
+            .details div { margin-bottom: 4px; }
+            .photo-box { width: 85px; height: 95px; border: 1.5px dashed #64748b; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 10px; color: #64748b; background: #f8fafc; border-radius: 6px; shrink-0; }
+            .routine-box { margin-bottom: 14px; }
+            .rules { font-size: 10px; line-height: 1.5; color: #334155; border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-bottom: 16px; }
+            .footer-sig { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-top: 20px; }
+            .sig-line { border-top: 1px solid #333; width: 140px; text-align: center; padding-top: 4px; margin-top: 25px; }
+          </style>
+        </head>
+        <body>
+          <div class="admit-card">
+            <div class="header">
+              <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
+              <div style="font-size: 11px; font-weight: bold; color: #475569;">Shree Nepal Secondary School • EMIS: 320160002</div>
+              <div class="admit-badge">EXAMINATION ADMIT CARD (प्रवेश पत्र)</div>
+              <div style="font-size: 13px; font-weight: 800; color: #b91c1c; margin-top: 4px;">${examName} — ${examYear} BS</div>
+              <div style="font-size: 11px; font-weight: bold; color: #0284c7; margin-top: 2px;">⏱️ ${shiftDisplay}</div>
+            </div>
+
+            <div class="body-grid">
+              <div class="details">
+                <div><strong>विद्यार्थीको नाम (Name):</strong> <span style="font-size: 13px; font-weight: 900; color: #0f172a;">${student?.fullName || displayName}</span></div>
+                <div><strong>Symbol No.:</strong> <span style="font-family: monospace; font-weight: 900; font-size: 14px; color: #1e3a5f; background: #e0f2fe; padding: 2px 8px; border-radius: 4px;">${symbolNo}</span></div>
+                <div><strong>कक्षा (Class):</strong> ${className} (${section}) &nbsp;|&nbsp; <strong>रोल नं.:</strong> ${rollNo}</div>
+                <div><strong>IEMIS / Student ID:</strong> ${student?.studentId || '—'}</div>
+                <div><strong>परीक्षा सिट (Assigned Seat):</strong> <span style="font-weight: bold; color: #047857;">${seatLocationText}</span></div>
+              </div>
+              <div class="photo-box">
+                ${student?.photoUrl ? `<img src="${student.photoUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />` : 'फोटो<br/>(Photo)'}
+              </div>
+            </div>
+
+            <div class="routine-box">
+              <div style="font-size: 11px; font-weight: 900; color: #1e3a5f; text-transform: uppercase; margin-bottom: 4px;">
+                📅 Exam Subject Timetable (विषयगत परीक्षा तालिका):
+              </div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+                <thead>
+                  <tr style="background: #1e3a5f; color: #fff; font-weight: bold;">
+                    <th style="border: 1px solid #1e3a5f; padding: 5px; width: 110px; text-align: center;">Date (मिति)</th>
+                    <th style="border: 1px solid #1e3a5f; padding: 5px; text-align: left;">Subject (विषय)</th>
+                    <th style="border: 1px solid #1e3a5f; padding: 5px; width: 140px; text-align: center;">Time (समय)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${routineRowsHtml}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="rules">
+              <strong>नियम तथा निर्देशनहरू:</strong><br/>
+              १. परीक्षा सुरु हुनुभन्दा १५ मिनेट अगावै तोकिएको परीक्षा कोठा तथा सिटमा अनिवार्य उपस्थित हुनुपर्नेछ।<br/>
+              २. प्रवेश पत्र विना परीक्षा हलमा प्रवेश गर्न पाइने छैन। मोबाइल फोन, स्मार्ट घडी तथा इलेक्ट्रोनिक उपकरण पूर्ण निषेध छ।
+            </div>
+
+            <div class="footer-sig">
+              <div class="sig-line">परीक्षा नियन्त्रक (Exam Controller)</div>
+              <div class="sig-line">प्रधानाध्यापक (Headmaster Stamp)</div>
+            </div>
+          </div>
           <script>
             window.onload = function() { setTimeout(function() { window.print(); }, 400); };
           </script>
@@ -1284,60 +1443,282 @@ export default function StudentPortalPage() {
         </div>
       )}
 
-      {/* ─────────────────── TAB 3: EXAMS & MARKSHEETS ────────────────────── */}
+      {/* ─────────────────── TAB 3: EXAMS, ROUTINES, SEATS & MARKSHEETS ────────────────────── */}
       {activeTab === 'exams' && (
         <div className="space-y-6">
-          {/* Exam Selector & Print Bar (NO-PRINT) */}
-          <div className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl bg-white border border-gray-100 p-4 shadow-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-gray-700">Select Exam (परीक्षा छनौट):</span>
-              <select
-                value={selectedExamId || ''}
-                onChange={(e) => setSelectedExamId(Number(e.target.value))}
-                className="rounded-xl border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-800 bg-slate-50 focus:ring-2 focus:ring-[#1e3a5f]"
-              >
-                {examsData?.map((exam: any) => (
-                  <option key={exam.id} value={exam.id}>
-                    {exam.name} ({exam.nameNepali || 'परीक्षा'}) - {exam.academicYear?.year || '2083'} BS
-                  </option>
-                ))}
-              </select>
+          {/* Exam Selector, View Switcher & Action Bar (NO-PRINT) */}
+          <div className="no-print flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-2xl bg-white border border-gray-100 p-4 shadow-xs">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-700">Select Exam (परीक्षा):</span>
+                <select
+                  value={selectedExamId || ''}
+                  onChange={(e) => setSelectedExamId(Number(e.target.value))}
+                  className="rounded-xl border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-800 bg-slate-50 focus:ring-2 focus:ring-[#1e3a5f]"
+                >
+                  {examsData?.map((exam: any) => (
+                    <option key={exam.id} value={exam.id}>
+                      {exam.name} ({exam.nameNepali || 'परीक्षा'}) - {exam.academicYear?.year || '2083'} BS
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sub-tab pills */}
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setExamViewSubTab('routine')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    examViewSubTab === 'routine'
+                      ? 'bg-[#1e3a5f] text-white shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  📅 तालिका र सिट (Routine & Seat)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExamViewSubTab('marksheet')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    examViewSubTab === 'marksheet'
+                      ? 'bg-[#1e3a5f] text-white shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  📜 लब्धाङ्क पत्र (Marksheet)
+                </button>
+              </div>
             </div>
 
-            <button
-              onClick={triggerStudentMarksheetPrint}
-              disabled={!marksheetData}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 text-xs font-bold text-white shadow-xs transition disabled:opacity-50"
-            >
-              <Printer size={15} />
-              <span>Print My Marksheet (लब्धाङ्क पत्र प्रिन्ट गर्नुहोस्)</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {examViewSubTab === 'routine' ? (
+                <button
+                  onClick={triggerStudentAdmitCardPrint}
+                  disabled={!selectedExam}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-4 py-2 text-xs font-bold text-white shadow-xs transition disabled:opacity-50"
+                >
+                  <Printer size={15} />
+                  <span>Download Admit Card (प्रवेश पत्र)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={triggerStudentMarksheetPrint}
+                  disabled={!marksheetData}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-4 py-2 text-xs font-bold text-white shadow-xs transition disabled:opacity-50"
+                >
+                  <Printer size={15} />
+                  <span>Print My Marksheet (लब्धाङ्क पत्र)</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Marksheet Container */}
-          {isMarksheetLoading ? (
-            <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-gray-400">
-              Loading your academic marksheet and evaluation...
+          {/* ══════ SUB-TAB 1: EXAM ROUTINE & SEAT PLAN ══════ */}
+          {examViewSubTab === 'routine' && (
+            <div className="space-y-6">
+              {/* Exam & Shift Banner */}
+              {(() => {
+                const examShifts = selectedExam?.shifts || [];
+                let matchedShift = examShifts.find((sh: any) => {
+                  let cids: number[] = [];
+                  try {
+                    cids = typeof sh.classIds === 'string' ? JSON.parse(sh.classIds) : (sh.classIds || []);
+                  } catch {
+                    cids = [];
+                  }
+                  return cids.includes(activeClassId);
+                });
+                if (!matchedShift && examShifts.length > 0) {
+                  matchedShift = examShifts[0];
+                }
+
+                const shiftName = matchedShift?.nameNepali || matchedShift?.name || selectedExam?.shift || 'Day';
+                const startTime = matchedShift?.startTime || '07:00 AM';
+                const endTime = matchedShift?.endTime || '10:00 AM';
+
+                const classSchedules = (selectedExam?.schedules || [])
+                  .filter((s: any) => s.classId === activeClassId)
+                  .sort((a: any, b: any) => (a.examDateBs || '').localeCompare(b.examDateBs || ''));
+
+                return (
+                  <>
+                    {/* Shift & Seat Cards Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Shift Card */}
+                      <div className="rounded-2xl border-2 border-blue-200/80 bg-gradient-to-br from-blue-50 to-indigo-50/40 p-5 shadow-2xs space-y-2">
+                        <div className="flex items-center gap-2 text-blue-900 font-extrabold text-xs uppercase tracking-wide">
+                          <Clock size={16} className="text-blue-700" />
+                          <span>परीक्षा सत्र तथा समय (Exam Shift)</span>
+                        </div>
+                        <div className="text-lg font-black text-[#1e3a5f]">
+                          {shiftName} Shift ({shiftName === 'Morning' || shiftName === 'प्रभात' ? 'बिहानी' : 'दिवा'} सत्र)
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-blue-100/90 text-blue-950 px-3 py-1 text-xs font-mono font-bold">
+                          ⏱️ {startTime} - {endTime}
+                        </div>
+                        <p className="text-[11px] text-gray-500 font-nepali pt-1">
+                          कक्षा: <strong>{className} ({section})</strong> का लागि तोकिएको आधिकारिक समय
+                        </p>
+                      </div>
+
+                      {/* Seat Allocation Card */}
+                      <div className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50/70 to-orange-50/40 p-5 shadow-2xs space-y-2">
+                        <div className="flex items-center gap-2 text-amber-900 font-extrabold text-xs uppercase tracking-wide">
+                          <MapPin size={16} className="text-amber-700" />
+                          <span>तोकिएको परीक्षा कोठा र सिट (Seat)</span>
+                        </div>
+                        {isStudentSeatLoading ? (
+                          <div className="text-xs text-gray-400 py-2">Loading seat allocation...</div>
+                        ) : studentSeatPlanData ? (
+                          <>
+                            <div className="text-lg font-black text-amber-950">
+                              {studentSeatPlanData.room?.roomNo || 'Room 101'}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-lg bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-bold font-mono">
+                                🪑 Bench #{studentSeatPlanData.benchNo}
+                              </span>
+                              <span className="rounded-lg bg-emerald-100 text-emerald-900 px-2.5 py-0.5 text-xs font-bold">
+                                {studentSeatPlanData.seatPosition} Seat
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-600 font-nepali pt-1">
+                              भवन: {studentSeatPlanData.room?.building || 'Main Block'}
+                            </p>
+                          </>
+                        ) : (
+                          <div className="py-2 space-y-1">
+                            <div className="text-xs font-bold text-gray-700">परीक्षा हल / मुख्य कोठा</div>
+                            <p className="text-[11px] text-gray-500 font-nepali">
+                              प्रवेश द्वारको सूचना अनुसार सिट व्यवस्था हुनेछ।
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Candidate Card */}
+                      <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50/30 p-5 shadow-2xs space-y-2">
+                        <div className="flex items-center gap-2 text-purple-900 font-extrabold text-xs uppercase tracking-wide">
+                          <Award size={16} className="text-purple-700" />
+                          <span>परीक्षार्थी विवरण (Candidate)</span>
+                        </div>
+                        <div className="text-sm font-black text-purple-950 truncate">
+                          {student?.fullName || displayName}
+                        </div>
+                        <div className="flex items-center justify-between text-xs pt-1">
+                          <span className="text-gray-500">Symbol No:</span>
+                          <span className="font-mono font-black text-[#1e3a5f] bg-purple-100 px-2 py-0.5 rounded">
+                            {symbolNo}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Roll No / Class:</span>
+                          <span className="font-bold text-gray-800">
+                            Roll {rollNo} • {className}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Class Subject Exam Timetable */}
+                    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-2xs space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <CalendarCheck size={18} className="text-[#1e3a5f]" />
+                          <h3 className="text-sm font-extrabold text-[#1e3a5f] uppercase tracking-wide">
+                            {selectedExam?.nameNepali || selectedExam?.name} — {className} ({section}) विषयगत परीक्षा तालिका
+                          </h3>
+                        </div>
+                        <span className="text-xs font-bold text-gray-500 font-mono">
+                          {classSchedules.length} Subjects Scheduled
+                        </span>
+                      </div>
+
+                      {classSchedules.length === 0 ? (
+                        <div className="py-12 text-center text-gray-400 space-y-2">
+                          <Calendar size={32} className="mx-auto text-gray-300" />
+                          <p className="text-xs font-nepali">यस कक्षाका लागि परीक्षा तालिका (Schedule) चाँडै प्रकाशित गरिनेछ।</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-xl border border-gray-200">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead className="bg-[#1e3a5f] text-white">
+                              <tr>
+                                <th className="p-3 w-12 text-center">क्र.सं.</th>
+                                <th className="p-3 w-32">मिति (Date BS)</th>
+                                <th className="p-3">विषय (Subject Name)</th>
+                                <th className="p-3 w-40">परीक्षा समय (Exam Timing)</th>
+                                <th className="p-3 w-28 text-center">पूर्णाङ्क / उत्तीर्णाङ्क</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {classSchedules.map((sch: any, idx: number) => (
+                                <tr key={sch.id || idx} className="hover:bg-slate-50 transition">
+                                  <td className="p-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                                  <td className="p-3 font-mono font-bold text-gray-900">
+                                    <span className="bg-slate-100 px-2 py-0.5 rounded">
+                                      {sch.examDateBs || sch.examDate || '—'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-extrabold text-gray-900 text-sm">
+                                      {sch.subject?.name || sch.subjectName || 'Subject'}
+                                    </div>
+                                    {sch.subject?.nameNepali && (
+                                      <div className="text-[11px] text-gray-500 font-nepali">
+                                        {sch.subject.nameNepali}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className="inline-flex items-center gap-1 font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded">
+                                      ⏱️ {sch.startTime || startTime} - {sch.endTime || endTime}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-center font-mono font-bold text-gray-700">
+                                    {sch.fullMarks || 100} / {sch.passMarks || 35}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
-          ) : marksheetData?.isPublished === false ? (
-            <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-12 text-center space-y-4 shadow-sm">
-              <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
-                <Bell size={32} />
-              </div>
-              <div className="max-w-md mx-auto space-y-1">
-                <h3 className="text-lg font-black text-amber-950">Result Pending (नतिजा प्रकाशन प्रतीक्षामा)</h3>
-                <p className="text-xs text-amber-800 leading-relaxed font-nepali">
-                  यस परीक्षाको आधिकारिक नतिजा विद्यालय प्रशासनबाट प्रकाशन भइसकेको छैन। नतिजा प्रकाशन पश्चात् तपाईंको ग्रेडसिट यहाँ उपलब्ध हुनेछ।
-                </p>
-              </div>
-            </div>
-          ) : !marksheetData ? (
-            <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-gray-400">
-              No examination marks entered for this exam yet.
-            </div>
-          ) : (
-            /* ─── PRINTABLE CDC GRADE SHEET PAPER (A4 FORMAT) ─────────────────── */
-            <div className="printable-document p-8 border-4 border-double border-[#1e3a5f] rounded-2xl space-y-5 bg-white text-gray-900 shadow-sm print:p-0 print:border-2 print:shadow-none print:rounded-none">
+          )}
+
+          {/* ══════ SUB-TAB 2: MARKSHEET & RESULTS ══════ */}
+          {examViewSubTab === 'marksheet' && (
+            <div className="space-y-6">
+              {/* Marksheet Container */}
+              {isMarksheetLoading ? (
+                <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-gray-400">
+                  Loading your academic marksheet and evaluation...
+                </div>
+              ) : marksheetData?.isPublished === false ? (
+                <div className="rounded-3xl border border-amber-200 bg-amber-50/60 p-12 text-center space-y-4 shadow-sm">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+                    <Bell size={32} />
+                  </div>
+                  <div className="max-w-md mx-auto space-y-1">
+                    <h3 className="text-lg font-black text-amber-950">Result Pending (नतिजा प्रकाशन प्रतीक्षामा)</h3>
+                    <p className="text-xs text-amber-800 leading-relaxed font-nepali">
+                      यस परीक्षाको आधिकारिक नतिजा विद्यालय प्रशासनबाट प्रकाशन भइसकेको छैन। नतिजा प्रकाशन पश्चात् तपाईंको ग्रेडसिट यहाँ उपलब्ध हुनेछ।
+                    </p>
+                  </div>
+                </div>
+              ) : !marksheetData ? (
+                <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-gray-400">
+                  No examination marks entered for this exam yet.
+                </div>
+              ) : (
+                /* ─── PRINTABLE CDC GRADE SHEET PAPER (A4 FORMAT) ─────────────────── */
+                <div className="printable-document p-8 border-4 border-double border-[#1e3a5f] rounded-2xl space-y-5 bg-white text-gray-900 shadow-sm print:p-0 print:border-2 print:shadow-none print:rounded-none">
               {/* Header with School Logo & Photo */}
               <div className="text-center space-y-1 border-b-2 border-[#1e3a5f] pb-4">
                 <div className="flex items-center justify-between px-2">
@@ -1652,6 +2033,8 @@ export default function StudentPortalPage() {
           )}
         </div>
       )}
+    </div>
+  )}
 
       {/* ─────────────────── TAB 4: FEES & PAYMENTS ──────────────────────── */}
       {activeTab === 'fees' && (

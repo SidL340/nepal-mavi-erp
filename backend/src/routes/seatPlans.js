@@ -98,11 +98,12 @@ router.post('/rooms/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN
 // GET /api/seat-plans — get seat plan for an exam & shift
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { examId, roomId, classId, shift } = req.query;
+    const { examId, roomId, classId, studentId, shift } = req.query;
     const where = {};
     if (examId) where.examId = parseInt(examId);
     if (roomId) where.roomId = parseInt(roomId);
     if (classId) where.classId = parseInt(classId);
+    if (studentId) where.studentId = parseInt(studentId);
     if (shift) where.shift = String(shift);
 
     const seatPlans = await prisma.examSeatPlan.findMany({

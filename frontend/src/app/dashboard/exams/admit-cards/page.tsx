@@ -76,7 +76,19 @@ export default function AdmitCardsPage() {
     enabled: !!selectedClassId,
   });
 
+  // Fetch Seat Plans for selected exam
+  const { data: examSeatsData } = useQuery({
+    queryKey: ['seat-plans-for-admit', selectedExamId],
+    queryFn: async () => {
+      if (!selectedExamId) return [];
+      const res = await api.get(`/seat-plans?examId=${selectedExamId}`);
+      return res.data?.data || [];
+    },
+    enabled: !!selectedExamId,
+  });
+
   const students = studentsData || [];
+  const examSeats = examSeatsData || [];
 
   const handleToggleStudent = (id: number) => {
     setSelectedStudentIds((prev) =>
@@ -101,6 +113,48 @@ export default function AdmitCardsPage() {
     const currentExam = examsData?.find((e: any) => e.id.toString() === selectedExamId);
     const currentClass = classesData?.find((c: any) => c.id.toString() === selectedClassId);
     const examName = currentExam?.nameNepali || currentExam?.name || 'FIRST TERMINAL EXAMINATION';
+    const examYear = currentExam?.academicYear?.year || '2081';
+
+    // Find shift for this class
+    const examShifts = currentExam?.shifts || [];
+    let matchedShift = examShifts.find((sh: any) => {
+      let cids: number[] = [];
+      try {
+        cids = typeof sh.classIds === 'string' ? JSON.parse(sh.classIds) : (sh.classIds || []);
+      } catch {
+        cids = [];
+      }
+      return cids.includes(parseInt(selectedClassId));
+    });
+
+    if (!matchedShift && examShifts.length > 0) {
+      matchedShift = examShifts[0];
+    }
+
+    const shiftDisplay = matchedShift
+      ? `${matchedShift.nameNepali || matchedShift.name} Shift (${matchedShift.startTime || ''} - ${matchedShift.endTime || ''})`
+      : `${currentExam?.shift || 'DAY'} Shift`;
+
+    // Filter schedules for this class
+    const classSchedules = (currentExam?.schedules || []).filter(
+      (sch: any) => sch.classId?.toString() === selectedClassId
+    );
+
+    const routineRowsHtml = classSchedules.length > 0
+      ? classSchedules.map((sch: any) => `
+          <tr>
+            <td style="border: 1px solid #cbd5e1; padding: 2px 4px; text-align: center; font-family: monospace;">${sch.examDateBs || sch.examDate || '—'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px 4px; font-weight: bold; color: #0f172a;">${sch.subject?.name || sch.subjectName || 'Subject'}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px 4px; text-align: center;">${sch.startTime || matchedShift?.startTime || '07:00 AM'} - ${sch.endTime || matchedShift?.endTime || '10:00 AM'}</td>
+          </tr>
+        `).join('')
+      : `
+          <tr>
+            <td colspan="3" style="border: 1px solid #cbd5e1; padding: 3px 6px; text-align: center; color: #64748b; font-style: italic;">
+              Shift Timing: ${shiftDisplay}
+            </td>
+          </tr>
+        `;
 
     const targetStudents = selectedStudentIds.length > 0
       ? students.filter((s: any) => selectedStudentIds.includes(s.id))
@@ -119,34 +173,57 @@ export default function AdmitCardsPage() {
 
     const cardsHtml = targetStudents.map((st: any, idx: number) => {
       const roll = st.classEnrollment?.[0]?.rollNo || (idx + 1);
-      const symbol = generateSymbolNo('2081', currentClass?.name, roll);
+      const symbol = generateSymbolNo(examYear, currentClass?.name, roll);
+
+      // Find seat allocation for this student
+      const seat = examSeats.find((s: any) => s.studentId === st.id);
+      const seatLocationText = seat
+        ? `${seat.room?.roomNo || 'Room'} • Bench #${seat.benchNo} (${seat.seatPosition})`
+        : 'Exam Hall / As Assigned';
 
       return `
         <div class="admit-card">
           <div class="header">
             <div class="school-name">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
-            <div style="font-size: 10px; font-weight: bold; color: #475569;">Shree Nepal Secondary School • EMIS: 320160002</div>
+            <div style="font-size: 9.5px; font-weight: bold; color: #475569;">Shree Nepal Secondary School • EMIS: 320160002</div>
             <div class="admit-badge">EXAMINATION ADMIT CARD (प्रवेश पत्र)</div>
-            <div style="font-size: 11px; font-weight: 800; color: #b91c1c; margin-top: 2px;">${examName} — 2081 BS</div>
+            <div style="font-size: 10.5px; font-weight: 800; color: #b91c1c; margin-top: 2px;">${examName} — ${examYear} BS</div>
+            <div style="font-size: 9.5px; font-weight: bold; color: #0284c7; margin-top: 1px;">⏱️ ${shiftDisplay}</div>
           </div>
 
           <div class="body-grid">
             <div class="details">
-              <div><strong>विद्यार्थीको नाम (Name):</strong> ${st.fullName}</div>
-              <div><strong>Symbol No.:</strong> <span style="font-family: monospace; font-weight: 900; color: #1e3a5f;">${symbol}</span></div>
+              <div><strong>विद्यार्थीको नाम:</strong> <span style="font-size: 11px; font-weight: 900; color: #0f172a;">${st.fullName}</span></div>
+              <div><strong>Symbol No.:</strong> <span style="font-family: monospace; font-weight: 900; color: #1e3a5f; background: #e0f2fe; padding: 1px 4px; border-radius: 3px;">${symbol}</span></div>
               <div><strong>कक्षा (Class):</strong> ${currentClass?.name || '—'} ${currentClass?.section ? `(${currentClass.section})` : ''}</div>
-              <div><strong>रोल नं. (Roll No):</strong> ${roll}</div>
-              <div><strong>IEMIS / Student ID:</strong> ${st.studentId}</div>
+              <div><strong>रोल नं. (Roll No):</strong> <span style="font-weight: 800;">${roll}</span> &nbsp;|&nbsp; <strong>ID:</strong> ${st.studentId}</div>
+              <div><strong>परीक्षा सिट (Seat):</strong> <span style="font-weight: bold; color: #047857;">${seatLocationText}</span></div>
             </div>
             <div class="photo-box">
               फोटो<br/>(Photo)
             </div>
           </div>
 
+          <div class="routine-box">
+            <div style="font-size: 8.5px; font-weight: 900; color: #1e3a5f; text-transform: uppercase; margin-bottom: 2px;">
+              📅 Exam Subject Timetable (विषयगत परीक्षा तालिका):
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 8px;">
+              <thead>
+                <tr style="background: #f1f5f9; color: #334155; font-weight: bold;">
+                  <th style="border: 1px solid #cbd5e1; padding: 2px 4px; width: 65px; text-align: center;">Date (मिति)</th>
+                  <th style="border: 1px solid #cbd5e1; padding: 2px 4px; text-align: left;">Subject (विषय)</th>
+                  <th style="border: 1px solid #cbd5e1; padding: 2px 4px; width: 110px; text-align: center;">Time (समय)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${routineRowsHtml}
+              </tbody>
+            </table>
+          </div>
+
           <div class="rules">
-            <strong>नियम तथा निर्देशनहरू:</strong>
-            १. परीक्षा सुरु हुनुभन्दा १५ मिनेट अगावै परीक्षा हलमा प्रवेश गरिसक्नुपर्नेछ।<br/>
-            २. प्रवेश पत्र विना परीक्षा हलमा प्रवेश गर्न पाइने छैन। मोबाइल फोन तथा इलेक्ट्रोनिक उपकरण पूर्ण निषेध छ।
+            <strong>नियम:</strong> १. परीक्षा सुरु हुनुभन्दा १५ मिनेट अगावै तोकिएको सिटमा उपस्थित हुनुपर्नेछ। २. प्रवेश पत्र अनिवार्य छ।
           </div>
 
           <div class="footer-sig">
@@ -161,22 +238,23 @@ export default function AdmitCardsPage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Admit Cards - ${currentClass?.name}</title>
+          <title>Admit Cards - ${currentClass?.name} - ${examName}</title>
           <style>
             @page { size: A4 portrait; margin: 8mm; }
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
-            .cards-container { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
-            .admit-card { border: 2px solid #1e3a5f; padding: 10px; border-radius: 6px; page-break-inside: avoid; background: #fffdfa; display: flex; flex-direction: column; justify-content: space-between; height: 132mm; }
-            .header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 4px; margin-bottom: 6px; }
-            .school-name { font-size: 13px; font-weight: 900; color: #1e3a5f; }
-            .admit-badge { font-size: 10px; font-weight: 900; background: #1e3a5f; color: #fff; display: inline-block; padding: 1px 8px; border-radius: 3px; margin-top: 3px; text-transform: uppercase; }
-            .body-grid { display: flex; justify-content: space-between; font-size: 10.5px; margin-bottom: 6px; }
-            .details div { margin-bottom: 2.5px; }
-            .photo-box { width: 65px; height: 75px; border: 1px dashed #64748b; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 9px; color: #64748b; background: #f8fafc; border-radius: 4px; shrink-0; }
-            .rules { font-size: 8.5px; line-height: 1.4; color: #334155; border-top: 1px dashed #cbd5e1; padding-top: 4px; margin-bottom: 8px; }
-            .footer-sig { display: flex; justify-content: space-between; font-size: 9px; font-weight: bold; margin-top: 4px; }
-            .sig-line { border-top: 1px solid #333; width: 110px; text-align: center; padding-top: 2px; }
+            .cards-container { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+            .admit-card { border: 2px solid #1e3a5f; padding: 8px 10px; border-radius: 6px; page-break-inside: avoid; background: #fffdfa; display: flex; flex-direction: column; justify-content: space-between; height: 135mm; }
+            .header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 3px; margin-bottom: 4px; }
+            .school-name { font-size: 12px; font-weight: 900; color: #1e3a5f; }
+            .admit-badge { font-size: 9.5px; font-weight: 900; background: #1e3a5f; color: #fff; display: inline-block; padding: 1px 7px; border-radius: 3px; margin-top: 2px; text-transform: uppercase; }
+            .body-grid { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; }
+            .details div { margin-bottom: 2px; }
+            .photo-box { width: 60px; height: 68px; border: 1px dashed #64748b; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 8.5px; color: #64748b; background: #f8fafc; border-radius: 4px; shrink-0; }
+            .routine-box { margin-bottom: 4px; }
+            .rules { font-size: 8px; line-height: 1.3; color: #334155; border-top: 1px dashed #cbd5e1; padding-top: 3px; margin-bottom: 4px; }
+            .footer-sig { display: flex; justify-content: space-between; font-size: 8.5px; font-weight: bold; margin-top: 2px; }
+            .sig-line { border-top: 1px solid #333; width: 105px; text-align: center; padding-top: 2px; }
           </style>
         </head>
         <body>

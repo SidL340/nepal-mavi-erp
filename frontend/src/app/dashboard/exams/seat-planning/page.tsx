@@ -358,6 +358,217 @@ export default function ExamSeatPlanningPage() {
     printWin.document.close();
   };
 
+  const printDeskSlips = () => {
+    if (!seatPlansData || seatPlansData.length === 0) {
+      toast.error('No seat plan to generate desk slips for');
+      return;
+    }
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+
+    const examName = currentExam?.nameNepali || currentExam?.name || 'Examination';
+    const shiftInfo = examShifts.find((s: any) => s.name === selectedShift);
+    const shiftLabel = shiftInfo
+      ? `${shiftInfo.nameNepali || shiftInfo.name} (${shiftInfo.startTime || ''} - ${shiftInfo.endTime || ''})`
+      : `${selectedShift} SHIFT`;
+
+    const slipsHtml = seatPlansData.map((seat: any) => {
+      const roomTitle = seat.room?.roomNo ? `${seat.room.roomNo} (${seat.room.building || 'Main Block'})` : 'Exam Room';
+      const className = seat.student?.classEnrollment?.[0]?.class?.name || '—';
+      const rollNo = seat.rollNo || seat.student?.classEnrollment?.[0]?.rollNo || '—';
+      const classNum = (className.match(/\d+/) || ['00'])[0].padStart(2, '0');
+      const rollStr = String(rollNo).padStart(2, '0');
+      const symbolNo = `2081${classNum}${rollStr}`;
+
+      return `
+        <div class="slip-card">
+          <div class="slip-header">
+            <div class="school-title">श्री नेपाल मा.वि., विश्रामपुर, रौतहट</div>
+            <div class="exam-title">${examName} — 2081</div>
+            <div class="shift-badge">⏱️ ${shiftLabel}</div>
+          </div>
+
+          <div class="seat-coords">
+            <div class="coord-box room-badge">🏢 ${roomTitle}</div>
+            <div class="coord-box bench-badge">🪑 Bench #${seat.benchNo} (${seat.seatPosition})</div>
+          </div>
+
+          <div class="student-info">
+            <div class="name-row">
+              <span class="label">परीक्षार्थी:</span>
+              <span class="st-name">${seat.student?.fullName || '—'}</span>
+            </div>
+            <div class="details-row">
+              <div><strong>कक्षा:</strong> ${className}</div>
+              <div><strong>रोल:</strong> <span class="badge-num">${rollNo}</span></div>
+            </div>
+            <div class="symbol-row">
+              <span class="label">Symbol No:</span>
+              <span class="symbol-num">${symbolNo}</span>
+            </div>
+          </div>
+
+          <div class="slip-footer">
+            <span>EMIS: ${seat.student?.studentId || '—'}</span>
+            <span class="cut-line">✂️ DESK SLIP</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Desk Slips - ${examName} (${selectedShift})</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
+            .slips-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 6mm;
+            }
+            .slip-card {
+              border: 1.5px dashed #1e3a5f;
+              border-radius: 8px;
+              padding: 8px 10px;
+              background: #fffdfa;
+              page-break-inside: avoid;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              height: 64mm;
+            }
+            .slip-header {
+              text-align: center;
+              border-bottom: 1px solid #cbd5e1;
+              padding-bottom: 3px;
+              margin-bottom: 4px;
+            }
+            .school-title {
+              font-size: 11px;
+              font-weight: 900;
+              color: #1e3a5f;
+            }
+            .exam-title {
+              font-size: 10px;
+              font-weight: 800;
+              color: #b91c1c;
+            }
+            .shift-badge {
+              font-size: 9px;
+              font-weight: bold;
+              color: #0369a1;
+              margin-top: 1px;
+            }
+            .seat-coords {
+              display: flex;
+              gap: 4px;
+              justify-content: space-between;
+              margin-bottom: 4px;
+            }
+            .coord-box {
+              font-size: 9.5px;
+              font-weight: 900;
+              padding: 2px 6px;
+              border-radius: 4px;
+              text-align: center;
+              flex: 1;
+            }
+            .room-badge {
+              background: #f1f5f9;
+              color: #334155;
+              border: 1px solid #cbd5e1;
+            }
+            .bench-badge {
+              background: #fef3c7;
+              color: #92400e;
+              border: 1px solid #fde68a;
+            }
+            .student-info {
+              background: #fff;
+              border: 1px solid #e2e8f0;
+              border-radius: 6px;
+              padding: 5px 7px;
+              font-size: 10px;
+            }
+            .name-row {
+              font-size: 11.5px;
+              font-weight: 900;
+              color: #0f172a;
+              margin-bottom: 3px;
+              display: flex;
+              align-items: baseline;
+              gap: 4px;
+            }
+            .label {
+              font-size: 9px;
+              color: #64748b;
+              font-weight: normal;
+            }
+            .st-name {
+              color: #1e3a5f;
+            }
+            .details-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 3px;
+              font-size: 10px;
+            }
+            .badge-num {
+              font-family: monospace;
+              font-weight: 900;
+              color: #1e3a5f;
+            }
+            .symbol-row {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              background: #f0fdf4;
+              border: 1px solid #bbf7d0;
+              padding: 1px 6px;
+              border-radius: 4px;
+            }
+            .symbol-num {
+              font-family: monospace;
+              font-weight: 900;
+              font-size: 11.5px;
+              color: #166534;
+              letter-spacing: 0.5px;
+            }
+            .slip-footer {
+              display: flex;
+              justify-content: space-between;
+              font-size: 8px;
+              color: #64748b;
+              font-family: monospace;
+              padding-top: 2px;
+            }
+            .cut-line {
+              font-weight: bold;
+              color: #94a3b8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="slips-grid">
+            ${slipsHtml}
+          </div>
+          <script>
+            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   const totalSchoolBenches = rooms.reduce((sum, r) => sum + (r.totalBenches || 0), 0);
   const totalSchoolCapacity = rooms.reduce((sum, r) => sum + (r.totalCapacity || r.totalBenches * 2), 0);
   const seatPlans = seatPlansData || [];
@@ -381,7 +592,7 @@ export default function ExamSeatPlanningPage() {
             <span>Room Plan & Shift-Wise Anti-Cheating Seat Allocation</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            कोठा तथा बेन्च योजना (Room & Desk Plan) तयार गरी प्रत्येक सत्रका लागि एकान्तर (Interleaved) सिट प्लान र ढोका टाँस निकाल्नुहोस्
+            कोठा तथा बेन्च योजना (Room & Desk Plan) तयार गरी प्रत्येक सत्रका लागि एकान्तर (Interleaved) सिट प्लान, डेस्क स्लिप र ढोका टाँस निकाल्नुहोस्
           </p>
         </div>
 
@@ -393,6 +604,16 @@ export default function ExamSeatPlanningPage() {
             <Printer size={14} className="text-purple-600" />
             <span>Admit Cards (प्रवेश पत्र)</span>
           </Link>
+
+          <button
+            onClick={printDeskSlips}
+            disabled={seatPlans.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-50"
+            title="Print bench desk slips to stick on desks"
+          >
+            <Printer size={14} className="text-amber-700" />
+            <span>Print Desk Slips (डेस्क स्लिप टाँस)</span>
+          </button>
 
           <button
             onClick={printDoorNotice}
@@ -909,10 +1130,30 @@ export default function ExamSeatPlanningPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1 font-bold text-emerald-900 text-xs">
               Total Seated: <strong>{seatPlans.length}</strong> Students
             </span>
+
+            <button
+              type="button"
+              onClick={printDeskSlips}
+              disabled={seatPlans.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-50"
+            >
+              <Printer size={13} className="text-amber-700" />
+              <span>Print Desk Slips</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={printDoorNotice}
+              disabled={seatPlans.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs disabled:opacity-50"
+            >
+              <Printer size={13} />
+              <span>Print Door Notice</span>
+            </button>
           </div>
         </div>
 
