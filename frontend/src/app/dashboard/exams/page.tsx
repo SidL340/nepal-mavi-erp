@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -26,6 +27,15 @@ import {
   Layers,
   Sparkles,
   FileText,
+  Calendar,
+  ArrowRight,
+  GraduationCap,
+  Ticket,
+  LayoutGrid,
+  ExternalLink,
+  ShieldCheck,
+  BarChart3,
+  CheckCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/lib/auth-store';
@@ -988,194 +998,540 @@ export default function ExamsPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f]">
-            Exams, Marks & Marksheets (परीक्षा तथा लब्धाङ्क)
-          </h1>
-          <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            प्रथम/दोस्रो/वार्षिक परीक्षा, विषयगत पूर्णाङ्क (Theory, Practical, Life Learning) र लेजर
-          </p>
+      {/* ─── MODERN HEADER & CONTROLS ─── */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1e3a5f] via-[#162c46] to-[#0f1e31] p-6 sm:p-8 text-white shadow-xl">
+        {/* Decorative background glow */}
+        <div className="absolute -top-12 -right-12 h-56 w-56 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-12 -left-12 h-56 w-56 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-md px-3 py-1 text-xs font-semibold text-amber-300 border border-white/10">
+              <GraduationCap size={14} className="text-amber-400" />
+              <span>परीक्षा तथा लब्धाङ्क व्यवस्थापन प्रणाली</span>
+              <span className="h-1 w-1 rounded-full bg-amber-400"></span>
+              <span className="font-mono text-white/90">सत्र {activeYear?.year || '२०८३'}</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              Exams, Marks & Marksheets
+            </h1>
+            <p className="text-xs sm:text-sm text-blue-100/80 font-nepali max-w-2xl leading-relaxed">
+              प्रथम, दोस्रो र वार्षिक परीक्षा सञ्चालन, विषयगत मूल्याङ्कन (Theory, Practical, Internal), NEB ग्रेडिङ लेजर तथा विद्यार्थी लब्धाङ्क पत्र (Marksheet) व्यवस्थापन ।
+            </p>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  if (exams?.length > 0) setPublishExamId(exams[0].id.toString());
+                  setIsPublishModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-4 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition active:scale-95"
+              >
+                <Bell size={15} className="animate-pulse" />
+                <span>📢 Publish Results (नतिजा प्रकाशन)</span>
+              </button>
+            )}
+
+            {activeTab === 'exams' && isAdmin && (
+              <button
+                onClick={openAddExamModal}
+                className="inline-flex items-center gap-2 rounded-xl bg-white text-[#1e3a5f] hover:bg-blue-50 px-4 py-2.5 text-xs font-extrabold shadow-lg hover:shadow-xl transition active:scale-95"
+              >
+                <Plus size={15} className="stroke-[3]" />
+                <span>Create Exam (परीक्षा सिर्जना)</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-xl bg-slate-200/70 p-1 text-xs font-bold">
+        {/* Segmented Tab Navigation Bar */}
+        <div className="relative z-10 mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+          <div className="inline-flex rounded-2xl bg-black/25 backdrop-blur-md p-1.5 border border-white/10 text-xs font-bold">
             <button
               onClick={() => setActiveTab('exams')}
-              className={`rounded-lg px-3.5 py-1.5 transition ${
-                activeTab === 'exams' ? 'bg-white text-[#1e3a5f] shadow-xs' : 'text-gray-600 hover:text-gray-900'
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 transition-all ${
+                activeTab === 'exams'
+                  ? 'bg-white text-[#1e3a5f] shadow-md font-extrabold scale-[1.02]'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
-              Exams (परीक्षाहरू)
+              <Award size={15} className={activeTab === 'exams' ? 'text-[#1e3a5f]' : 'text-white/70'} />
+              <span>Exams (परीक्षाहरू)</span>
+              {exams?.length > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${activeTab === 'exams' ? 'bg-blue-100 text-blue-900 font-bold' : 'bg-white/20 text-white'}`}>
+                  {exams.length}
+                </span>
+              )}
             </button>
+
             <button
               onClick={() => setActiveTab('marks')}
-              className={`rounded-lg px-3.5 py-1.5 transition ${
-                activeTab === 'marks' ? 'bg-white text-[#1e3a5f] shadow-xs' : 'text-gray-600 hover:text-gray-900'
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 transition-all ${
+                activeTab === 'marks'
+                  ? 'bg-white text-[#1e3a5f] shadow-md font-extrabold scale-[1.02]'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
-              Mark Entry (अङ्क प्रविष्टि)
+              <FileSpreadsheet size={15} className={activeTab === 'marks' ? 'text-[#1e3a5f]' : 'text-white/70'} />
+              <span>Mark Entry (अङ्क प्रविष्टि)</span>
             </button>
+
             <button
               onClick={() => setActiveTab('ledger')}
-              className={`rounded-lg px-3.5 py-1.5 transition ${
-                activeTab === 'ledger' ? 'bg-white text-[#1e3a5f] shadow-xs' : 'text-gray-600 hover:text-gray-900'
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 transition-all ${
+                activeTab === 'ledger'
+                  ? 'bg-white text-[#1e3a5f] shadow-md font-extrabold scale-[1.02]'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
-              Class Ledger & Ranking (लेजर)
+              <BarChart3 size={15} className={activeTab === 'ledger' ? 'text-[#1e3a5f]' : 'text-white/70'} />
+              <span>Class Ledger & Ranking (लेजर)</span>
             </button>
           </div>
 
-          {isAdmin && (
-            <button
-              onClick={() => {
-                if (exams?.length > 0) setPublishExamId(exams[0].id.toString());
-                setIsPublishModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 px-3.5 py-2 text-xs font-bold text-white shadow-2xs transition"
+          {/* Quick Shortcuts */}
+          <div className="flex items-center gap-2 text-xs">
+            <Link
+              href="/dashboard/exams/admit-cards"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-white/90 text-xs font-semibold backdrop-blur-xs border border-white/10 transition"
             >
-              <Bell size={14} />
-              <span>📢 Publish Results (नतिजा प्रकाशन)</span>
-            </button>
-          )}
-
-          {activeTab === 'exams' && isAdmin && (
-            <button
-              onClick={openAddExamModal}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs"
+              <Ticket size={13} className="text-amber-300" />
+              <span>🎫 Admit Cards (प्रवेश पत्र)</span>
+            </Link>
+            <Link
+              href="/dashboard/exams/seat-planning"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-white/90 text-xs font-semibold backdrop-blur-xs border border-white/10 transition"
             >
-              <Plus size={14} />
-              <span>Create Exam (परीक्षा सिर्जना)</span>
-            </button>
-          )}
+              <LayoutGrid size={13} className="text-blue-300" />
+              <span>🪑 Seat Planning (सिट प्लानिङ)</span>
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* ─── TAB 1: EXAMS LIST ─────────────────────────────────────────────── */}
       {activeTab === 'exams' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {isExamsLoading ? (
-            <div className="col-span-full py-12 text-center text-gray-400">Loading exams...</div>
-          ) : !exams?.length ? (
-            <div className="col-span-full py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
-              <Award size={32} className="mx-auto text-gray-300 mb-1" />
-              <p className="text-sm font-semibold text-gray-600">No exams created for active academic year</p>
+        <div className="space-y-6">
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="rounded-2xl border border-gray-200/90 bg-white p-4 shadow-xs flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0 border border-blue-100">
+                <Award size={22} />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">कुल परीक्षाहरू</p>
+                <h4 className="text-lg font-black text-gray-900">{exams.length} सञ्चालित</h4>
+                <p className="text-[10px] text-gray-500 font-nepali">शैक्षिक सत्र {activeYear?.year || '२०८३'}</p>
+              </div>
             </div>
-          ) : (
-            exams.map((exam: any) => (
-              <div
-                key={exam.id}
-                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs hover:shadow-md transition space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-extrabold text-base text-gray-900">{exam.name}</h3>
-                    {exam.nameNepali && (
-                      <p className="text-xs text-gray-500 font-nepali">{exam.nameNepali}</p>
-                    )}
-                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">
-                      {exam.startDateBs || 'N/A'} ~ {exam.endDateBs || 'N/A'}
-                    </p>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {isAdmin && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEditExamModal(exam)}
-                          title="Edit Exam Details"
-                          className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition"
-                        >
-                          <Edit2 size={15} />
-                        </button>
+            <div className="rounded-2xl border border-gray-200/90 bg-white p-4 shadow-xs flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-100">
+                <Users size={22} />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">सहभागी कक्षाहरू</p>
+                <h4 className="text-lg font-black text-emerald-700">{classesData?.length || 10} कक्षाहरू</h4>
+                <p className="text-[10px] text-gray-500 font-nepali">ECD देखि कक्षा १० सम्म</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200/90 bg-white p-4 shadow-xs flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center shrink-0 border border-purple-100">
+                <FileSpreadsheet size={22} />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">मूल्याङ्कन ढाँचा</p>
+                <h4 className="text-lg font-black text-purple-900">NEB Grading</h4>
+                <p className="text-[10px] text-gray-500 font-nepali">थ्योरी, प्रयोगात्मक र आन्तरिक</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200/90 bg-white p-4 shadow-xs flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-100">
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">नतिजा प्रमाणीकरण</p>
+                <h4 className="text-lg font-black text-amber-800">QR Grade Sheets</h4>
+                <p className="text-[10px] text-gray-500 font-nepali">आधिकारिक ग्रेडसिट र लेजर</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Section Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
+                <span>परीक्षा सूची (Configured Examination Terms)</span>
+                <span className="rounded-full bg-blue-100 text-blue-900 px-2 py-0.5 text-xs font-bold font-mono">
+                  {exams.length}
+                </span>
+              </h2>
+              <p className="text-xs text-gray-500 font-nepali">यस शैक्षिक सत्रका लागि सिर्जना गरिएका परीक्षाहरू</p>
+            </div>
+          </div>
+
+          {/* Exams Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {isExamsLoading ? (
+              <div className="col-span-full py-16 text-center text-gray-400 bg-white rounded-3xl border border-gray-100">
+                <Award size={36} className="mx-auto text-blue-300 animate-pulse mb-2" />
+                <p className="text-sm font-bold text-gray-700">Loading examination schedules...</p>
+              </div>
+            ) : !exams?.length ? (
+              <div className="col-span-full py-16 text-center bg-white rounded-3xl border-2 border-dashed border-gray-200 p-8">
+                <Award size={40} className="mx-auto text-gray-300 mb-2" />
+                <h3 className="text-base font-bold text-gray-800">हाल कुनै पनि परीक्षा सिर्जना गरिएको छैन</h3>
+                <p className="text-xs text-gray-500 font-nepali mt-1 max-w-md mx-auto">
+                  माथिको "Create Exam (परीक्षा सिर्जना)" बटन थिची नयाँ परीक्षा (जस्तै: प्रथम त्रैमासिक, अर्ध-वार्षिक, वार्षिक) सुरु गर्नुहोस् ।
+                </p>
+                {isAdmin && (
+                  <button
+                    onClick={openAddExamModal}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] text-white px-5 py-2.5 text-xs font-bold shadow-md hover:bg-[#2a5280] transition"
+                  >
+                    <Plus size={15} />
+                    <span>पहिलो परीक्षा सिर्जना गर्नुहोस्</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              exams.map((exam: any) => {
+                const totalClasses = exam.examClasses?.length || classesData?.length || 0;
+                return (
+                  <div
+                    key={exam.id}
+                    className="group relative flex flex-col justify-between rounded-3xl border border-gray-200/90 bg-white shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden hover:border-blue-300"
+                  >
+                    {/* Top Accent Gradient Bar */}
+                    <div className="h-2 w-full bg-gradient-to-r from-[#1e3a5f] via-blue-600 to-amber-400" />
+
+                    <div className="p-5 sm:p-6 space-y-4">
+                      {/* Card Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#1e3a5f] to-blue-700 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-900/20 group-hover:scale-105 transition">
+                            <BookOpen size={22} />
+                          </div>
+                          <div>
+                            <h3 className="font-black text-base sm:text-lg text-gray-900 group-hover:text-[#1e3a5f] transition leading-snug">
+                              {exam.name}
+                            </h3>
+                            {exam.nameNepali && (
+                              <p className="text-xs text-gray-600 font-nepali font-semibold mt-0.5">
+                                {exam.nameNepali}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action buttons (Edit/Delete) */}
+                        {isAdmin && (
+                          <div className="flex items-center gap-1 shrink-0 bg-gray-50 rounded-xl p-1 border border-gray-200/60">
+                            <button
+                              onClick={() => openEditExamModal(exam)}
+                              title="Edit Exam Details"
+                              className="rounded-lg p-1.5 text-gray-500 hover:bg-white hover:text-blue-600 hover:shadow-2xs transition"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete "${exam.name}"? All related marks will be permanently removed.`)) {
+                                  deleteExamMutation.mutate(exam.id);
+                                }
+                              }}
+                              title="Delete Exam"
+                              className="rounded-lg p-1.5 text-gray-500 hover:bg-white hover:text-rose-600 hover:shadow-2xs transition"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Date & Shift Information Box */}
+                      <div className="rounded-2xl bg-slate-50/80 border border-slate-200/80 p-3.5 space-y-2.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[11px] font-bold text-gray-500 flex items-center gap-1.5">
+                            <Calendar size={14} className="text-blue-600" />
+                            <span>परीक्षा मिति:</span>
+                          </span>
+                          <span className="font-mono font-bold text-[#1e3a5f] bg-blue-50/80 border border-blue-200/60 px-2 py-0.5 rounded-md text-[11px]">
+                            {exam.startDateBs || 'N/A'} ~ {exam.endDateBs || 'N/A'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60">
+                          {/* Shift Badge */}
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 border border-amber-200/90 px-2.5 py-1 font-bold text-amber-900 text-[11px]">
+                            {exam.shift === 'MORNING' ? (
+                              <>
+                                <Sun size={12} className="text-amber-600" />
+                                <span>Morning Shift (बिहानी सत्र)</span>
+                              </>
+                            ) : exam.shift === 'EVENING' ? (
+                              <>
+                                <Moon size={12} className="text-indigo-600" />
+                                <span>Evening Shift (साँझ सत्र)</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sun size={12} className="text-amber-600" />
+                                <span>Day Shift (दिवा सत्र)</span>
+                              </>
+                            )}
+                          </span>
+
+                          {/* Timing Badge */}
+                          {exam.examTiming && (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-2.5 py-1 font-mono font-bold text-slate-800 text-[11px] shadow-2xs">
+                              <Clock size={12} className="text-blue-600" />
+                              <span>{exam.examTiming}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Participating Classes Badges */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="uppercase font-bold text-gray-500">
+                            Participating Classes (सहभागी कक्षा):
+                          </span>
+                          <span className="font-bold text-blue-900 text-[11px]">
+                            {totalClasses} Classes
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1 max-h-24 overflow-y-auto pr-1">
+                          {exam.examClasses?.length ? (
+                            exam.examClasses.map((ec: any) => (
+                              <span
+                                key={ec.classId}
+                                className="rounded-lg bg-slate-100/90 border border-slate-200/80 px-2 py-0.5 text-[10px] font-bold text-slate-700"
+                              >
+                                {ec.class?.name || `Class ${ec.classId}`}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                              <CheckCircle2 size={13} className="text-emerald-600" />
+                              <span>All School Classes (सम्पूर्ण कक्षाहरू)</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Action Footer */}
+                    <div className="bg-slate-50/90 border-t border-gray-100 p-4 space-y-2.5">
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete "${exam.name}"? All related marks will be permanently removed.`)) {
-                              deleteExamMutation.mutate(exam.id);
-                            }
+                            setSelectedExamId(exam.id.toString());
+                            setActiveTab('marks');
                           }}
-                          title="Delete Exam"
-                          className="rounded-lg p-1.5 text-gray-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white py-2 px-3 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
                         >
-                          <Trash2 size={15} />
+                          <Edit2 size={13} />
+                          <span>Mark Entry (अङ्क)</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setLedgerExamId(exam.id.toString());
+                            setActiveTab('ledger');
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
+                        >
+                          <FileSpreadsheet size={13} />
+                          <span>Ledger (लेजर)</span>
                         </button>
                       </div>
-                    )}
+
+                      {/* Secondary Quick Links */}
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-200/60 text-[11px]">
+                        <Link
+                          href={`/dashboard/exams/admit-cards?examId=${exam.id}`}
+                          className="font-bold text-gray-600 hover:text-blue-700 flex items-center gap-1 hover:underline"
+                        >
+                          <Ticket size={12} className="text-amber-500" />
+                          <span>Admit Cards →</span>
+                        </Link>
+
+                        <Link
+                          href={`/dashboard/exams/seat-planning?examId=${exam.id}`}
+                          className="font-bold text-gray-600 hover:text-blue-700 flex items-center gap-1 hover:underline"
+                        >
+                          <LayoutGrid size={12} className="text-indigo-500" />
+                          <span>Seat Plan →</span>
+                        </Link>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                );
+              })
+            )}
+          </div>
 
-                {/* Shift & Timing Badges */}
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200/80 px-2 py-0.5 font-bold text-amber-800 text-[11px]">
-                    {exam.shift === 'MORNING' ? (
-                      <>
-                        <Sun size={12} className="text-amber-600" />
-                        <span>Morning Shift (बिहानी सत्र)</span>
-                      </>
-                    ) : exam.shift === 'EVENING' ? (
-                      <>
-                        <Moon size={12} className="text-indigo-600" />
-                        <span>Evening Shift (साँझ सत्र)</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sun size={12} className="text-amber-600" />
-                        <span>Day Shift (दिवा सत्र)</span>
-                      </>
-                    )}
-                  </span>
+          {/* ─── WORKFLOW TOOLS & QUICK ACCESS HUB ─── */}
+          <div className="mt-8 rounded-3xl border border-gray-200/90 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+            <div>
+              <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                <Sparkles size={20} className="text-amber-500" />
+                <span>परीक्षा व्यवस्थापन सहयोगी मोड्युलहरू (Exam Support Tools & Modules)</span>
+              </h3>
+              <p className="text-xs text-gray-500 font-nepali mt-0.5">
+                परीक्षा सञ्चालन, सिट व्यवस्थापन, प्रवेश पत्र छपाइ र नतिजा प्रकाशन सम्बन्धी सम्पूर्ण सुविधाहरू
+              </p>
+            </div>
 
-                  {exam.examTiming && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/80 px-2 py-0.5 font-mono font-bold text-blue-800 text-[11px]">
-                      <Clock size={12} className="text-blue-600" />
-                      <span>{exam.examTiming}</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Participating Classes Badges */}
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-gray-400">Participating Classes (कक्षा):</span>
-                  <div className="flex flex-wrap items-center gap-1">
-                    {exam.examClasses?.length ? (
-                      exam.examClasses.map((ec: any) => (
-                        <span key={ec.classId} className="rounded-md bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                          {ec.class?.name || `Class ${ec.classId}`}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                        ✓ All School Classes (सम्पूर्ण कक्षाहरू)
-                      </span>
-                    )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Tool 1: Admit Cards */}
+              <Link
+                href="/dashboard/exams/admit-cards"
+                className="group flex flex-col justify-between rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/50 to-white p-5 hover:border-blue-300 hover:shadow-lg transition-all"
+              >
+                <div className="space-y-2">
+                  <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 group-hover:scale-110 transition">
+                    <Ticket size={20} />
                   </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 group-hover:text-blue-700 transition">
+                    प्रवेश पत्र निर्माण (Admit Cards)
+                  </h4>
+                  <p className="text-[11px] text-gray-500 font-nepali leading-relaxed">
+                    सिम्बोल नम्बर, विषयगत तालिका, समय र नियम सहितको व्यक्तिगत तथा एकमुष्ट प्रिन्ट योग्य प्रवेश पत्र ।
+                  </p>
                 </div>
+                <div className="mt-4 pt-3 border-t border-blue-100 flex items-center justify-between text-xs font-bold text-blue-700">
+                  <span>खोल्नुहोस्</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition" />
+                </div>
+              </Link>
 
-                <div className="flex items-center justify-between border-t border-gray-50 pt-3">
-                  <button
-                    onClick={() => {
-                      setSelectedExamId(exam.id.toString());
-                      setActiveTab('marks');
-                    }}
-                    className="text-xs font-bold text-[#1e3a5f] hover:underline"
-                  >
-                    Enter Marks →
-                  </button>
-                  <button
-                    onClick={() => {
-                      setLedgerExamId(exam.id.toString());
-                      setActiveTab('ledger');
-                    }}
-                    className="text-xs font-bold text-purple-700 hover:underline"
-                  >
-                    View Ledger →
-                  </button>
+              {/* Tool 2: Seat Planning */}
+              <Link
+                href="/dashboard/exams/seat-planning"
+                className="group flex flex-col justify-between rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white p-5 hover:border-indigo-300 hover:shadow-lg transition-all"
+              >
+                <div className="space-y-2">
+                  <div className="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 group-hover:scale-110 transition">
+                    <LayoutGrid size={20} />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 group-hover:text-indigo-700 transition">
+                    सिट तथा हल प्लानिङ (Seat Plan)
+                  </h4>
+                  <p className="text-[11px] text-gray-500 font-nepali leading-relaxed">
+                    परीक्षा कोठा, बेन्च व्यवस्थापन, रोल नम्बर बाँडफाँड र डेस्क सिट कार्ड निर्माण तथा प्रिन्ट ।
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-indigo-100 flex items-center justify-between text-xs font-bold text-indigo-700">
+                  <span>खोल्नुहोस्</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition" />
+                </div>
+              </Link>
+
+              {/* Tool 3: Grade Sheets */}
+              <div
+                onClick={() => setActiveTab('ledger')}
+                className="group cursor-pointer flex flex-col justify-between rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50/50 to-white p-5 hover:border-purple-300 hover:shadow-lg transition-all"
+              >
+                <div className="space-y-2">
+                  <div className="h-10 w-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/20 group-hover:scale-110 transition">
+                    <Award size={20} />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 group-hover:text-purple-700 transition">
+                    लब्धाङ्क पत्र तथा लेजर (Marksheets)
+                  </h4>
+                  <p className="text-[11px] text-gray-500 font-nepali leading-relaxed">
+                    NEB मापदण्ड बमोजिम लेटर ग्रेडिङ (Theory 25/75, Practical 25, GPA) सहितको आधिकारिक ग्रेडसिट ।
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-purple-100 flex items-center justify-between text-xs font-bold text-purple-700">
+                  <span>लेजर हेर्नुहोस्</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition" />
                 </div>
               </div>
-            ))
-          )}
+
+              {/* Tool 4: Result Broadcast */}
+              <div
+                onClick={() => {
+                  if (exams?.length > 0) setPublishExamId(exams[0].id.toString());
+                  setIsPublishModalOpen(true);
+                }}
+                className="group cursor-pointer flex flex-col justify-between rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/50 to-white p-5 hover:border-amber-300 hover:shadow-lg transition-all"
+              >
+                <div className="space-y-2">
+                  <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 group-hover:scale-110 transition">
+                    <Bell size={20} />
+                  </div>
+                  <h4 className="font-extrabold text-sm text-gray-900 group-hover:text-amber-700 transition">
+                    नतिजा तथा SMS प्रसारण (Broadcast)
+                  </h4>
+                  <p className="text-[11px] text-gray-500 font-nepali leading-relaxed">
+                    परीक्षा नतिजा प्रकाशन गरी विद्यार्थी/अभिभावक पोर्टलमा खुला तथा SMS मार्फत सन्देश सम्प्रेषण ।
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-amber-100 flex items-center justify-between text-xs font-bold text-amber-700">
+                  <span>नतिजा प्रकाशन</span>
+                  <ArrowRight size={14} className="group-hover:translate-x-1 transition" />
+                </div>
+              </div>
+            </div>
+
+            {/* Step-by-Step Lifecycle Guide Bar */}
+            <div className="rounded-2xl bg-slate-50/90 border border-slate-200/80 p-4 sm:p-5">
+              <h4 className="text-xs font-extrabold uppercase text-gray-600 tracking-wider mb-3">
+                परीक्षा व्यवस्थापन चरणहरू (Standard Exam Process Flow):
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="flex items-start gap-2 bg-white rounded-xl p-3 border border-slate-200/60 shadow-2xs">
+                  <span className="h-6 w-6 rounded-full bg-blue-100 text-[#1e3a5f] font-bold flex items-center justify-center shrink-0 text-xs">
+                    १
+                  </span>
+                  <div>
+                    <strong className="block text-gray-900 font-bold">परीक्षा सिर्जना</strong>
+                    <span className="text-[10px] text-gray-500 font-nepali">नाम, मिति, सत्र र कक्षा तय</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 bg-white rounded-xl p-3 border border-slate-200/60 shadow-2xs">
+                  <span className="h-6 w-6 rounded-full bg-purple-100 text-purple-900 font-bold flex items-center justify-center shrink-0 text-xs">
+                    २
+                  </span>
+                  <div>
+                    <strong className="block text-gray-900 font-bold">अङ्क विभाजन ढाँचा</strong>
+                    <span className="text-[10px] text-gray-500 font-nepali">Theory, Test, Practical, HW</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 bg-white rounded-xl p-3 border border-slate-200/60 shadow-2xs">
+                  <span className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-900 font-bold flex items-center justify-center shrink-0 text-xs">
+                    ३
+                  </span>
+                  <div>
+                    <strong className="block text-gray-900 font-bold">प्राप्ताङ्क प्रविष्टि</strong>
+                    <span className="text-[10px] text-gray-500 font-nepali">विषय शिक्षकद्वारा अङ्क दर्ता</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 bg-white rounded-xl p-3 border border-slate-200/60 shadow-2xs">
+                  <span className="h-6 w-6 rounded-full bg-amber-100 text-amber-900 font-bold flex items-center justify-center shrink-0 text-xs">
+                    ४
+                  </span>
+                  <div>
+                    <strong className="block text-gray-900 font-bold">लेजर तथा नतिजा</strong>
+                    <span className="text-[10px] text-gray-500 font-nepali">GPA, र्‍याङ्क र ग्रेडसिट प्रकाशन</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
