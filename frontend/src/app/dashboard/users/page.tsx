@@ -287,6 +287,17 @@ export default function UserManagementPage() {
   // Form State for Reset Password
   const [resetCustomPassword, setResetCustomPassword] = useState<string>('');
 
+  // Form States for Edit User & Incharge Roles
+  const [editUserId, setEditUserId] = useState<number | null>(null);
+  const [editUsername, setEditUsername] = useState<string>('');
+  const [editRole, setEditRole] = useState<string>('TEACHER');
+  const [editIsActive, setEditIsActive] = useState<boolean>(true);
+  const [editFullName, setEditFullName] = useState<string>('');
+  const [editPhone, setEditPhone] = useState<string>('');
+  const [editEmail, setEditEmail] = useState<string>('');
+  const [editInchargeRoles, setEditInchargeRoles] = useState<string[]>([]);
+  const [editInchargeTitle, setEditInchargeTitle] = useState<string>('');
+
   // Fetch classes for bulk student filter
   const { data: classesList } = useQuery({
     queryKey: ['classes-list-users'],
@@ -447,6 +458,22 @@ export default function UserManagementPage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to resolve request.');
+    },
+  });
+
+  // ── 7. Update User & Incharge Roles Mutation ──
+  const updateUserMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.put(`/users/${payload.id}`, payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['users-list'] });
+      setIsEditModalOpen(false);
+      toast.success(data.message || 'User account updated successfully!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update user account.');
     },
   });
 
@@ -736,14 +763,78 @@ export default function UserManagementPage() {
                             </span>
                           </td>
 
-                          {/* Role Badge */}
+                          {/* Role Badges */}
                           <td className="px-4 py-3">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${roleBadge.bg}`}
-                            >
-                              <RoleIcon size={12} />
-                              <span>{roleBadge.label}</span>
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              {u.teacher ? (
+                                <div className="flex flex-wrap gap-1 items-center">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border bg-blue-100 text-blue-800 border-blue-200">
+                                    <GraduationCap size={12} />
+                                    <span>
+                                      {u.teacher.isTeachingStaff === false || u.teacher.shreni === 'NON_TEACHING'
+                                        ? 'Staff (कर्मचारी)'
+                                        : 'Teacher (शिक्षक)'}
+                                    </span>
+                                  </span>
+
+                                  {(u.role === 'ADMIN' || u.role === 'SUPER_ADMIN') && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border bg-rose-100 text-rose-800 border-rose-200">
+                                      <Shield size={10} />
+                                      <span>Admin</span>
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${roleBadge.bg}`}
+                                >
+                                  <RoleIcon size={12} />
+                                  <span>{roleBadge.label}</span>
+                                </span>
+                              )}
+
+                              {/* Incharge Badges */}
+                              {u.teacher?.inchargeRole && (
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {u.teacher.inchargeRole
+                                    .split(',')
+                                    .map((r: string) => r.trim())
+                                    .filter(Boolean)
+                                    .map((inc: string) => {
+                                      let badgeCls = 'bg-amber-50 text-amber-900 border-amber-300';
+                                      let label = inc;
+                                      if (inc === 'EXAM_INCHARGE') {
+                                        badgeCls = 'bg-amber-100 text-amber-900 border-amber-300';
+                                        label = '📝 Exam Incharge';
+                                      } else if (inc === 'LIBRARIAN') {
+                                        badgeCls = 'bg-purple-100 text-purple-900 border-purple-300';
+                                        label = '📚 Librarian';
+                                      } else if (inc === 'ACCOUNTANT') {
+                                        badgeCls = 'bg-emerald-100 text-emerald-900 border-emerald-300';
+                                        label = '💰 Accountant';
+                                      } else if (inc === 'COORDINATOR') {
+                                        badgeCls = 'bg-indigo-100 text-indigo-900 border-indigo-300';
+                                        label = '🎯 Coordinator';
+                                      }
+                                      return (
+                                        <span
+                                          key={inc}
+                                          className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-extrabold border shadow-2xs ${badgeCls}`}
+                                        >
+                                          {label}
+                                        </span>
+                                      );
+                                    })}
+                                </div>
+                              )}
+
+                              {/* Designation / Post */}
+                              {u.teacher?.post && (
+                                <span className="text-[10px] text-gray-500 font-medium">
+                                  पद: {u.teacher.post}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Contact Info / Class */}
@@ -779,6 +870,31 @@ export default function UserManagementPage() {
                           {/* Actions */}
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* Edit Roles & Incharge */}
+                              <button
+                                onClick={() => {
+                                  setSelectedUser(u);
+                                  setEditUserId(u.id);
+                                  setEditUsername(u.username);
+                                  setEditRole(u.role);
+                                  setEditIsActive(u.isActive);
+                                  setEditFullName(u.teacher?.fullName || u.student?.fullName || '');
+                                  setEditPhone(u.teacher?.phone || u.student?.phone || '');
+                                  setEditEmail(u.teacher?.email || '');
+                                  const roles = u.teacher?.inchargeRole
+                                    ? u.teacher.inchargeRole.split(',').map((r: string) => r.trim()).filter(Boolean)
+                                    : [];
+                                  setEditInchargeRoles(roles);
+                                  setEditInchargeTitle(u.teacher?.inchargeTitle || '');
+                                  setIsEditModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 px-2.5 py-1 text-[11px] font-extrabold shadow-2xs transition"
+                                title="Edit Roles & Incharge Duties"
+                              >
+                                <UserCog size={12} />
+                                <span>Edit (भूमिका)</span>
+                              </button>
+
                               {/* 1-Click Print Individual Slip */}
                               <button
                                 onClick={() => {
@@ -1171,6 +1287,202 @@ export default function UserManagementPage() {
                   className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 font-bold text-white shadow-xs transition disabled:opacity-50"
                 >
                   {createUserMutation.isPending ? 'Creating Account...' : 'Create Account (खाता बनाउनुहोस्)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 4B. EDIT USER & INCHARGE ROLES MODAL ────────────────────────────── */}
+      {isEditModalOpen && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 my-8 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <UserCog size={18} className="text-indigo-600" />
+                  <span>Edit User Roles & Duties (भूमिका तथा जिम्मेवारी सम्पादन)</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  User: <b>{editUsername}</b> ({selectedUser.teacher?.fullName || selectedUser.student?.fullName || selectedUser.role})
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateUserMutation.mutate({
+                  id: editUserId,
+                  username: editUsername,
+                  role: editRole,
+                  isActive: editIsActive,
+                  fullName: editFullName,
+                  phone: editPhone,
+                  email: editEmail,
+                  inchargeRole: editInchargeRoles.join(','),
+                  inchargeTitle: editInchargeTitle,
+                });
+              }}
+              className="space-y-4 text-xs"
+            >
+              {/* Basic Details */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Full Name (पूरा नाम)</label>
+                  <input
+                    type="text"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Username (लगइन आईडी) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    className="erp-input font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Phone & Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Phone Number (फोन)</label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="erp-input font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Account Status (खाता स्थिति)</label>
+                  <select
+                    value={editIsActive ? 'ACTIVE' : 'INACTIVE'}
+                    onChange={(e) => setEditIsActive(e.target.value === 'ACTIVE')}
+                    className="erp-input font-bold"
+                  >
+                    <option value="ACTIVE">Active (सक्रिय)</option>
+                    <option value="INACTIVE">Inactive / Disabled (निष्क्रिय)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* System Role */}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Primary System Role (मूल प्रणाली भूमिका) *</label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  className="erp-input font-bold"
+                  required
+                >
+                  <option value="TEACHER">🎓 Teacher (शिक्षक / कर्मचारी)</option>
+                  <option value="LIBRARIAN">📚 Librarian (पुस्तकालय)</option>
+                  <option value="ACCOUNTANT">💰 Accountant (लेखापाल)</option>
+                  <option value="ADMIN">🛡️ Admin (प्रशासक)</option>
+                  <option value="STUDENT">🎒 Student (विद्यार्थी)</option>
+                </select>
+              </div>
+
+              {/* Teacher Incharge Duties Section */}
+              {(selectedUser.teacher || editRole === 'TEACHER' || editRole === 'LIBRARIAN' || editRole === 'ACCOUNTANT') && (
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-[#1e3a5f] flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-indigo-600" />
+                      <span>अतिरिक्त जिम्मेवारी / इनचार्ज भूमिकाहरू (Incharge Roles)</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                      Teacher Portal Safe
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    यी इनचार्ज भूमिकाहरू छान्दा शिक्षकको खाता वा शिक्षक पोर्टल सुरक्षित रहन्छ र उहाँले आफ्नै पोर्टलबाटै सम्बन्धित कार्यहरू गर्न सक्नुहुनेछ:
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {[
+                      { key: 'EXAM_INCHARGE', label: '📝 Exam Incharge (परीक्षा प्रमुख)', desc: 'Marksheet, Ledger, Exam Routine' },
+                      { key: 'LIBRARIAN', label: '📚 Librarian (पुस्तकालय प्रमुख)', desc: 'Book Catalog, Issue/Return' },
+                      { key: 'ACCOUNTANT', label: '💰 Accountant (लेखा प्रमुख)', desc: 'Fee Collection, Invoices' },
+                      { key: 'COORDINATOR', label: '🎯 Coordinator (शैक्षिक संयोजक)', desc: 'Academic supervision' },
+                    ].map((duty) => {
+                      const isChecked = editInchargeRoles.includes(duty.key);
+                      return (
+                        <label
+                          key={duty.key}
+                          className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition ${
+                            isChecked
+                              ? 'bg-white border-indigo-400 ring-1 ring-indigo-300 shadow-2xs'
+                              : 'bg-white/60 border-gray-200 hover:bg-white'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditInchargeRoles([...editInchargeRoles, duty.key]);
+                              } else {
+                                setEditInchargeRoles(editInchargeRoles.filter((k) => k !== duty.key));
+                              }
+                            }}
+                            className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <span className="font-extrabold text-gray-900 block leading-tight">{duty.label}</span>
+                            <span className="text-[10px] text-gray-500 block mt-0.5 leading-none">{duty.desc}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      Incharge Title / पद विवरण (Optional):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. परीक्षा नियन्त्रक / अतिरिक्त पुस्तकालय जिम्मेवारी"
+                      value={editInchargeTitle}
+                      onChange={(e) => setEditInchargeTitle(e.target.value)}
+                      className="erp-input text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateUserMutation.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-5 py-2 font-bold text-white shadow-xs transition disabled:opacity-50"
+                >
+                  <UserCog size={14} />
+                  <span>{updateUserMutation.isPending ? 'Saving Changes...' : 'Save Changes (परिवर्तन सेभ गर्नुहोस्)'}</span>
                 </button>
               </div>
             </form>

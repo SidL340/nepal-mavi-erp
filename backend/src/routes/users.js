@@ -24,19 +24,35 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
 
     const where = {};
     if (role && role !== 'ALL') {
-      where.role = role;
+      if (role === 'TEACHER') {
+        where.OR = [{ role: 'TEACHER' }, { teacher: { isNot: null } }];
+      } else if (role === 'LIBRARIAN') {
+        where.OR = [{ role: 'LIBRARIAN' }, { teacher: { inchargeRole: { contains: 'LIBRARIAN' } } }];
+      } else if (role === 'ACCOUNTANT') {
+        where.OR = [{ role: 'ACCOUNTANT' }, { teacher: { inchargeRole: { contains: 'ACCOUNTANT' } } }];
+      } else if (role === 'ADMIN') {
+        where.role = { in: ['SUPER_ADMIN', 'ADMIN'] };
+      } else {
+        where.role = role;
+      }
     }
     if (isActive !== undefined && isActive !== '') {
       where.isActive = isActive === 'true' || isActive === true;
     }
     if (q && q.trim()) {
       const search = q.trim();
-      where.OR = [
+      const searchConditions = [
         { username: { contains: search } },
         { teacher: { fullName: { contains: search } } },
         { student: { fullName: { contains: search } } },
         { student: { studentId: { contains: search } } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: searchConditions }];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const [total, users] = await Promise.all([
@@ -60,6 +76,10 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
               email: true,
               type: true,
               post: true,
+              shreni: true,
+              inchargeRole: true,
+              inchargeTitle: true,
+              isTeachingStaff: true,
               photoUrl: true,
             },
           },
@@ -97,10 +117,10 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res
       pendingResetCount,
       totalAllUsers,
     ] = await Promise.all([
-      prisma.user.count({ where: { role: 'TEACHER' } }),
+      prisma.user.count({ where: { OR: [{ role: 'TEACHER' }, { teacher: { isNot: null } }] } }),
       prisma.user.count({ where: { role: 'STUDENT' } }),
-      prisma.user.count({ where: { role: 'LIBRARIAN' } }),
-      prisma.user.count({ where: { role: 'ACCOUNTANT' } }),
+      prisma.user.count({ where: { OR: [{ role: 'LIBRARIAN' }, { teacher: { inchargeRole: { contains: 'LIBRARIAN' } } }] } }),
+      prisma.user.count({ where: { OR: [{ role: 'ACCOUNTANT' }, { teacher: { inchargeRole: { contains: 'ACCOUNTANT' } } }] } }),
       prisma.user.count({ where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } } }),
       prisma.passwordResetRequest.count({ where: { status: 'PENDING' } }),
       prisma.user.count(),
@@ -235,7 +255,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const { username, role, isActive, mustChangePassword } = req.body;
+    const { username, role, isActive, mustChangePassword, inchargeRole, inchargeTitle, fullName, phone, email } = req.body;
 
     const data = {};
     if (username) data.username = username.trim();
@@ -249,10 +269,57 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, 
       include: { teacher: true, student: true },
     });
 
+    // If teacher profile exists, update teacher inchargeRole / title / phone / etc. if provided
+    if (updated.teacher && (inchargeRole !== undefined || inchargeTitle !== undefined || fullName !== undefined || phone !== undefined || email !== undefined)) {
+      const teacherData = {};
+      if (inchargeRole !== undefined) teacherData.inchargeRole = inchargeRole;
+      if (inchargeTitle !== undefined) teacherData.inchargeTitle = inchargeTitle;
+      if (fullName !== undefined) teacherData.fullName = fullName.trim();
+      if (phone !== undefined) teacherData.phone = phone;
+      if (email !== undefined) teacherData.email = email;
+
+      await prisma.teacher.update({
+        where: { id: updated.teacher.id },
+        data: teacherData,
+      });
+    }
+
+    const finalUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        teacher: {
+          select: {
+            id: true,
+            fullName: true,
+            fullNameNepali: true,
+            phone: true,
+            email: true,
+            type: true,
+            post: true,
+            shreni: true,
+            inchargeRole: true,
+            inchargeTitle: true,
+            isTeachingStaff: true,
+            photoUrl: true,
+          },
+        },
+        student: {
+          select: {
+            id: true,
+            studentId: true,
+            fullName: true,
+            fullNameNepali: true,
+            phone: true,
+            photoUrl: true,
+          },
+        },
+      },
+    });
+
     return res.json({
       success: true,
-      data: updated,
-      message: `User "${updated.username}" updated successfully!`,
+      data: finalUser,
+      message: `User "${finalUser.username}" updated successfully!`,
     });
   } catch (err) {
     console.error(err);
