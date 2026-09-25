@@ -51,6 +51,27 @@ router.get('/class/:classId', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/routine/teacher/:teacherId — get specific teacher routine across all classes
+router.get('/teacher/:teacherId', authenticate, async (req, res) => {
+  try {
+    const teacherId = parseInt(req.params.teacherId);
+    const routines = await prisma.classRoutine.findMany({
+      where: { teacherId },
+      include: {
+        class: true,
+        subject: true,
+        teacher: true,
+      },
+      orderBy: [{ dayOfWeek: 'asc' }, { periodNo: 'asc' }],
+    });
+
+    return res.json({ success: true, data: routines });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // GET /api/routine/master — get all routines across school for conflict checking
 router.get('/master', authenticate, async (req, res) => {
   try {

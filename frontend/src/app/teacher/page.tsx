@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -105,6 +105,11 @@ export default function TeacherPortalPage() {
   const [logFormMethod, setLogFormMethod] = useState<string>('व्याख्या तथा छलफल (Discussion & Lecture)');
   const [logFilterDateBs, setLogFilterDateBs] = useState<string>(todayBS());
   const [logFilterClassId, setLogFilterClassId] = useState<string>('');
+  const [logFormIsSubstitute, setLogFormIsSubstitute] = useState(false);
+  const [selectedRoutineDay, setSelectedRoutineDay] = useState<number>(() => {
+    const day = new Date().getDay() + 1; // 1 (Sun) to 7 (Sat)
+    return day === 7 ? 1 : day;
+  });
 
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [isProblemModalOpen, setIsProblemModalOpen] = useState(false);
@@ -275,6 +280,73 @@ export default function TeacherPortalPage() {
 
   const myTasks: any[] = myTasksData || [];
   const pendingTasksCount = myTasks.filter((t) => t.status !== 'COMPLETED').length;
+
+  // ─── ASSIGNED CLASSES & SUBJECTS RESOLUTION FOR TEACHING LOGS ───
+  // 1. All unique assigned classes for this teacher
+  const teacherAssignedClasses = React.useMemo(() => {
+    const classMap = new Map<number, any>();
+
+    // From Routine:
+    teacherRoutine?.forEach((r: any) => {
+      if (r.class) classMap.set(r.class.id, r.class);
+    });
+
+    // From Class Teacher of:
+    myAssignedClasses?.forEach((c: any) => {
+      classMap.set(c.id, c);
+    });
+
+    // From Classes where subject is assigned to this teacher:
+    classesData?.forEach((c: any) => {
+      if (c.subjects?.some((cs: any) => cs.teacherId === teacherId)) {
+        classMap.set(c.id, c);
+      }
+    });
+
+    return Array.from(classMap.values());
+  }, [teacherRoutine, myAssignedClasses, classesData, teacherId]);
+
+  // Display classes for the form: if isSubstitute is true or no assigned classes found, show all school classes; otherwise show strictly assigned classes!
+  const availableClassesForLog = React.useMemo(() => {
+    if (logFormIsSubstitute || teacherAssignedClasses.length === 0) {
+      return classesData || [];
+    }
+    return teacherAssignedClasses;
+  }, [logFormIsSubstitute, teacherAssignedClasses, classesData]);
+
+  // 2. Assigned subjects for currently selected class in log form
+  const availableSubjectsForLog = React.useMemo(() => {
+    if (!logFormClassId) return [];
+    const cId = Number(logFormClassId);
+    const subMap = new Map<number, any>();
+
+    // From Routine for this class:
+    teacherRoutine?.filter((r: any) => r.classId === cId && r.subject).forEach((r: any) => {
+      subMap.set(r.subject.id, r.subject);
+    });
+
+    // From ClassSubject assigned to teacher:
+    const currentClass = classesData?.find((c: any) => c.id === cId);
+    currentClass?.subjects?.forEach((cs: any) => {
+      if (cs.teacherId === teacherId && cs.subject) {
+        subMap.set(cs.subject.id, cs.subject);
+      }
+    });
+
+    // From teacher's overall subjects:
+    teacherDetails?.subjects?.forEach((ts: any) => {
+      if (ts.subject) {
+        subMap.set(ts.subject.id, ts.subject);
+      }
+    });
+
+    return Array.from(subMap.values());
+  }, [logFormClassId, teacherRoutine, classesData, teacherDetails, teacherId]);
+
+  // 3. Routine periods for the selected routine day
+  const routinePeriodsForDay = React.useMemo(() => {
+    return (teacherRoutine || []).filter((r: any) => r.dayOfWeek === selectedRoutineDay && !r.isBreak);
+  }, [teacherRoutine, selectedRoutineDay]);
 
   // Quick Task Status Update Mutation
   const updateTaskStatusMutation = useMutation({
@@ -936,18 +1008,49 @@ export default function TeacherPortalPage() {
                 Record what topic and assignment you taught today to keep parents and administration updated.
               </p>
 
-              <div className="space-y-3 text-xs">
+              <div className="space-y-3.5 text-xs">
+                {/* Quick Routine Chips for Today if any */}
+                {routinePeriodsForDay.length > 0 && (
+                  <div className="space-y-1.5 bg-blue-50/60 border border-blue-100 rounded-xl p-2.5">
+                    <span className="text-[10px] uppercase font-extrabold text-blue-900 flex items-center gap-1">
+                      <Clock size={12} className="text-blue-600" />
+                      <span>आजको घण्टी तालिका (Click to quick-select):</span>
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {routinePeriodsForDay.map((r: any) => {
+                        const isSelected = Number(selectedClassLog) === r.classId;
+                        return (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedClassLog(String(r.classId));
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                              isSelected
+                                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-2xs'
+                                : 'bg-white hover:bg-blue-100 text-gray-800 border-blue-200'
+                            }`}
+                          >
+                            घण्टी {r.periodNo}: {r.class?.name} ({r.subject?.name || 'Subject'})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Class Taught *</label>
+                    <label className="block font-bold text-gray-700 mb-1">Assigned Class (तोकिएको कक्षा) *</label>
                     <select
                       required
                       value={selectedClassLog}
                       onChange={(e) => setSelectedClassLog(e.target.value)}
                       className="erp-input font-semibold"
                     >
-                      <option value="">Select Class</option>
-                      {classesData?.map((c: any) => (
+                      <option value="">-- कक्षा छान्नुहोस् --</option>
+                      {availableClassesForLog?.map((c: any) => (
                         <option key={c.id} value={c.id}>
                           {c.name} {c.section ? `(${c.section})` : ''}
                         </option>
@@ -956,7 +1059,7 @@ export default function TeacherPortalPage() {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Date (BS)</label>
+                    <label className="block font-bold text-gray-700 mb-1">Date (मिति BS)</label>
                     <input type="text" readOnly value={todayBS()} className="erp-input font-mono font-bold bg-slate-50" />
                   </div>
                 </div>
@@ -969,37 +1072,47 @@ export default function TeacherPortalPage() {
                     placeholder="e.g. Chapter 4: Photosynthesis - covered light & dark reaction. Homework: Exercises 1 to 5 on page 48."
                     value={dailyLog}
                     onChange={(e) => setDailyLog(e.target.value)}
-                    className="erp-input leading-relaxed"
+                    className="erp-input leading-relaxed font-medium"
                   />
                 </div>
 
-                <button
-                  type="button"
-                  disabled={createTeachingLogMutation.isPending}
-                  onClick={() => {
-                    if (!selectedClassLog) {
-                      toast.error('Please select a class first.');
-                      return;
-                    }
-                    if (!dailyLog.trim()) {
-                      toast.error('Please enter the topics taught and homework.');
-                      return;
-                    }
-                    createTeachingLogMutation.mutate({
-                      teacherId,
-                      classId: selectedClassLog,
-                      dateBs: todayBS(),
-                      periodNo: 1,
-                      topicTaught: dailyLog.trim(),
-                      homework: dailyLog.includes('Homework') ? dailyLog.split(/homework/i)[1]?.trim() : null,
-                      status: 'COMPLETED',
-                    });
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-sm cursor-pointer disabled:opacity-50"
-                >
-                  <Save size={14} />
-                  <span>{createTeachingLogMutation.isPending ? 'Saving...' : 'Save Lesson Diary (डायरी सुरक्षित)'}</span>
-                </button>
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    disabled={createTeachingLogMutation.isPending}
+                    onClick={() => {
+                      if (!selectedClassLog) {
+                        toast.error('Please select an assigned class first.');
+                        return;
+                      }
+                      if (!dailyLog.trim()) {
+                        toast.error('Please enter the topics taught and homework.');
+                        return;
+                      }
+                      createTeachingLogMutation.mutate({
+                        teacherId,
+                        classId: selectedClassLog,
+                        dateBs: todayBS(),
+                        periodNo: 1,
+                        topicTaught: dailyLog.trim(),
+                        homework: dailyLog.includes('Homework') ? dailyLog.split(/homework/i)[1]?.trim() : null,
+                        status: 'COMPLETED',
+                      });
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#2a5280] shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    <span>{createTeachingLogMutation.isPending ? 'Saving...' : 'Save Lesson Diary (डायरी सुरक्षित)'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => switchTab('daily_log')}
+                    className="text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                  >
+                    Full Diary Form →
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1056,20 +1169,114 @@ export default function TeacherPortalPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left 5 Cols: Quick Add Lesson Log Form */}
-            <div className="lg:col-span-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-xs space-y-4">
-              <div className="border-b border-gray-100 pb-2">
-                <h3 className="font-extrabold text-sm text-[#1e3a5f] flex items-center gap-2">
-                  <BookOpen size={16} className="text-amber-500" />
-                  <span>Record Lesson Taught (नयाँ पाठ प्रविष्टि)</span>
-                </h3>
-                <p className="text-[11px] text-gray-500">Log today's completed classroom period</p>
+            <div className="lg:col-span-5 rounded-3xl border border-gray-200/90 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+              <div className="border-b border-gray-100 pb-3 flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-extrabold text-base text-[#1e3a5f] flex items-center gap-2">
+                    <BookOpen size={18} className="text-amber-500" />
+                    <span>Record Lesson Taught (पाठ प्रविष्टि)</span>
+                  </h3>
+                  <p className="text-xs text-gray-500 font-nepali">
+                    घण्टी तालिकाबाट सिधै छान्नुहोस् वा तल कक्षा र विषय चयन गर्नुहोस्
+                  </p>
+                </div>
+
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-600 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={logFormIsSubstitute}
+                    onChange={(e) => setLogFormIsSubstitute(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>सट्टा घण्टी (Substitute)</span>
+                </label>
               </div>
 
+              {/* ─── 1. TIMETABLE ROUTINE SELECTOR BAR ─── */}
+              <div className="rounded-2xl bg-gradient-to-br from-blue-50/60 via-slate-50 to-indigo-50/40 p-3.5 border border-blue-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold text-blue-900 flex items-center gap-1.5 uppercase tracking-wide">
+                    <Clock size={13} className="text-blue-600" />
+                    <span>तपाईंको रुटिन तालिका (My Timetable):</span>
+                  </span>
+
+                  {/* Day Picker */}
+                  <select
+                    value={selectedRoutineDay}
+                    onChange={(e) => setSelectedRoutineDay(Number(e.target.value))}
+                    className="text-[11px] font-bold text-[#1e3a5f] bg-white border border-blue-200 rounded-lg px-2 py-0.5 shadow-2xs"
+                  >
+                    <option value={1}>आइतबार (Sun)</option>
+                    <option value={2}>सोमबार (Mon)</option>
+                    <option value={3}>मंगलबार (Tue)</option>
+                    <option value={4}>बुधबार (Wed)</option>
+                    <option value={5}>बिहीबार (Thu)</option>
+                    <option value={6}>शुक्रबार (Fri)</option>
+                  </select>
+                </div>
+
+                {routinePeriodsForDay.length === 0 ? (
+                  <div className="p-3 bg-white/80 rounded-xl border border-dashed border-blue-200 text-center text-xs text-gray-500">
+                    यस दिनमा कुनै रुटिन तालिका तोकिएको छैन । तल फारमबाट कक्षा र घण्टी छान्नुहोस् ।
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {routinePeriodsForDay.map((r: any) => {
+                      const isSelected =
+                        Number(logFormClassId) === r.classId &&
+                        logFormPeriodNo === r.periodNo &&
+                        (logFormSubjectName === r.subject?.name || !logFormSubjectName);
+
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            setLogFormClassId(String(r.classId));
+                            setLogFormPeriodNo(r.periodNo);
+                            if (r.subject) {
+                              setLogFormSubjectId(String(r.subject.id));
+                              setLogFormSubjectName(r.subject.name);
+                            }
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md scale-[1.02]'
+                              : 'bg-white hover:bg-blue-50/80 text-gray-800 border-blue-200/80 shadow-2xs'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 font-black text-xs">
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${isSelected ? 'bg-amber-400 text-[#1e3a5f]' : 'bg-blue-100 text-blue-900'}`}>
+                                घण्टी {r.periodNo}
+                              </span>
+                              <span className="truncate text-[11px]">{r.class?.name}</span>
+                            </div>
+                            <div className={`text-[11px] font-bold mt-0.5 truncate ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
+                              {r.subject?.name || 'Subject'}
+                              {r.startTime && <span className="font-mono text-[10px] opacity-75 ml-1">({r.startTime})</span>}
+                            </div>
+                          </div>
+                          {isSelected ? (
+                            <CheckCircle2 size={16} className="text-amber-400 shrink-0" />
+                          ) : (
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+                              छान्नुहोस्
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ─── 2. DETAILED LESSON ENTRY FORM ─── */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (!logFormClassId) {
-                    toast.error('Please select a class.');
+                    toast.error('Please select an assigned class.');
                     return;
                   }
                   if (!logFormTopic.trim()) {
@@ -1091,25 +1298,44 @@ export default function TeacherPortalPage() {
                     status: 'COMPLETED',
                   });
                 }}
-                className="space-y-3 text-xs"
+                className="space-y-3.5 text-xs"
               >
-                {/* Class & Period */}
-                <div className="grid grid-cols-2 gap-2.5">
+                {/* Class & Period Selectors */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Class (कक्षा) *</label>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      {logFormIsSubstitute ? 'Class (सम्पूर्ण कक्षाहरू) *' : 'Assigned Class (तोकिएको कक्षा) *'}
+                    </label>
                     <select
                       required
                       value={logFormClassId}
-                      onChange={(e) => setLogFormClassId(e.target.value)}
+                      onChange={(e) => {
+                        const newCId = e.target.value;
+                        setLogFormClassId(newCId);
+                        // Auto-fill subject if only 1 subject assigned in this class
+                        const subs = (classesData?.find((c: any) => c.id === Number(newCId))?.subjects || [])
+                          .filter((cs: any) => cs.teacherId === teacherId)
+                          .map((cs: any) => cs.subject)
+                          .filter(Boolean);
+                        if (subs.length === 1) {
+                          setLogFormSubjectId(String(subs[0].id));
+                          setLogFormSubjectName(subs[0].name);
+                        }
+                      }}
                       className="erp-input font-bold"
                     >
-                      <option value="">-- Select Class --</option>
-                      {classesData?.map((c: any) => (
+                      <option value="">-- कक्षा छान्नुहोस् --</option>
+                      {availableClassesForLog?.map((c: any) => (
                         <option key={c.id} value={c.id}>
                           {c.name} {c.section ? `(${c.section})` : ''}
                         </option>
                       ))}
                     </select>
+                    {!logFormIsSubstitute && teacherAssignedClasses.length > 0 && (
+                      <span className="text-[10px] text-blue-700 font-bold block mt-0.5">
+                        ✓ {teacherAssignedClasses.length} assigned classes
+                      </span>
+                    )}
                   </div>
 
                   <div>
@@ -1120,27 +1346,53 @@ export default function TeacherPortalPage() {
                       className="erp-input font-bold"
                       required
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-                        <option key={p} value={p}>
-                          Period {p} ({p}st/nd/th Hour)
-                        </option>
-                      ))}
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+                        const matchingRoutine = routinePeriodsForDay.find((r: any) => r.periodNo === p);
+                        return (
+                          <option key={p} value={p}>
+                            Period {p} {matchingRoutine ? `(${matchingRoutine.class?.name} - ${matchingRoutine.subject?.name})` : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>
 
-                {/* Subject & Date */}
-                <div className="grid grid-cols-2 gap-2.5">
+                {/* Subject & Date Selectors */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Subject (विषय) *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Science / Math / नेपाली"
-                      value={logFormSubjectName}
-                      onChange={(e) => setLogFormSubjectName(e.target.value)}
-                      className="erp-input font-bold"
-                    />
+                    <label className="block font-bold text-gray-700 mb-1">
+                      {logFormIsSubstitute ? 'Subject (विषय) *' : 'Assigned Subject (तोकिएको विषय) *'}
+                    </label>
+                    {availableSubjectsForLog.length > 0 && !logFormIsSubstitute ? (
+                      <select
+                        required
+                        value={logFormSubjectName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLogFormSubjectName(val);
+                          const matching = availableSubjectsForLog.find((s: any) => s.name === val);
+                          if (matching) setLogFormSubjectId(String(matching.id));
+                        }}
+                        className="erp-input font-bold"
+                      >
+                        <option value="">-- विषय छान्नुहोस् --</option>
+                        {availableSubjectsForLog.map((s: any) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name} {s.code ? `(${s.code})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Science / Math / नेपाली"
+                        value={logFormSubjectName}
+                        onChange={(e) => setLogFormSubjectName(e.target.value)}
+                        className="erp-input font-bold"
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -1166,7 +1418,7 @@ export default function TeacherPortalPage() {
                     placeholder="e.g. Chapter 5: Human Circulatory System - Blood vessels & Heart structure"
                     value={logFormTopic}
                     onChange={(e) => setLogFormTopic(e.target.value)}
-                    className="erp-input"
+                    className="erp-input font-medium"
                   />
                 </div>
 
@@ -1203,20 +1455,26 @@ export default function TeacherPortalPage() {
                   <label className="block font-bold text-gray-700 mb-1">
                     Teaching Method / Materials (विधि र सामग्री):
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={logFormMethod}
                     onChange={(e) => setLogFormMethod(e.target.value)}
                     className="erp-input"
-                  />
+                  >
+                    <option value="व्याख्या तथा छलफल (Discussion & Lecture)">व्याख्या तथा छलफल (Discussion & Lecture)</option>
+                    <option value="प्रयोगात्मक तथा ल्याब कार्य (Practical & Lab)">प्रयोगात्मक तथा ल्याब कार्य (Practical & Lab)</option>
+                    <option value="समूह कार्य तथा प्रस्तुतीकरण (Group Work)">समूह कार्य तथा प्रस्तुतीकरण (Group Work)</option>
+                    <option value="परियोजना कार्य (Project-Based Learning)">परियोजना कार्य (Project-Based Learning)</option>
+                    <option value="मल्टिमिडिया तथा स्मार्ट बोर्ड (Smart Board / ICT)">मल्टिमिडिया तथा स्मार्ट बोर्ड (Smart Board / ICT)</option>
+                    <option value="प्रश्न-उत्तर तथा अभ्यास (Q&A & Practice)">प्रश्न-उत्तर तथा अभ्यास (Q&A & Practice)</option>
+                  </select>
                 </div>
 
                 <button
                   type="submit"
                   disabled={createTeachingLogMutation.isPending}
-                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] py-2.5 font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] py-3 font-extrabold text-white shadow-md hover:shadow-lg transition cursor-pointer active:scale-98 disabled:opacity-50"
                 >
-                  <Save size={15} />
+                  <Save size={16} />
                   <span>
                     {createTeachingLogMutation.isPending
                       ? 'Saving Lesson Log...'

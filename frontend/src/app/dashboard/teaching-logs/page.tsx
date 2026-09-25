@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { todayBS, todayBSFormatted } from '@/lib/nepali-date';
@@ -54,6 +54,11 @@ export default function AdminTeachingLogsPage() {
   const [formStudentFeedback, setFormStudentFeedback] = useState<string>('विद्यार्थीहरूको सक्रिय सहभागिता रह्यो (Active participation)');
   const [formStatus, setFormStatus] = useState<string>('COMPLETED');
   const [formSubstituteName, setFormSubstituteName] = useState<string>('');
+  const [formIsSubstitute, setFormIsSubstitute] = useState(false);
+  const [formRoutineDay, setFormRoutineDay] = useState<number>(() => {
+    const day = new Date().getDay() + 1;
+    return day === 7 ? 1 : day;
+  });
 
   // 1. Fetch Classes List
   const { data: classesList } = useQuery({
@@ -63,6 +68,45 @@ export default function AdminTeachingLogsPage() {
       return res.data?.data || [];
     },
   });
+
+  // 1.5 Fetch Selected Teacher Routine
+  const { data: selectedTeacherRoutine } = useQuery({
+    queryKey: ['routine-teacher-form', formTeacherId],
+    queryFn: async () => {
+      if (!formTeacherId) return [];
+      const res = await api.get(`/routine/teacher/${formTeacherId}`);
+      return res.data?.data || [];
+    },
+    enabled: !!formTeacherId,
+  });
+
+  // Assigned classes for selected teacher
+  const teacherAssignedClasses = React.useMemo(() => {
+    if (!formTeacherId) return classesList || [];
+    const tId = Number(formTeacherId);
+    const classMap = new Map<number, any>();
+    selectedTeacherRoutine?.forEach((r: any) => {
+      if (r.class) classMap.set(r.class.id, r.class);
+    });
+    classesList?.forEach((c: any) => {
+      if (c.classTeacherId === tId || c.subjects?.some((cs: any) => cs.teacherId === tId)) {
+        classMap.set(c.id, c);
+      }
+    });
+    return Array.from(classMap.values());
+  }, [selectedTeacherRoutine, classesList, formTeacherId]);
+
+  const availableClassesForForm = React.useMemo(() => {
+    if (formIsSubstitute || !formTeacherId || teacherAssignedClasses.length === 0) {
+      return classesList || [];
+    }
+    return teacherAssignedClasses;
+  }, [formIsSubstitute, formTeacherId, teacherAssignedClasses, classesList]);
+
+  // Routine periods for the day for selected teacher
+  const routinePeriodsForDay = React.useMemo(() => {
+    return (selectedTeacherRoutine || []).filter((r: any) => r.dayOfWeek === formRoutineDay && !r.isBreak);
+  }, [selectedTeacherRoutine, formRoutineDay]);
 
   // 2. Fetch Teachers List
   const { data: teachersList } = useQuery({
@@ -651,13 +695,86 @@ export default function AdminTeachingLogsPage() {
               }}
               className="space-y-3.5 text-xs"
             >
+              {/* Substitute Checkbox */}
+              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-gray-700">घण्टी तथा कक्षा छनोट विधि:</span>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formIsSubstitute}
+                    onChange={(e) => setFormIsSubstitute(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>सट्टा घण्टी / अन्य कक्षा (Substitute / All Classes)</span>
+                </label>
+              </div>
+
+              {/* Quick Routine Selector for Selected Teacher */}
+              {formTeacherId && routinePeriodsForDay.length > 0 && (
+                <div className="rounded-xl bg-blue-50/70 border border-blue-200 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-extrabold text-blue-900 flex items-center gap-1">
+                      <Clock size={12} className="text-blue-600" />
+                      <span>शिक्षकको रुटिन तालिका (Quick Timetable):</span>
+                    </span>
+                    <select
+                      value={formRoutineDay}
+                      onChange={(e) => setFormRoutineDay(Number(e.target.value))}
+                      className="text-[10px] font-bold text-[#1e3a5f] bg-white border border-blue-200 rounded px-1.5 py-0.5"
+                    >
+                      <option value={1}>आइतबार (Sun)</option>
+                      <option value={2}>सोमबार (Mon)</option>
+                      <option value={3}>मंगलबार (Tue)</option>
+                      <option value={4}>बुधबार (Wed)</option>
+                      <option value={5}>बिहीबार (Thu)</option>
+                      <option value={6}>शुक्रबार (Fri)</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto">
+                    {routinePeriodsForDay.map((r: any) => {
+                      const isSelected =
+                        Number(formClassId) === r.classId && formPeriodNo === r.periodNo;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            setFormClassId(String(r.classId));
+                            setFormPeriodNo(r.periodNo);
+                            if (r.subject) {
+                              setFormSubjectId(String(r.subject.id));
+                              setFormSubjectName(r.subject.name);
+                            }
+                          }}
+                          className={`p-2 rounded-lg text-left text-[11px] font-bold border transition ${
+                            isSelected
+                              ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
+                              : 'bg-white hover:bg-blue-100 text-gray-800 border-blue-200'
+                          }`}
+                        >
+                          <div>घण्टी {r.periodNo}: {r.class?.name}</div>
+                          <div className={`text-[10px] font-normal truncate ${isSelected ? 'text-blue-100' : 'text-blue-700'}`}>
+                            {r.subject?.name || 'Subject'} {r.startTime ? `(${r.startTime})` : ''}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Teacher and Class */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Teacher (शिक्षक) *</label>
                   <select
                     value={formTeacherId}
-                    onChange={(e) => setFormTeacherId(e.target.value)}
+                    onChange={(e) => {
+                      setFormTeacherId(e.target.value);
+                      setFormClassId('');
+                      setFormSubjectId('');
+                      setFormSubjectName('');
+                    }}
                     className="erp-input font-bold"
                     required
                   >
@@ -671,7 +788,9 @@ export default function AdminTeachingLogsPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Class (कक्षा) *</label>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    {formIsSubstitute ? 'Class (सम्पूर्ण कक्षा) *' : 'Assigned Class (तोकिएको कक्षा) *'}
+                  </label>
                   <select
                     value={formClassId}
                     onChange={(e) => setFormClassId(e.target.value)}
@@ -679,7 +798,7 @@ export default function AdminTeachingLogsPage() {
                     required
                   >
                     <option value="">-- Select Class --</option>
-                    {classesList?.map((c: any) => (
+                    {availableClassesForForm?.map((c: any) => (
                       <option key={c.id} value={c.id}>
                         {c.name} {c.section ? `(${c.section})` : ''}
                       </option>
@@ -709,11 +828,14 @@ export default function AdminTeachingLogsPage() {
                     className="erp-input font-bold"
                     required
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-                      <option key={p} value={p}>
-                        Period {p} ({p}st/nd/th Hour)
-                      </option>
-                    ))}
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => {
+                      const match = routinePeriodsForDay.find((r: any) => r.periodNo === p);
+                      return (
+                        <option key={p} value={p}>
+                          Period {p} {match ? `(${match.class?.name} - ${match.subject?.name})` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
