@@ -26,6 +26,9 @@ import {
   Coffee,
   Table,
   Edit3,
+  Zap,
+  Sliders,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -40,7 +43,7 @@ const DAYS = [
   { key: 'SATURDAY', name: 'Saturday (शनिबार)', short: 'शनि' },
 ];
 
-interface PeriodConfig {
+export interface PeriodConfig {
   num: number;
   startTime: string;
   endTime: string;
@@ -49,16 +52,49 @@ interface PeriodConfig {
   breakTime?: string;
 }
 
-const DEFAULT_PERIODS: PeriodConfig[] = [
-  { num: 1, startTime: '10:15 AM', endTime: '11:00 AM' },
-  { num: 2, startTime: '11:00 AM', endTime: '11:45 AM' },
-  { num: 3, startTime: '11:45 AM', endTime: '12:30 PM' },
-  { num: 4, startTime: '12:30 PM', endTime: '01:15 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:15 - 01:45 PM' },
-  { num: 5, startTime: '01:45 PM', endTime: '02:25 PM' },
-  { num: 6, startTime: '02:25 PM', endTime: '03:05 PM' },
-  { num: 7, startTime: '03:05 PM', endTime: '03:45 PM' },
-  { num: 8, startTime: '03:45 PM', endTime: '04:15 PM' },
+export const TIMING_PRESETS = [
+  {
+    id: 'day_standard',
+    name: '☀️ मानक दिवा सत्र (Day Shift: 10:25 AM - 04:15 PM)',
+    periods: [
+      { num: 1, startTime: '10:25 AM', endTime: '11:15 AM' },
+      { num: 2, startTime: '11:15 AM', endTime: '12:00 PM' },
+      { num: 3, startTime: '12:00 PM', endTime: '12:45 PM' },
+      { num: 4, startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
+      { num: 5, startTime: '01:55 PM', endTime: '02:35 PM' },
+      { num: 6, startTime: '02:35 PM', endTime: '03:15 PM' },
+      { num: 7, startTime: '03:15 PM', endTime: '03:55 PM' },
+      { num: 8, startTime: '03:55 PM', endTime: '04:15 PM' },
+    ],
+  },
+  {
+    id: 'morning_standard',
+    name: '🌅 बिहानी सत्र (Morning Shift: 06:30 AM - 11:00 AM)',
+    periods: [
+      { num: 1, startTime: '06:30 AM', endTime: '07:10 AM' },
+      { num: 2, startTime: '07:10 AM', endTime: '07:50 AM' },
+      { num: 3, startTime: '07:50 AM', endTime: '08:30 AM', hasBreakAfter: true, breakTitle: 'विश्राम (Break)', breakTime: '08:30 - 08:50 AM' },
+      { num: 4, startTime: '08:50 AM', endTime: '09:30 AM' },
+      { num: 5, startTime: '09:30 AM', endTime: '10:15 AM' },
+      { num: 6, startTime: '10:15 AM', endTime: '11:00 AM' },
+    ],
+  },
+  {
+    id: 'winter_standard',
+    name: '❄️ हिउँदे / छोटो समय (Winter Shift: 10:00 AM - 03:30 PM)',
+    periods: [
+      { num: 1, startTime: '10:00 AM', endTime: '10:45 AM' },
+      { num: 2, startTime: '10:45 AM', endTime: '11:30 AM' },
+      { num: 3, startTime: '11:30 AM', endTime: '12:15 PM' },
+      { num: 4, startTime: '12:15 PM', endTime: '01:00 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:00 - 01:25 PM' },
+      { num: 5, startTime: '01:25 PM', endTime: '02:05 PM' },
+      { num: 6, startTime: '02:05 PM', endTime: '02:45 PM' },
+      { num: 7, startTime: '02:45 PM', endTime: '03:30 PM' },
+    ],
+  },
 ];
+
+const DEFAULT_PERIODS: PeriodConfig[] = TIMING_PRESETS[0].periods;
 
 export default function ClassRoutineView({ initialClassId }: { initialClassId?: string }) {
   const queryClient = useQueryClient();
@@ -263,6 +299,39 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     toast.success(`घण्टी ${removedNum} हटाइयो।`);
   };
 
+  // Set explicit period count (e.g., 5, 6, 7, 8)
+  const handleSetPeriodCount = (count: number) => {
+    if (count < 1 || count > 12) return;
+    setPeriods((prev) => {
+      const defaultTimes = [
+        { startTime: '10:25 AM', endTime: '11:15 AM', hasBreakAfter: false },
+        { startTime: '11:15 AM', endTime: '12:00 PM', hasBreakAfter: false },
+        { startTime: '12:00 PM', endTime: '12:45 PM', hasBreakAfter: false },
+        { startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
+        { startTime: '01:55 PM', endTime: '02:35 PM', hasBreakAfter: false },
+        { startTime: '02:35 PM', endTime: '03:15 PM', hasBreakAfter: false },
+        { startTime: '03:15 PM', endTime: '03:55 PM', hasBreakAfter: false },
+        { startTime: '03:55 PM', endTime: '04:15 PM', hasBreakAfter: false },
+      ];
+
+      const newPeriods: PeriodConfig[] = [];
+      for (let i = 1; i <= count; i++) {
+        const existing = prev.find((p) => p.num === i);
+        const std = defaultTimes[i - 1];
+        newPeriods.push({
+          num: i,
+          startTime: existing?.startTime || std?.startTime || `10:${i * 40} AM`,
+          endTime: existing?.endTime || std?.endTime || '',
+          hasBreakAfter: existing?.hasBreakAfter ?? (i === 4),
+          breakTitle: existing?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
+          breakTime: existing?.breakTime || (i === 4 ? '01:30 - 01:55 PM' : ''),
+        });
+      }
+      return newPeriods;
+    });
+    toast.success(`यस कक्षाको लागि कुल ${count} घण्टी तालिका समायोजन गरियो!`);
+  };
+
   // Update Period timing or Break settings
   const handleUpdatePeriodConfig = (num: number, updates: Partial<PeriodConfig>) => {
     setPeriods((prev) =>
@@ -339,6 +408,64 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     });
 
     toast.success(`घण्टी ${periodNum} चयनित ${checkedDays.length} दिनहरूमा लागू गरियो!`);
+  };
+
+  // Sync Timings Mutation — applies current period timings to ALL classes
+  const syncTimingsMutation = useMutation({
+    mutationFn: async () => {
+      const allClassIds = classesData?.map((c: any) => c.id) || [];
+      const res = await api.post('/routine/sync-timings', {
+        targetClassIds: allClassIds,
+        periods,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'घण्टी समय तालिका विद्यालयका सम्पूर्ण कक्षाहरूमा सफलतापूर्वक लागू भयो!');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('school_default_routine_timings', JSON.stringify(periods));
+      }
+      queryClient.invalidateQueries({ queryKey: ['class-routine'] });
+      queryClient.invalidateQueries({ queryKey: ['all-routines'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'घण्टी समय तालिका लागू गर्न सकिएन।');
+    },
+  });
+
+  // Load Preset
+  const handleLoadPreset = (presetId: string) => {
+    const preset = TIMING_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setPeriods(preset.periods);
+    toast.success(`'${preset.name.split('(')[0].trim()}' घण्टी ढाँचा लोड भयो!`);
+  };
+
+  // Copy Timing From Another Class
+  const handleCopyTimingFromClass = (sourceClassIdStr: string) => {
+    if (!sourceClassIdStr || !allRoutinesData) return;
+    const sourceRoutines = allRoutinesData.filter((r: any) => r.classId.toString() === sourceClassIdStr);
+    if (!sourceRoutines || sourceRoutines.length === 0) {
+      toast.error('चयन गरिएको कक्षामा कुनै रुटिन तालिका फेला परेन।');
+      return;
+    }
+
+    const maxPeriod = Math.max(...sourceRoutines.map((r: any) => r.periodNo || 1), 4);
+    const newPeriods: PeriodConfig[] = [];
+    for (let i = 1; i <= maxPeriod; i++) {
+      const match = sourceRoutines.find((r: any) => (r.periodNo || 1) === i && (r.startTime || r.endTime));
+      newPeriods.push({
+        num: i,
+        startTime: match?.startTime || `10:${i * 45} AM`,
+        endTime: match?.endTime || '',
+        hasBreakAfter: match?.isBreak || (i === 4),
+        breakTitle: match?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
+        breakTime: i === 4 ? '01:30 - 01:55 PM' : '',
+      });
+    }
+    setPeriods(newPeriods);
+    const srcClassName = classesData?.find((c: any) => c.id.toString() === sourceClassIdStr)?.name || 'Class';
+    toast.success(`${srcClassName} को घण्टी समय तालिका लोड गरियो!`);
   };
 
   // Batch Save Routine Mutation
@@ -572,66 +699,165 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
       </div>
 
       {/* Class Selector Bar & Periods Count Manager */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs items-center">
-        <div className="md:col-span-5 flex items-center gap-3">
-          <label className="text-xs font-bold text-gray-700 whitespace-nowrap">Class (कक्षा):</label>
-          <select
-            value={selectedClassId}
-            onChange={(e) => setSelectedClassId(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-slate-50 px-3 py-2 text-xs font-bold text-[#1e3a5f] focus:bg-white focus:outline-hidden"
-          >
-            {classesData?.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {c.name} {c.section ? `(${c.section})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Dynamic Period Count Adjuster */}
-        <div className="md:col-span-7 flex flex-wrap items-center justify-start md:justify-end gap-2">
-          <div className="flex items-center gap-1 bg-slate-50 border border-gray-200 px-2.5 py-1.5 rounded-xl text-xs">
-            <span className="font-bold text-gray-600">कुल घण्टी:</span>
-            <span className="font-black text-[#1e3a5f] px-1.5 py-0.5 bg-blue-100 rounded-md text-xs">
-              {periods.length}
-            </span>
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div className="md:col-span-4 flex items-center gap-2.5">
+            <label className="text-xs font-bold text-gray-700 whitespace-nowrap flex items-center gap-1">
+              <School size={14} className="text-[#1e3a5f]" />
+              <span>कक्षा छान्नुहोस् (Class):</span>
+            </label>
+            <select
+              value={selectedClassId}
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-slate-50 px-3 py-2 text-xs font-bold text-[#1e3a5f] focus:bg-white focus:outline-hidden"
+            >
+              {classesData?.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.section ? `(${c.section})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <button
-            type="button"
-            onClick={handleAddPeriod}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
-            title="Add another period for this class"
-          >
-            <Plus size={14} />
-            <span>+ घण्टी थप्नुहोस् (Add Period)</span>
-          </button>
+          {/* Quick Period Count Selector & Dynamic Period Controls */}
+          <div className="md:col-span-8 flex flex-wrap items-center justify-start md:justify-end gap-1.5">
+            <div className="flex items-center gap-1 bg-slate-100 border border-gray-200 px-2.5 py-1 rounded-xl text-xs">
+              <Sliders size={13} className="text-gray-600" />
+              <span className="font-bold text-gray-700">घण्टी संख्या:</span>
+              <span className="font-black text-[#1e3a5f] px-1.5 py-0.5 bg-blue-100 rounded-md text-xs">
+                {periods.length} घण्टी
+              </span>
+            </div>
 
-          <button
-            type="button"
-            onClick={handleRemovePeriod}
-            disabled={periods.length <= 1}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold hover:bg-rose-100 transition cursor-pointer disabled:opacity-40"
-            title="Remove last period"
-          >
-            <Trash2 size={13} />
-            <span>- घण्टी घटाउनुहोस्</span>
-          </button>
+            {/* Quick Count Pills: 5, 6, 7, 8 */}
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 gap-1">
+              {[5, 6, 7, 8].map((cnt) => (
+                <button
+                  key={cnt}
+                  type="button"
+                  onClick={() => handleSetPeriodCount(cnt)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                    periods.length === cnt
+                      ? 'bg-[#1e3a5f] text-white shadow-xs'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                  title={`${cnt} घण्टीको तालिका बनाउनुहोस्`}
+                >
+                  {cnt} घण्टी
+                </button>
+              ))}
+            </div>
+
+            {/* Auto-set from Class Subjects Count */}
+            {classSubjects.length > 0 && classSubjects.length !== periods.length && (
+              <button
+                type="button"
+                onClick={() => handleSetPeriodCount(classSubjects.length)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold hover:bg-indigo-100 transition cursor-pointer"
+                title={`यस कक्षामा ${classSubjects.length} विषय दर्ता छन्`}
+              >
+                <Sparkles size={13} className="text-indigo-600" />
+                <span>💡 {classSubjects.length} विषय अनुसार सेट</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleAddPeriod}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
+              title="Add another period for this class"
+            >
+              <Plus size={13} />
+              <span>+ घण्टी थप्नुहोस्</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRemovePeriod}
+              disabled={periods.length <= 1}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold hover:bg-rose-100 transition cursor-pointer disabled:opacity-40"
+              title="Remove last period"
+            >
+              <Trash2 size={13} />
+              <span>- घटाउनुहोस्</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ─── TIME & BREAKS SCHEDULE CONFIGURATOR ─── */}
       <div className="bg-white border border-gray-100 p-4 rounded-2xl shadow-2xs space-y-3">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-          <div className="flex items-center gap-2">
-            <Clock size={16} className="text-blue-600" />
-            <h3 className="text-xs font-black text-gray-900">
-              घण्टी समय (From when to when) तथा खाजा/विश्राम समय (Break Time)
-            </h3>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-blue-600" />
+              <h3 className="text-xs font-black text-gray-900">
+                घण्टी समय तालिका (School Bell & Break Timings)
+              </h3>
+            </div>
+            <p className="text-[11px] text-gray-500 font-nepali">
+              समय तालिका एक पटक मिलाएर <strong>"सबै कक्षामा लागू"</strong> गर्न सक्नुहुन्छ, अथवा कक्षा अनुसार फरक समय राख्न सक्नुहुन्छ।
+            </p>
           </div>
-          <span className="text-[11px] text-gray-500 font-nepali">
-            प्रत्येक घण्टीको सुरु र अन्त्य समय तथा विश्राम समय तल परिमार्जन गर्न सकिन्छ
-          </span>
+
+          {/* Preset, Copy and Bulk Sync Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Presets Dropdown */}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleLoadPreset(e.target.value);
+                  e.target.value = '';
+                }
+              }}
+              className="rounded-xl border border-gray-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-white focus:outline-hidden cursor-pointer"
+            >
+              <option value="" disabled>📋 समय ढाँचाहरू (Presets)...</option>
+              {TIMING_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Copy From Another Class */}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleCopyTimingFromClass(e.target.value);
+                  e.target.value = '';
+                }
+              }}
+              className="rounded-xl border border-gray-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-white focus:outline-hidden cursor-pointer"
+            >
+              <option value="" disabled>🔄 अर्को कक्षाबाट समय लिनुहोस्...</option>
+              {classesData
+                ?.filter((c: any) => c.id.toString() !== selectedClassId)
+                ?.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.section ? `(${c.section})` : ''}
+                  </option>
+                ))}
+            </select>
+
+            {/* Apply to All Classes (Bulk Sync) */}
+            <button
+              type="button"
+              disabled={syncTimingsMutation.isPending}
+              onClick={() => {
+                if (confirm('के तपाईं यो घण्टी समय तालिका विद्यालयका सम्पूर्ण कक्षाहरूमा लागू गर्न चाहनुहुन्छ? (Sync standard bell timings to ALL classes?)')) {
+                  syncTimingsMutation.mutate();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition cursor-pointer disabled:opacity-50"
+              title="Apply currently defined period start/end timings to all classes"
+            >
+              <Zap size={14} className={syncTimingsMutation.isPending ? 'animate-pulse' : ''} />
+              <span>{syncTimingsMutation.isPending ? 'लागू हुँदैछ...' : '⚡ सबै कक्षामा यो समय लागू गर्नुहोस् (Sync to All)'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

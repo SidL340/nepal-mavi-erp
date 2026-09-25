@@ -195,6 +195,44 @@ async function handleBatchSave(req, res) {
 router.post('/batch-save', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), handleBatchSave);
 router.post('/batch', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), handleBatchSave);
 
+// POST /api/routine/sync-timings — sync period timings across all or selected classes
+router.post('/sync-timings', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), async (req, res) => {
+  try {
+    const { targetClassIds, periods } = req.body;
+    if (!Array.isArray(periods) || periods.length === 0) {
+      return res.status(400).json({ success: false, message: 'Periods configuration is required.' });
+    }
+
+    const where = {};
+    if (Array.isArray(targetClassIds) && targetClassIds.length > 0) {
+      where.classId = { in: targetClassIds.map((id) => parseInt(id)) };
+    }
+
+    // Update existing routine entries for each period number
+    for (const p of periods) {
+      const periodNum = parseInt(p.num);
+      await prisma.classRoutine.updateMany({
+        where: {
+          ...where,
+          periodNo: periodNum,
+        },
+        data: {
+          startTime: p.startTime || '',
+          endTime: p.endTime || '',
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'घण्टी समय तालिका सफलतापूर्वक सम्पूर्ण कक्षाहरूमा लागू गरियो (Routine timings synced across classes)!',
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // DELETE /api/routine/:id
 router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
   try {
