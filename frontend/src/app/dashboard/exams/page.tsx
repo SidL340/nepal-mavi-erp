@@ -117,10 +117,35 @@ export default function ExamsPage() {
   const [activeTab, setActiveTab] = useState<'exams' | 'schedules' | 'marks' | 'ledger'>('exams');
 
   // Add Exam state
+  interface ShiftFormItem {
+    id?: number;
+    name: string;
+    nameNepali?: string;
+    startTime: string;
+    endTime: string;
+    classIds: number[];
+  }
+
   const [isAddExamModalOpen, setIsAddExamModalOpen] = useState(false);
   const [addExamClassIds, setAddExamClassIds] = useState<number[]>([]);
   const [addExamShift, setAddExamShift] = useState('DAY');
   const [addExamTiming, setAddExamTiming] = useState('11:00 AM - 02:00 PM');
+  const [addExamShifts, setAddExamShifts] = useState<ShiftFormItem[]>([
+    {
+      name: 'MORNING',
+      nameNepali: 'बिहानी सत्र (Morning Shift)',
+      startTime: '07:00 AM',
+      endTime: '10:00 AM',
+      classIds: [8, 9, 10],
+    },
+    {
+      name: 'DAY',
+      nameNepali: 'दिवा सत्र (Day Shift)',
+      startTime: '11:00 AM',
+      endTime: '02:00 PM',
+      classIds: [1, 2, 3, 4, 5, 6, 7],
+    },
+  ]);
 
   // Edit Exam state
   const [isEditExamModalOpen, setIsEditExamModalOpen] = useState(false);
@@ -128,6 +153,7 @@ export default function ExamsPage() {
   const [editExamClassIds, setEditExamClassIds] = useState<number[]>([]);
   const [editExamShift, setEditExamShift] = useState('DAY');
   const [editExamTiming, setEditExamTiming] = useState('11:00 AM - 02:00 PM');
+  const [editExamShifts, setEditExamShifts] = useState<ShiftFormItem[]>([]);
 
   // Breakdown state
   const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
@@ -501,31 +527,108 @@ export default function ExamsPage() {
   });
 
   const openAddExamModal = () => {
-    setAddExamClassIds((classesData || []).map((c: any) => c.id));
+    const allCids = (classesData || []).map((c: any) => c.id);
+    setAddExamClassIds(allCids);
     setAddExamShift('DAY');
     setAddExamTiming('11:00 AM - 02:00 PM');
+    // Default both shifts (Morning & Day)
+    const upperCids = (classesData || []).filter((c: any) => {
+      const name = (c.name || '').toLowerCase();
+      return name.includes('8') || name.includes('9') || name.includes('10') || name.includes('11') || name.includes('12');
+    }).map((c: any) => c.id);
+    const lowerCids = (classesData || []).filter((c: any) => !upperCids.includes(c.id)).map((c: any) => c.id);
+
+    setAddExamShifts([
+      {
+        name: 'MORNING',
+        nameNepali: 'बिहानी सत्र (Morning Shift)',
+        startTime: '07:00 AM',
+        endTime: '10:00 AM',
+        classIds: upperCids.length > 0 ? upperCids : allCids,
+      },
+      {
+        name: 'DAY',
+        nameNepali: 'दिवा सत्र (Day Shift)',
+        startTime: '11:00 AM',
+        endTime: '02:00 PM',
+        classIds: lowerCids.length > 0 ? lowerCids : allCids,
+      },
+    ]);
     setIsAddExamModalOpen(true);
   };
 
   const openEditExamModal = (exam: any) => {
     setEditingExam(exam);
-    setEditExamClassIds(exam.examClasses?.map((ec: any) => ec.classId) || []);
+    const existingClassIds = exam.examClasses?.map((ec: any) => ec.classId) || [];
+    setEditExamClassIds(existingClassIds);
     setEditExamShift(exam.shift || 'DAY');
     setEditExamTiming(exam.examTiming || '11:00 AM - 02:00 PM');
+
+    if (exam.shifts && exam.shifts.length > 0) {
+      setEditExamShifts(
+        exam.shifts.map((s: any) => {
+          let cids: number[] = [];
+          try {
+            cids = typeof s.classIds === 'string' ? JSON.parse(s.classIds) : (s.classIds || []);
+          } catch {
+            cids = [];
+          }
+          return {
+            id: s.id,
+            name: s.name,
+            nameNepali: s.nameNepali || s.name,
+            startTime: s.startTime || '07:00 AM',
+            endTime: s.endTime || '10:00 AM',
+            classIds: cids,
+          };
+        })
+      );
+    } else {
+      setEditExamShifts([
+        {
+          name: exam.shift || 'DAY',
+          nameNepali: exam.shift === 'MORNING' ? 'बिहानी सत्र' : 'दिवा सत्र',
+          startTime: exam.examTiming?.split('-')[0]?.trim() || '11:00 AM',
+          endTime: exam.examTiming?.split('-')[1]?.trim() || '02:00 PM',
+          classIds: existingClassIds,
+        },
+      ]);
+    }
     setIsEditExamModalOpen(true);
   };
 
   const handleAddExam = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const combinedClassIds = Array.from(
+      new Set(
+        addExamShifts.length > 0
+          ? addExamShifts.flatMap((s) => s.classIds)
+          : addExamClassIds
+      )
+    );
+
+    const primaryShift = addExamShifts[0]?.name || addExamShift;
+    const primaryTiming = addExamShifts[0]
+      ? `${addExamShifts[0].startTime} - ${addExamShifts[0].endTime}`
+      : addExamTiming;
+
     const data: any = {
       name: fd.get('name'),
       nameNepali: fd.get('nameNepali') || null,
       startDateBs: fd.get('startDateBs'),
       endDateBs: fd.get('endDateBs') || null,
-      shift: addExamShift,
-      examTiming: addExamTiming,
-      classIds: addExamClassIds,
+      shift: primaryShift,
+      examTiming: primaryTiming,
+      classIds: combinedClassIds.length > 0 ? combinedClassIds : addExamClassIds,
+      shifts: addExamShifts.map((s, idx) => ({
+        name: s.name,
+        nameNepali: s.nameNepali || null,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        classIds: s.classIds,
+        orderIndex: idx,
+      })),
     };
     addExamMutation.mutate(data);
   };
@@ -533,14 +636,35 @@ export default function ExamsPage() {
   const handleUpdateExam = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const combinedClassIds = Array.from(
+      new Set(
+        editExamShifts.length > 0
+          ? editExamShifts.flatMap((s) => s.classIds)
+          : editExamClassIds
+      )
+    );
+
+    const primaryShift = editExamShifts[0]?.name || editExamShift;
+    const primaryTiming = editExamShifts[0]
+      ? `${editExamShifts[0].startTime} - ${editExamShifts[0].endTime}`
+      : editExamTiming;
+
     const data: any = {
       name: fd.get('name'),
       nameNepali: fd.get('nameNepali') || null,
       startDateBs: fd.get('startDateBs'),
       endDateBs: fd.get('endDateBs') || null,
-      shift: editExamShift,
-      examTiming: editExamTiming,
-      classIds: editExamClassIds,
+      shift: primaryShift,
+      examTiming: primaryTiming,
+      classIds: combinedClassIds.length > 0 ? combinedClassIds : editExamClassIds,
+      shifts: editExamShifts.map((s, idx) => ({
+        name: s.name,
+        nameNepali: s.nameNepali || null,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        classIds: s.classIds,
+        orderIndex: idx,
+      })),
     };
     updateExamMutation.mutate(data);
   };
@@ -1280,33 +1404,96 @@ export default function ExamsPage() {
                           </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-200/60">
-                          {/* Shift Badge */}
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 border border-amber-200/90 px-2.5 py-1 font-bold text-amber-900 text-[11px]">
-                            {exam.shift === 'MORNING' ? (
-                              <>
-                                <Sun size={12} className="text-amber-600" />
-                                <span>Morning Shift (बिहानी सत्र)</span>
-                              </>
-                            ) : exam.shift === 'EVENING' ? (
-                              <>
-                                <Moon size={12} className="text-indigo-600" />
-                                <span>Evening Shift (साँझ सत्र)</span>
-                              </>
-                            ) : (
-                              <>
-                                <Sun size={12} className="text-amber-600" />
-                                <span>Day Shift (दिवा सत्र)</span>
-                              </>
-                            )}
-                          </span>
+                        {/* All Shifts configured for this exam */}
+                        <div className="space-y-1.5 pt-1.5 border-t border-slate-200/60">
+                          {exam.shifts && exam.shifts.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {exam.shifts.map((sh: any, sIdx: number) => {
+                                let shClassIds: number[] = [];
+                                try {
+                                  shClassIds = typeof sh.classIds === 'string' ? JSON.parse(sh.classIds) : (sh.classIds || []);
+                                } catch {
+                                  shClassIds = [];
+                                }
+                                const isMorning = (sh.name || '').toUpperCase().includes('MORN');
+                                const isEvening = (sh.name || '').toUpperCase().includes('EVEN');
 
-                          {/* Timing Badge */}
-                          {exam.examTiming && (
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-2.5 py-1 font-mono font-bold text-slate-800 text-[11px] shadow-2xs">
-                              <Clock size={12} className="text-blue-600" />
-                              <span>{exam.examTiming}</span>
-                            </span>
+                                return (
+                                  <div
+                                    key={sh.id || sIdx}
+                                    className="flex flex-col gap-1 rounded-xl bg-white border border-slate-200/80 p-2 shadow-2xs"
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-bold text-[11px] ${
+                                          isMorning
+                                            ? 'bg-amber-50 text-amber-900 border border-amber-200/80'
+                                            : isEvening
+                                            ? 'bg-indigo-50 text-indigo-900 border border-indigo-200/80'
+                                            : 'bg-blue-50 text-blue-900 border border-blue-200/80'
+                                        }`}
+                                      >
+                                        {isMorning ? (
+                                          <Sun size={12} className="text-amber-600" />
+                                        ) : isEvening ? (
+                                          <Moon size={12} className="text-indigo-600" />
+                                        ) : (
+                                          <Sun size={12} className="text-blue-600" />
+                                        )}
+                                        <span>{sh.nameNepali || (isMorning ? 'बिहानी सत्र' : isEvening ? 'साँझ सत्र' : 'दिवा सत्र')}</span>
+                                      </span>
+
+                                      {(sh.startTime || sh.endTime) && (
+                                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-50 border border-slate-200 px-2 py-0.5 font-mono font-bold text-slate-700 text-[10.5px]">
+                                          <Clock size={11} className="text-blue-600" />
+                                          <span>{sh.startTime} - {sh.endTime}</span>
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {shClassIds.length > 0 && (
+                                      <div className="flex items-center gap-1 text-[10px] text-gray-500 font-nepali pl-1">
+                                        <span className="font-semibold text-gray-400">कक्षाहरू:</span>
+                                        <span className="font-bold text-gray-700 truncate">
+                                          {shClassIds
+                                            .map((cid: number) => classesData?.find((c: any) => c.id === cid)?.name || `कक्षा ${cid}`)
+                                            .join(', ')}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Legacy Single Shift Badge */}
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 border border-amber-200/90 px-2.5 py-1 font-bold text-amber-900 text-[11px]">
+                                {exam.shift === 'MORNING' ? (
+                                  <>
+                                    <Sun size={12} className="text-amber-600" />
+                                    <span>Morning Shift (बिहानी सत्र)</span>
+                                  </>
+                                ) : exam.shift === 'EVENING' ? (
+                                  <>
+                                    <Moon size={12} className="text-indigo-600" />
+                                    <span>Evening Shift (साँझ सत्र)</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sun size={12} className="text-amber-600" />
+                                    <span>Day Shift (दिवा सत्र)</span>
+                                  </>
+                                )}
+                              </span>
+
+                              {exam.examTiming && (
+                                <span className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-2.5 py-1 font-mono font-bold text-slate-800 text-[11px] shadow-2xs">
+                                  <Clock size={12} className="text-blue-600" />
+                                  <span>{exam.examTiming}</span>
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2237,18 +2424,18 @@ export default function ExamsPage() {
       {/* ─── ADD EXAM MODAL ────────────────────────────────────────────────── */}
       {isAddExamModalOpen && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <div>
                 <h2 className="text-sm font-bold text-[#1e3a5f]">Create Exam (नयाँ परीक्षा सिर्जना गर्नुहोस्)</h2>
-                <p className="text-[11px] text-gray-500 font-nepali">परीक्षाको नाम, मिति, शिफ्ट, समय र सहभागी कक्षाहरू छनौट गर्नुहोस्</p>
+                <p className="text-[11px] text-gray-500 font-nepali">परीक्षाको नाम, मिति, बहु-शिफ्ट (Multi-Shift), समय र सहभागी कक्षाहरू छनौट गर्नुहोस्</p>
               </div>
               <button onClick={() => setIsAddExamModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleAddExam} className="space-y-3.5 text-xs">
+            <form onSubmit={handleAddExam} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Exam Name (English) *</label>
@@ -2267,85 +2454,263 @@ export default function ExamsPage() {
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">End Date (BS)</label>
-                  <input name="endDateBs" type="text" placeholder="2081-06-15" className="erp-input font-mono" />
+                  <input name="endDateBs" type="text" placeholder="2083-07-10" className="erp-input font-mono" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Exam Shift (परीक्षा शिफ्ट) *</label>
-                  <select
-                    value={addExamShift}
-                    onChange={(e) => setAddExamShift(e.target.value)}
-                    className="erp-input font-bold"
-                  >
-                    <option value="DAY">☀️ Day Shift (दिवा सत्र)</option>
-                    <option value="MORNING">🌅 Morning Shift (बिहानी सत्र)</option>
-                    <option value="EVENING">🌙 Evening Shift (साँझ सत्र)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Exam Timing (परीक्षा समय) *</label>
-                  <input
-                    type="text"
-                    value={addExamTiming}
-                    onChange={(e) => setAddExamTiming(e.target.value)}
-                    placeholder="11:00 AM - 02:00 PM"
-                    className="erp-input font-mono font-bold"
-                  />
-                </div>
-              </div>
+              {/* ─── Multi-Shift Configuration Section ─── */}
+              <div className="space-y-3 rounded-2xl border border-purple-200/80 bg-purple-50/40 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/60 pb-2.5">
+                  <div>
+                    <h3 className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
+                      <Clock size={15} className="text-purple-600" />
+                      <span>Exam Shifts & Class Timings (परीक्षा सत्र तथा समय तालिका)</span>
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-nepali">
+                      यस परीक्षामा एकै दिन विभिन्न सिफ्टहरू (जस्तै: बिहानी र दिवा सत्र) सञ्चालन गर्न सकिन्छ।
+                    </p>
+                  </div>
 
-              {/* Participating Classes Checkboxes */}
-              <div className="space-y-2 rounded-xl border border-gray-200 bg-slate-50/70 p-3">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-gray-800 flex items-center gap-1.5">
-                    <Layers size={14} className="text-[#1e3a5f]" />
-                    <span>Which Classes are Taking this Exam? (सहभागी कक्षाहरू):</span>
-                  </label>
+                  {/* Preset Buttons */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allC = classesData || [];
+                        const upper = allC.filter((c: any) => {
+                          const n = (c.name || '').toLowerCase();
+                          return n.includes('8') || n.includes('9') || n.includes('10') || n.includes('11') || n.includes('12');
+                        }).map((c: any) => c.id);
+                        const lower = allC.filter((c: any) => !upper.includes(c.id)).map((c: any) => c.id);
+                        setAddExamShifts([
+                          {
+                            name: 'MORNING',
+                            nameNepali: 'बिहानी सत्र (Morning Shift)',
+                            startTime: '07:00 AM',
+                            endTime: '10:00 AM',
+                            classIds: upper.length > 0 ? upper : allC.map((c: any) => c.id),
+                          },
+                          {
+                            name: 'DAY',
+                            nameNepali: 'दिवा सत्र (Day Shift)',
+                            startTime: '11:00 AM',
+                            endTime: '02:00 PM',
+                            classIds: lower.length > 0 ? lower : allC.map((c: any) => c.id),
+                          },
+                        ]);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[10px] font-bold transition"
+                    >
+                      ⚡ 2 Shifts (Morning + Day)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allC = (classesData || []).map((c: any) => c.id);
+                        setAddExamShifts([
+                          {
+                            name: 'DAY',
+                            nameNepali: 'दिवा सत्र (Day Shift)',
+                            startTime: '11:00 AM',
+                            endTime: '02:00 PM',
+                            classIds: allC,
+                          },
+                        ]);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 text-[10px] font-bold transition"
+                    >
+                      ⚡ Single Shift (Day Only)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Shifts List Cards */}
+                <div className="space-y-3">
+                  {addExamShifts.map((sh, sIdx) => {
+                    return (
+                      <div
+                        key={sIdx}
+                        className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-3"
+                      >
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="h-6 w-6 rounded-full bg-purple-100 text-purple-900 font-black text-xs flex items-center justify-center">
+                              {sIdx + 1}
+                            </span>
+                            <span className="font-extrabold text-xs text-gray-900">
+                              Shift #{sIdx + 1}: {sh.nameNepali || sh.name}
+                            </span>
+                          </div>
+
+                          {addExamShifts.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddExamShifts(addExamShifts.filter((_, idx) => idx !== sIdx));
+                              }}
+                              className="text-rose-500 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 hover:underline"
+                            >
+                              <Trash2 size={12} />
+                              <span>Remove Shift</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1">Shift Type *</label>
+                            <select
+                              value={sh.name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = [...addExamShifts];
+                                updated[sIdx].name = val;
+                                if (val === 'MORNING') {
+                                  updated[sIdx].nameNepali = 'बिहानी सत्र (Morning Shift)';
+                                  updated[sIdx].startTime = '07:00 AM';
+                                  updated[sIdx].endTime = '10:00 AM';
+                                } else if (val === 'DAY') {
+                                  updated[sIdx].nameNepali = 'दिवा सत्र (Day Shift)';
+                                  updated[sIdx].startTime = '11:00 AM';
+                                  updated[sIdx].endTime = '02:00 PM';
+                                } else if (val === 'EVENING') {
+                                  updated[sIdx].nameNepali = 'साँझ सत्र (Evening Shift)';
+                                  updated[sIdx].startTime = '03:00 PM';
+                                  updated[sIdx].endTime = '06:00 PM';
+                                }
+                                setAddExamShifts(updated);
+                              }}
+                              className="erp-input font-bold"
+                            >
+                              <option value="MORNING">🌅 Morning Shift (बिहानी सत्र)</option>
+                              <option value="DAY">☀️ Day Shift (दिवा सत्र)</option>
+                              <option value="EVENING">🌙 Evening Shift (साँझ सत्र)</option>
+                              <option value="CUSTOM">Custom Shift</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1">Start Time *</label>
+                            <input
+                              type="text"
+                              required
+                              value={sh.startTime}
+                              onChange={(e) => {
+                                const updated = [...addExamShifts];
+                                updated[sIdx].startTime = e.target.value;
+                                setAddExamShifts(updated);
+                              }}
+                              placeholder="07:00 AM"
+                              className="erp-input font-mono font-bold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1">End Time *</label>
+                            <input
+                              type="text"
+                              required
+                              value={sh.endTime}
+                              onChange={(e) => {
+                                const updated = [...addExamShifts];
+                                updated[sIdx].endTime = e.target.value;
+                                setAddExamShifts(updated);
+                              }}
+                              placeholder="10:00 AM"
+                              className="erp-input font-mono font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Class Checkboxes for this shift */}
+                        <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-gray-700">
+                              Classes in this Shift ({sh.classIds.length} Selected):
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...addExamShifts];
+                                  updated[sIdx].classIds = (classesData || []).map((c: any) => c.id);
+                                  setAddExamShifts(updated);
+                                }}
+                                className="text-blue-600 hover:underline font-bold text-[10.5px]"
+                              >
+                                Select All
+                              </button>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...addExamShifts];
+                                  updated[sIdx].classIds = [];
+                                  setAddExamShifts(updated);
+                                }}
+                                className="text-gray-500 hover:underline font-bold text-[10.5px]"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                            {classesData?.map((c: any) => {
+                              const isChecked = sh.classIds.includes(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  className={`flex items-center gap-1 rounded-lg border p-1 cursor-pointer text-[10.5px] font-bold transition ${
+                                    isChecked
+                                      ? 'border-[#1e3a5f] bg-blue-50 text-[#1e3a5f] ring-1 ring-[#1e3a5f]'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const updated = [...addExamShifts];
+                                      if (e.target.checked) {
+                                        updated[sIdx].classIds = [...sh.classIds, c.id];
+                                      } else {
+                                        updated[sIdx].classIds = sh.classIds.filter((id) => id !== c.id);
+                                      }
+                                      setAddExamShifts(updated);
+                                    }}
+                                    className="rounded text-[#1e3a5f] h-3 w-3"
+                                  />
+                                  <span className="truncate">{c.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   <button
                     type="button"
                     onClick={() => {
-                      if (addExamClassIds.length === (classesData || []).length) {
-                        setAddExamClassIds([]);
-                      } else {
-                        setAddExamClassIds((classesData || []).map((c: any) => c.id));
-                      }
+                      setAddExamShifts([
+                        ...addExamShifts,
+                        {
+                          name: `SHIFT_${addExamShifts.length + 1}`,
+                          nameNepali: `शिफ्ट ${addExamShifts.length + 1}`,
+                          startTime: '01:00 PM',
+                          endTime: '04:00 PM',
+                          classIds: [],
+                        },
+                      ]);
                     }}
-                    className="text-[11px] font-bold text-[#1e3a5f] hover:underline"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-white hover:bg-purple-50 px-3.5 py-2 text-xs font-bold text-purple-900 transition w-full justify-center shadow-2xs"
                   >
-                    {addExamClassIds.length === (classesData || []).length ? 'Deselect All' : 'Select All'}
+                    <Plus size={14} />
+                    <span>Add Another Shift (अर्को सत्र थप्नुहोस्)</span>
                   </button>
-                </div>
-
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pt-1">
-                  {classesData?.map((c: any) => {
-                    const isChecked = addExamClassIds.includes(c.id);
-                    return (
-                      <label
-                        key={c.id}
-                        className={`flex items-center gap-1.5 rounded-lg border p-1.5 cursor-pointer text-[11px] font-bold transition ${
-                          isChecked
-                            ? 'border-[#1e3a5f] bg-blue-50 text-[#1e3a5f]'
-                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setAddExamClassIds([...addExamClassIds, c.id]);
-                            } else {
-                              setAddExamClassIds(addExamClassIds.filter((id) => id !== c.id));
-                            }
-                          }}
-                          className="rounded text-[#1e3a5f]"
-                        />
-                        <span className="truncate">{c.name} {c.section ? `(${c.section})` : ''}</span>
-                      </label>
-                    );
-                  })}
                 </div>
               </div>
 
@@ -2373,18 +2738,18 @@ export default function ExamsPage() {
       {/* ─── EDIT EXAM MODAL ───────────────────────────────────────────────── */}
       {isEditExamModalOpen && isAdmin && editingExam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <div>
                 <h2 className="text-sm font-bold text-[#1e3a5f]">Edit Exam (परीक्षा सम्पादन गर्नुहोस्)</h2>
-                <p className="text-[11px] text-gray-500 font-nepali">परीक्षाको विवरण, शिफ्ट, समय तथा कक्षाहरू परिमार्जन गर्नुहोस्</p>
+                <p className="text-[11px] text-gray-500 font-nepali">परीक्षाको विवरण, बहु-शिफ्ट, समय तथा कक्षाहरू परिमार्जन गर्नुहोस्</p>
               </div>
               <button onClick={() => setIsEditExamModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateExam} className="space-y-3.5 text-xs">
+            <form onSubmit={handleUpdateExam} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Exam Name (English) *</label>
@@ -2424,87 +2789,265 @@ export default function ExamsPage() {
                     name="endDateBs"
                     type="text"
                     defaultValue={editingExam.endDateBs || ''}
-                    placeholder="2081-06-15"
+                    placeholder="2083-07-10"
                     className="erp-input font-mono"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Exam Shift (परीक्षा शिफ्ट) *</label>
-                  <select
-                    value={editExamShift}
-                    onChange={(e) => setEditExamShift(e.target.value)}
-                    className="erp-input font-bold"
-                  >
-                    <option value="DAY">☀️ Day Shift (दिवा सत्र)</option>
-                    <option value="MORNING">🌅 Morning Shift (बिहानी सत्र)</option>
-                    <option value="EVENING">🌙 Evening Shift (साँझ सत्र)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Exam Timing (परीक्षा समय) *</label>
-                  <input
-                    type="text"
-                    value={editExamTiming}
-                    onChange={(e) => setEditExamTiming(e.target.value)}
-                    placeholder="11:00 AM - 02:00 PM"
-                    className="erp-input font-mono font-bold"
-                  />
-                </div>
-              </div>
+              {/* ─── Multi-Shift Configuration Section for Edit ─── */}
+              <div className="space-y-3 rounded-2xl border border-purple-200/80 bg-purple-50/40 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/60 pb-2.5">
+                  <div>
+                    <h3 className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
+                      <Clock size={15} className="text-purple-600" />
+                      <span>Exam Shifts & Class Timings (परीक्षा सत्र तथा समय तालिका)</span>
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-nepali">
+                      यस परीक्षामा एकै दिन विभिन्न सिफ्टहरू (जस्तै: बिहानी र दिवा सत्र) सञ्चालन गर्न सकिन्छ।
+                    </p>
+                  </div>
 
-              {/* Participating Classes Checkboxes */}
-              <div className="space-y-2 rounded-xl border border-gray-200 bg-slate-50/70 p-3">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-gray-800 flex items-center gap-1.5">
-                    <Layers size={14} className="text-[#1e3a5f]" />
-                    <span>Which Classes are Taking this Exam? (सहभागी कक्षाहरू):</span>
-                  </label>
+                  {/* Preset Buttons */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allC = classesData || [];
+                        const upper = allC.filter((c: any) => {
+                          const n = (c.name || '').toLowerCase();
+                          return n.includes('8') || n.includes('9') || n.includes('10') || n.includes('11') || n.includes('12');
+                        }).map((c: any) => c.id);
+                        const lower = allC.filter((c: any) => !upper.includes(c.id)).map((c: any) => c.id);
+                        setEditExamShifts([
+                          {
+                            name: 'MORNING',
+                            nameNepali: 'बिहानी सत्र (Morning Shift)',
+                            startTime: '07:00 AM',
+                            endTime: '10:00 AM',
+                            classIds: upper.length > 0 ? upper : allC.map((c: any) => c.id),
+                          },
+                          {
+                            name: 'DAY',
+                            nameNepali: 'दिवा सत्र (Day Shift)',
+                            startTime: '11:00 AM',
+                            endTime: '02:00 PM',
+                            classIds: lower.length > 0 ? lower : allC.map((c: any) => c.id),
+                          },
+                        ]);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-900 text-[10px] font-bold transition"
+                    >
+                      ⚡ 2 Shifts (Morning + Day)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allC = (classesData || []).map((c: any) => c.id);
+                        setEditExamShifts([
+                          {
+                            name: 'DAY',
+                            nameNepali: 'दिवा सत्र (Day Shift)',
+                            startTime: '11:00 AM',
+                            endTime: '02:00 PM',
+                            classIds: allC,
+                          },
+                        ]);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 text-[10px] font-bold transition"
+                    >
+                      ⚡ Single Shift (Day Only)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Shifts List Cards */}
+                <div className="space-y-3">
+                  {editExamShifts.map((sh, sIdx) => {
+                    return (
+                      <div
+                        key={sIdx}
+                        className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-3"
+                      >
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="h-6 w-6 rounded-full bg-purple-100 text-purple-900 font-black text-xs flex items-center justify-center">
+                              {sIdx + 1}
+                            </span>
+                            <span className="font-extrabold text-xs text-gray-900">
+                              Shift #{sIdx + 1}: {sh.nameNepali || sh.name}
+                            </span>
+                          </div>
+
+                          {editExamShifts.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditExamShifts(editExamShifts.filter((_, idx) => idx !== sIdx));
+                              }}
+                              className="text-rose-500 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 hover:underline"
+                            >
+                              <Trash2 size={12} />
+                              <span>Remove Shift</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1">Shift Type *</label>
+                            <select
+                              value={sh.name}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updated = [...editExamShifts];
+                                updated[sIdx].name = val;
+                                if (val === 'MORNING') {
+                                  updated[sIdx].nameNepali = 'बिहानी सत्र (Morning Shift)';
+                                  updated[sIdx].startTime = '07:00 AM';
+                                  updated[sIdx].endTime = '10:00 AM';
+                                } else if (val === 'DAY') {
+                                  updated[sIdx].nameNepali = 'दिवा सत्र (Day Shift)';
+                                  updated[sIdx].startTime = '11:00 AM';
+                                  updated[sIdx].endTime = '02:00 PM';
+                                } else if (val === 'EVENING') {
+                                  updated[sIdx].nameNepali = 'साँझ सत्र (Evening Shift)';
+                                  updated[sIdx].startTime = '03:00 PM';
+                                  updated[sIdx].endTime = '06:00 PM';
+                                }
+                                setEditExamShifts(updated);
+                              }}
+                              className="erp-input font-bold"
+                            >
+                              <option value="MORNING">🌅 Morning Shift (बिहानी सत्र)</option>
+                              <option value="DAY">☀️ Day Shift (दिवा सत्र)</option>
+                              <option value="EVENING">🌙 Evening Shift (साँझ सत्र)</option>
+                              <option value="CUSTOM">Custom Shift</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1">Start Time *</label>
+                            <input
+                              type="text"
+                              required
+                              value={sh.startTime}
+                              onChange={(e) => {
+                                const updated = [...editExamShifts];
+                                updated[sIdx].startTime = e.target.value;
+                                setEditExamShifts(updated);
+                              }}
+                              placeholder="07:00 AM"
+                              className="erp-input font-mono font-bold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-gray-700 mb-1">End Time *</label>
+                            <input
+                              type="text"
+                              required
+                              value={sh.endTime}
+                              onChange={(e) => {
+                                const updated = [...editExamShifts];
+                                updated[sIdx].endTime = e.target.value;
+                                setEditExamShifts(updated);
+                              }}
+                              placeholder="10:00 AM"
+                              className="erp-input font-mono font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Class Checkboxes for this shift */}
+                        <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-gray-700">
+                              Classes in this Shift ({sh.classIds.length} Selected):
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...editExamShifts];
+                                  updated[sIdx].classIds = (classesData || []).map((c: any) => c.id);
+                                  setEditExamShifts(updated);
+                                }}
+                                className="text-blue-600 hover:underline font-bold text-[10.5px]"
+                              >
+                                Select All
+                              </button>
+                              <span className="text-gray-300">|</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...editExamShifts];
+                                  updated[sIdx].classIds = [];
+                                  setEditExamShifts(updated);
+                                }}
+                                className="text-gray-500 hover:underline font-bold text-[10.5px]"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 max-h-32 overflow-y-auto pr-1">
+                            {classesData?.map((c: any) => {
+                              const isChecked = sh.classIds.includes(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  className={`flex items-center gap-1 rounded-lg border p-1 cursor-pointer text-[10.5px] font-bold transition ${
+                                    isChecked
+                                      ? 'border-[#1e3a5f] bg-blue-50 text-[#1e3a5f] ring-1 ring-[#1e3a5f]'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const updated = [...editExamShifts];
+                                      if (e.target.checked) {
+                                        updated[sIdx].classIds = [...sh.classIds, c.id];
+                                      } else {
+                                        updated[sIdx].classIds = sh.classIds.filter((id) => id !== c.id);
+                                      }
+                                      setEditExamShifts(updated);
+                                    }}
+                                    className="rounded text-[#1e3a5f] h-3 w-3"
+                                  />
+                                  <span className="truncate">{c.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   <button
                     type="button"
                     onClick={() => {
-                      if (editExamClassIds.length === (classesData || []).length) {
-                        setEditExamClassIds([]);
-                      } else {
-                        setEditExamClassIds((classesData || []).map((c: any) => c.id));
-                      }
+                      setEditExamShifts([
+                        ...editExamShifts,
+                        {
+                          name: `SHIFT_${editExamShifts.length + 1}`,
+                          nameNepali: `शिफ्ट ${editExamShifts.length + 1}`,
+                          startTime: '01:00 PM',
+                          endTime: '04:00 PM',
+                          classIds: [],
+                        },
+                      ]);
                     }}
-                    className="text-[11px] font-bold text-[#1e3a5f] hover:underline"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-white hover:bg-purple-50 px-3.5 py-2 text-xs font-bold text-purple-900 transition w-full justify-center shadow-2xs"
                   >
-                    {editExamClassIds.length === (classesData || []).length ? 'Deselect All' : 'Select All'}
+                    <Plus size={14} />
+                    <span>Add Another Shift (अर्को सत्र थप्नुहोस्)</span>
                   </button>
-                </div>
-
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pt-1">
-                  {classesData?.map((c: any) => {
-                    const isChecked = editExamClassIds.includes(c.id);
-                    return (
-                      <label
-                        key={c.id}
-                        className={`flex items-center gap-1.5 rounded-lg border p-1.5 cursor-pointer text-[11px] font-bold transition ${
-                          isChecked
-                            ? 'border-[#1e3a5f] bg-blue-50 text-[#1e3a5f]'
-                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setEditExamClassIds([...editExamClassIds, c.id]);
-                            } else {
-                              setEditExamClassIds(editExamClassIds.filter((id) => id !== c.id));
-                            }
-                          }}
-                          className="rounded text-[#1e3a5f]"
-                        />
-                        <span className="truncate">{c.name} {c.section ? `(${c.section})` : ''}</span>
-                      </label>
-                    );
-                  })}
                 </div>
               </div>
 
