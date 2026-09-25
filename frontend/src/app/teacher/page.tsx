@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -55,8 +56,10 @@ const DAYS_MAP: Record<number, string> = {
 export default function TeacherPortalPage() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const searchParams = useSearchParams();
   const teacherId = user?.teacher?.id;
 
+  const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<
     | 'overview'
     | 'daily_log'
@@ -68,7 +71,14 @@ export default function TeacherPortalPage() {
     | 'incharge_library'
     | 'incharge_account'
     | 'incharge_coordinator'
-  >('overview');
+    | 'notices'
+  >((tabFromUrl as any) || 'overview');
+
+  useEffect(() => {
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl as any);
+    }
+  }, [tabFromUrl]);
   const [taskStatusFilter, setTaskStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
   const [dailyLog, setDailyLog] = useState('');
   const [selectedClassLog, setSelectedClassLog] = useState('');

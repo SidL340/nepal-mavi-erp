@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import {
   LayoutDashboard,
@@ -258,16 +258,39 @@ function getRoleHref(href: string, role?: string): string {
   return href;
 }
 
-function isActive(href: string, pathname: string, role?: string): boolean {
+function isActive(href: string, pathname: string, currentTab?: string | null, role?: string): boolean {
   const target = getRoleHref(href, role);
-  if (target === '/dashboard' || target === '/teacher' || target === '/student') {
-    return pathname === target;
+
+  // If link specifies a tab query, e.g. /teacher?tab=daily_log or /student?tab=lessons or /dashboard/library?tab=books
+  if (target.includes('?tab=')) {
+    const [base, tabParam] = target.split('?tab=');
+    if (pathname !== base) return false;
+    return currentTab === tabParam;
   }
+
+  // If link specifies other query params
   if (target.includes('?')) {
-    const basePath = target.split('?')[0];
-    return pathname === basePath;
+    const [base, queryStr] = target.split('?');
+    if (pathname !== base) return false;
+    const params = new URLSearchParams(queryStr);
+    const t = params.get('tab');
+    if (t) return currentTab === t;
+    return !currentTab;
   }
-  return pathname === target || pathname.startsWith(target + '/');
+
+  // If target is root /teacher or /student
+  if (target === '/teacher' || target === '/student') {
+    if (pathname !== target) return false;
+    return !currentTab || currentTab === 'overview';
+  }
+
+  // If target is root /dashboard
+  if (target === '/dashboard') {
+    return pathname === '/dashboard';
+  }
+
+  // For specific subpages like /dashboard/attendance, /dashboard/classes, /dashboard/students, etc.
+  return pathname === target;
 }
 
 function cn(...classes: (string | boolean | undefined | null)[]): string {
@@ -277,14 +300,15 @@ function cn(...classes: (string | boolean | undefined | null)[]): string {
 interface NavLinkProps {
   item: NavItem;
   pathname: string;
+  currentTab?: string | null;
   collapsed: boolean;
   role?: string;
   onNavigate?: () => void;
 }
 
-function NavLink({ item, pathname, collapsed, onNavigate, role }: NavLinkProps) {
+function NavLink({ item, pathname, currentTab, collapsed, onNavigate, role }: NavLinkProps) {
   const targetHref = getRoleHref(item.href, role);
-  const active = isActive(item.href, pathname, role);
+  const active = isActive(item.href, pathname, currentTab, role);
   const Icon = item.icon;
 
   return (
@@ -320,12 +344,14 @@ function NavLink({ item, pathname, collapsed, onNavigate, role }: NavLinkProps) 
 function NavTree({
   role,
   pathname,
+  currentTab,
   collapsed,
   onNavigate,
   user,
 }: {
   role: string;
   pathname: string;
+  currentTab?: string | null;
   collapsed: boolean;
   onNavigate?: () => void;
   user?: any;
@@ -351,7 +377,7 @@ function NavTree({
           if (!entry.roles.includes(userRole)) return null;
           return (
             <li key={entry.href}>
-              <NavLink item={entry} pathname={pathname} collapsed={collapsed} onNavigate={onNavigate} role={userRole} />
+              <NavLink item={entry} pathname={pathname} currentTab={currentTab} collapsed={collapsed} onNavigate={onNavigate} role={userRole} />
             </li>
           );
         }
@@ -376,8 +402,10 @@ function NavTree({
                   <NavLink
                     item={item}
                     pathname={pathname}
+                    currentTab={currentTab}
                     collapsed={collapsed}
                     onNavigate={onNavigate}
+                    role={userRole}
                   />
                 </li>
               ))}
@@ -408,8 +436,10 @@ function NavTree({
                     roles: ['TEACHER'],
                   }}
                   pathname={pathname}
+                  currentTab={currentTab}
                   collapsed={collapsed}
                   onNavigate={onNavigate}
+                  role={userRole}
                 />
               </li>
             )}
@@ -424,8 +454,10 @@ function NavTree({
                     roles: ['TEACHER'],
                   }}
                   pathname={pathname}
+                  currentTab={currentTab}
                   collapsed={collapsed}
                   onNavigate={onNavigate}
+                  role={userRole}
                 />
               </li>
             )}
@@ -440,8 +472,10 @@ function NavTree({
                     roles: ['TEACHER'],
                   }}
                   pathname={pathname}
+                  currentTab={currentTab}
                   collapsed={collapsed}
                   onNavigate={onNavigate}
+                  role={userRole}
                 />
               </li>
             )}
@@ -459,6 +493,8 @@ export interface SidebarProps {
 
 export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams ? searchParams.get('tab') : null;
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
@@ -511,7 +547,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
 
         {/* Navigation list */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          <NavTree role={role} pathname={pathname} collapsed={collapsed} user={user} />
+          <NavTree role={role} pathname={pathname} currentTab={currentTab} collapsed={collapsed} user={user} />
         </nav>
 
         {/* Footer info & collapse toggle */}
@@ -592,6 +628,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
               <NavTree
                 role={role}
                 pathname={pathname}
+                currentTab={currentTab}
                 collapsed={false}
                 onNavigate={onMobileClose}
                 user={user}
