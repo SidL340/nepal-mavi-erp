@@ -5,10 +5,16 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Helper to configure real Gmail/SMTP transporter if env vars are present
+let activeEmailSession = {
+  email: process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com',
+  password: process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || '',
+  isAuthenticated: false,
+};
+
+// Helper to configure real Gmail/SMTP transporter
 function getSmtpTransporter() {
-  const user = process.env.SMTP_USER || process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com';
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  const user = activeEmailSession.email || process.env.SMTP_USER || process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com';
+  const pass = activeEmailSession.password || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
 
   if (!pass) return null;
 
@@ -20,6 +26,170 @@ function getSmtpTransporter() {
     },
   });
 }
+
+// Helper to run IMAP sync
+async function runImapSync(user, pass) {
+  const { ImapFlow } = require('imapflow');
+  const { simpleParser } = require('mailparser');
+
+  const client = new ImapFlow({
+    host: 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: {
+      user,
+      pass,
+    },
+    logger: false,
+  });
+
+  let syncedCount = 0;
+  let lock;
+
+  try {
+    await client.connect();
+    lock = await client.getMailboxLock('INBOX');
+
+    const status = await client.status('INBOX', { messages: true });
+    const totalMessages = status.messages || 0;
+
+    if (totalMessages > 0) {
+      const fromSeq = Math.max(1, totalMessages - 29);
+      for await (let message of client.fetch(`${fromSeq}:*`, { envelope: true, source: true, flags: true })) {
+        try {
+          const parsed = await simpleParser(message.source);
+          const subject = parsed.subject || '(बिना विषय / No Subject)';
+          const fromAddress = parsed.from?.value?.[0]?.address || 'unknown@domain.com';
+          const fromName = parsed.from?.value?.[0]?.name || parsed.from?.text || fromAddress;
+          const toAddress = parsed.to?.value?.[0]?.address || user;
+          const toName = parsed.to?.value?.[0]?.name || null;
+          const date = parsed.date || new Date();
+          const textBody = parsed.text || parsed.html || '';
+
+          const existing = await prisma.schoolEmail.findFirst({
+            where: {
+              fromAddress,
+              subject,
+              receivedOrSentAt: date,
+            },
+          });
+
+          if (!existing) {
+            await prisma.schoolEmail.create({
+              data: {
+                folder: 'INBOX',
+                fromAddress,
+                fromName,
+                toAddress,
+                toName,
+                subject,
+                body: textBody,
+                isRead: message.flags?.has('\\Seen') || false,
+                receivedOrSentAt: date,
+              },
+            });
+            syncedCount++;
+          }
+        } catch (itemErr) {
+          console.warn('Single email parsing error:', itemErr.message);
+        }
+      }
+    }
+  } finally {
+    if (lock) {
+      try { lock.release(); } catch (_) {}
+    }
+    try { await client.logout(); } catch (_) {}
+  }
+
+  return syncedCount;
+}
+
+// GET /api/email/auth-status — check if mailbox is unlocked
+router.get('/auth-status', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), (req, res) => {
+  return res.json({
+    success: true,
+    isAuthenticated: activeEmailSession.isAuthenticated,
+    email: activeEmailSession.email,
+  });
+});
+
+// POST /api/email/auth-connect — authenticate email and password
+router.post('/auth-connect', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'इमेल र पासवर्ड अनिवार्य छ।' });
+    }
+
+    const testTransporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: email.trim(),
+        pass: password.trim(),
+      },
+    });
+
+    let authSuccess = false;
+    let authErrorMsg = '';
+
+    try {
+      await testTransporter.verify();
+      authSuccess = true;
+    } catch (verErr) {
+      authErrorMsg = verErr.message;
+    }
+
+    if (!authSuccess) {
+      // Check if it's 2FA App Password requirement
+      const is2FA = authErrorMsg.includes('Application-specific password') || 
+                    authErrorMsg.includes('534-5.7.9') ||
+                    authErrorMsg.includes('InvalidSecondFactor');
+
+      return res.status(401).json({
+        success: false,
+        is2FA,
+        message: is2FA
+          ? 'गुगलमा 2-Step Verification सक्रिय भएकाले सामान्य पासवर्ड स्वीकार भएन। कृपया Google Security > App Passwords बाट १६-अक्षरको कोड हाल्नुहोस्।'
+          : 'इमेल वा पासवर्ड मिलेन: ' + authErrorMsg,
+      });
+    }
+
+    // Auth succeeded!
+    activeEmailSession = {
+      email: email.trim(),
+      password: password.trim(),
+      isAuthenticated: true,
+    };
+
+    // Trigger background or immediate sync
+    let syncCount = 0;
+    try {
+      syncCount = await runImapSync(activeEmailSession.email, activeEmailSession.password);
+    } catch (sErr) {
+      console.warn('Initial IMAP sync warning:', sErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: 'इमेल प्रमाणीकरण सफल भयो!',
+      data: {
+        email: activeEmailSession.email,
+        isAuthenticated: true,
+        syncedCount: syncCount,
+      },
+    });
+  } catch (err) {
+    console.error('Email Connect Error:', err);
+    return res.status(500).json({ success: false, message: 'प्रमाणीकरण गर्दा समस्या आयो: ' + err.message });
+  }
+});
+
+// POST /api/email/lock — lock mailbox session
+router.post('/lock', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), (req, res) => {
+  activeEmailSession.isAuthenticated = false;
+  return res.json({ success: true, message: 'इमेल सत्र सफलतापूर्वक बन्द गरियो (Mailbox Locked).' });
+});
 
 // GET /api/email — list emails by folder
 router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
@@ -211,4 +381,118 @@ router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTAN
   }
 });
 
+// POST /api/email/sync — fetch recent incoming real emails from Gmail via IMAP
+router.post('/sync', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  const { ImapFlow } = require('imapflow');
+  const { simpleParser } = require('mailparser');
+
+  const user = process.env.IMAP_USER || process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com';
+  const pass = process.env.IMAP_PASS || process.env.GMAIL_APP_PASSWORD;
+
+  if (!pass) {
+    return res.status(400).json({
+      success: false,
+      message: 'Gmail App Password कन्फिगर गरिएको छैन। कृपया गुगल सेक्युरिटीबाट App Password राख्नुहोस्।',
+    });
+  }
+
+  const client = new ImapFlow({
+    host: 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: {
+      user,
+      pass,
+    },
+    logger: false,
+  });
+
+  let syncedCount = 0;
+  let lock;
+
+  try {
+    await client.connect();
+    lock = await client.getMailboxLock('INBOX');
+
+    const status = await client.status('INBOX', { messages: true });
+    const totalMessages = status.messages || 0;
+
+    if (totalMessages > 0) {
+      const fromSeq = Math.max(1, totalMessages - 29);
+      for await (let message of client.fetch(`${fromSeq}:*`, { envelope: true, source: true, flags: true })) {
+        try {
+          const parsed = await simpleParser(message.source);
+          const subject = parsed.subject || '(बिना विषय / No Subject)';
+          const fromAddress = parsed.from?.value?.[0]?.address || 'unknown@domain.com';
+          const fromName = parsed.from?.value?.[0]?.name || parsed.from?.text || fromAddress;
+          const toAddress = parsed.to?.value?.[0]?.address || user;
+          const toName = parsed.to?.value?.[0]?.name || null;
+          const date = parsed.date || new Date();
+          const textBody = parsed.text || parsed.html || '';
+
+          const existing = await prisma.schoolEmail.findFirst({
+            where: {
+              fromAddress,
+              subject,
+              receivedOrSentAt: date,
+            },
+          });
+
+          if (!existing) {
+            await prisma.schoolEmail.create({
+              data: {
+                folder: 'INBOX',
+                fromAddress,
+                fromName,
+                toAddress,
+                toName,
+                subject,
+                body: textBody,
+                isRead: message.flags?.has('\\Seen') || false,
+                receivedOrSentAt: date,
+              },
+            });
+            syncedCount++;
+          }
+        } catch (itemErr) {
+          console.warn('Error parsing single email message:', itemErr.message);
+        }
+      }
+    }
+
+    if (lock) lock.release();
+    await client.logout();
+
+    return res.json({
+      success: true,
+      message: syncedCount > 0 
+        ? `जिमेलबाट ${syncedCount} नयाँ इमेलहरू सफलतापूर्वक सिंक गरियो!` 
+        : 'सबै इमेलहरू अद्यावधिक छन् (No new emails to sync).',
+      syncedCount,
+    });
+  } catch (err) {
+    if (lock) {
+      try { lock.release(); } catch (_) {}
+    }
+    try { await client.logout(); } catch (_) {}
+
+    console.error('IMAP Sync Error:', err.message);
+
+    const isAuthError = err.message.includes('Invalid credentials') || 
+                        err.message.includes('Application-specific password') || 
+                        err.message.includes('AUTHENTICATIONFAILED');
+
+    const friendlyMsg = isAuthError
+      ? 'गुगलले मुख्य पासवर्ड सिधै स्वीकार गर्दैन। कृपया Google Account > Security बाट १६-अक्षरको "App Password" जेनेरेट गरी राख्नुहोस्।'
+      : 'जिमेलसँग सम्पर्क हुन सकेन: ' + err.message;
+
+    return res.status(400).json({
+      success: false,
+      message: friendlyMsg,
+      rawError: err.message,
+    });
+  }
+});
+
 module.exports = router;
+

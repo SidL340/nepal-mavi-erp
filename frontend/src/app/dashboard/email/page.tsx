@@ -23,6 +23,13 @@ import {
   ExternalLink,
   Globe,
   Trash,
+  Lock,
+  Unlock,
+  Key,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  HelpCircle,
 } from 'lucide-react';
 
 export default function SchoolEmailPage() {
@@ -31,6 +38,57 @@ export default function SchoolEmailPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+
+  // Authentication State
+  const [authEmail, setAuthEmail] = useState('nepalsecondaryschool.bdn@gmail.com');
+  const [authPassword, setAuthPassword] = useState('#Include9845');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [is2FAError, setIs2FAError] = useState(false);
+
+  // Check auth status
+  const { data: authData, isLoading: isAuthLoading } = useQuery({
+    queryKey: ['email-auth-status'],
+    queryFn: async () => {
+      const res = await api.get('/email/auth-status');
+      return res.data;
+    },
+  });
+
+  const isAuthenticated = authData?.isAuthenticated || false;
+
+  // Connect & Authenticate mutation
+  const authMutation = useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const res = await api.post('/email/auth-connect', { email, password });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || 'इमेल सफलतापूर्वक प्रमाणीकरण भयो!');
+      setAuthError(null);
+      setIs2FAError(false);
+      queryClient.invalidateQueries({ queryKey: ['email-auth-status'] });
+      queryClient.invalidateQueries({ queryKey: ['school-emails'] });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || 'प्रमाणीकरण असफल भयो।';
+      setAuthError(msg);
+      setIs2FAError(!!err?.response?.data?.is2FA);
+      toast.error(msg);
+    },
+  });
+
+  // Lock Mailbox mutation
+  const lockMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/email/lock');
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('इमेल सत्र बन्द गरियो (Mailbox Locked).');
+      queryClient.invalidateQueries({ queryKey: ['email-auth-status'] });
+    },
+  });
 
   // Compose form state
   const [composeForm, setComposeForm] = useState({
@@ -54,6 +112,7 @@ export default function SchoolEmailPage() {
       });
       return res.data;
     },
+    enabled: isAuthenticated,
   });
 
   const emails = emailData?.data || [];
@@ -102,6 +161,21 @@ export default function SchoolEmailPage() {
     },
   });
 
+  // Sync with Gmail via IMAP
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/email/sync');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || 'जिमेल सिंक भयो!');
+      queryClient.invalidateQueries({ queryKey: ['school-emails'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'जिमेल सिंक हुन सकेन।');
+    },
+  });
+
   // Send Email mutation
   const sendMutation = useMutation({
     mutationFn: async (formData: typeof composeForm) => {
@@ -147,6 +221,148 @@ export default function SchoolEmailPage() {
     sendMutation.mutate(composeForm);
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-3">
+        <RefreshCw className="h-8 w-8 text-blue-600 animate-spin" />
+        <p className="text-xs text-gray-500 font-medium">इमेल सुरक्षा प्रमाणीकरण जाँच्दै...</p>
+      </div>
+    );
+  }
+
+  // ── MAILBOX AUTHENTICATION GATE ──
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-xl mx-auto py-8 px-4 space-y-6">
+        {/* Header Title */}
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-3 rounded-2xl bg-blue-50 text-blue-700 shadow-xs border border-blue-100">
+            <Lock size={32} />
+          </div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+            School Mailbox Authentication (इमेल सुरक्षा प्रमाणीकरण)
+          </h1>
+          <p className="text-xs text-gray-600 font-nepali">
+            विद्यालयको आधिकारिक इमेल (<span className="font-bold text-gray-800">nepalsecondaryschool.bdn@gmail.com</span>) पहुँच गर्न कृपया प्रमाणीकरण गर्नुहोस्।
+          </p>
+        </div>
+
+        {/* Auth Card */}
+        <div className="bg-white rounded-3xl border border-gray-200 p-6 md:p-8 shadow-sm space-y-5">
+          {authError && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-start gap-2.5">
+              <AlertCircle size={18} className="shrink-0 text-rose-600 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold">{authError}</p>
+                {is2FAError && (
+                  <p className="text-[11px] text-rose-700 leading-relaxed font-nepali">
+                    💡 <strong>सुझाव:</strong> गुगलको सुरक्षा नीतिका कारण मुख्य पासवर्ड बाह्य एपमा सिधै प्रयोग गर्न मिल्दैन। 
+                    गुगल सेक्युरिटीमा गएर १६-अक्षरको <strong>App Password</strong> जेनेरेट गरी यहाँ पासवर्डको ठाउँमा हाल्नुहोस्।
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              authMutation.mutate({ email: authEmail, password: authPassword });
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                <Mail size={14} className="text-blue-600" />
+                <span>विद्यालय आधिकारिक इमेल (Email Address)</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                placeholder="nepalsecondaryschool.bdn@gmail.com"
+                className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50/50"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                  <Key size={14} className="text-amber-600" />
+                  <span>इमेल पासवर्ड / Google App Password</span>
+                </label>
+                <a
+                  href="https://myaccount.google.com/apppasswords"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] text-blue-600 hover:text-blue-800 underline font-bold inline-flex items-center gap-1"
+                >
+                  <HelpCircle size={12} />
+                  <span>App Password कसरी लिने?</span>
+                </a>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="Password वा Google App Password"
+                  className="w-full px-3.5 py-2.5 pr-10 text-xs font-semibold rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={authMutation.isPending}
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {authMutation.isPending ? (
+                <>
+                  <RefreshCw size={15} className="animate-spin" />
+                  <span>प्रमाणीकरण गरिँदैछ (Authenticating)...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={16} />
+                  <span>प्रमाणीकरण गरी इमेल खोल्नुहोस् (Authenticate & Enter)</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Alternative Direct Webmail Link */}
+          <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
+            <span className="flex items-center gap-1 font-nepali">
+              <Sparkles size={14} className="text-amber-500" />
+              <span>वा सिधै गुगल खाताबाट खोल्नुहोस्:</span>
+            </span>
+            <a
+              href="https://mail.google.com/mail/u/?authuser=nepalsecondaryschool.bdn@gmail.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold transition"
+            >
+              <Globe size={14} />
+              <span>Open in Gmail.com</span>
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── AUTHENTICATED WEBMAIL WORKSPACE ──
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
@@ -157,17 +373,34 @@ export default function SchoolEmailPage() {
               <Mail size={22} />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
-                School Official Webmail (विद्यालय इमेल केन्द्र)
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
+                  School Official Webmail (विद्यालय इमेल केन्द्र)
+                </h1>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold">
+                  <ShieldCheck size={12} />
+                  <span>प्रमाणीकृत (Authenticated)</span>
+                </span>
+              </div>
               <p className="text-xs text-gray-500">
-                nepalsecondaryschool.bdn@gmail.com — आधिकारिक पत्राचार, सूचना तथा पत्राचार व्यवस्थापन
+                {authEmail || 'nepalsecondaryschool.bdn@gmail.com'} — आधिकारिक पत्राचार, सूचना तथा पत्राचार व्यवस्थापन
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Sync with Gmail button */}
+          <button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+            title="Fetch recent incoming emails from Gmail"
+          >
+            <RefreshCw size={14} className={syncMutation.isPending ? 'animate-spin' : ''} />
+            <span>{syncMutation.isPending ? 'सिंक हुँदैछ...' : 'जिमेल सिंक (Sync)'}</span>
+          </button>
+
           {/* Direct Live Gmail Sign-In / Launcher */}
           <a
             href="https://mail.google.com/mail/u/?authuser=nepalsecondaryschool.bdn@gmail.com"
@@ -176,18 +409,26 @@ export default function SchoolEmailPage() {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition"
           >
             <Globe size={14} />
-            <span>Open Real Gmail (जिमेल खोल्नुहोस्)</span>
+            <span>Open in Gmail</span>
             <ExternalLink size={12} />
           </a>
 
+          {/* Lock / Log out */}
           <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-bold text-gray-700 transition cursor-pointer"
+            onClick={() => {
+              if (confirm('के तपाईं इमेल सत्र बन्द (Lock) गर्न चाहनुहुन्छ?')) {
+                lockMutation.mutate();
+              }
+            }}
+            disabled={lockMutation.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-rose-50 hover:text-rose-700 text-xs font-bold text-gray-700 transition cursor-pointer"
+            title="Lock Mailbox"
           >
-            <RefreshCw size={14} className={isFetching ? 'animate-spin text-blue-600' : ''} />
-            <span>रिफ्रेस</span>
+            <Lock size={14} />
+            <span>लक गर्नुहोस् (Lock)</span>
           </button>
+
+          {/* Compose Button */}
           <button
             onClick={() => {
               setIsComposeOpen(true);
