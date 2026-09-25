@@ -13,7 +13,12 @@ router.get('/active', authenticate, async (req, res) => {
 
     const exams = await prisma.exam.findMany({
       where,
-      include: { academicYear: true, examClasses: { include: { class: true } } },
+      include: {
+        academicYear: true,
+        examClasses: { include: { class: true } },
+        shifts: { orderBy: { orderIndex: 'asc' } },
+        schedules: { include: { class: true, subject: true, shift: true }, orderBy: [{ examDateBs: 'asc' }, { classId: 'asc' }] },
+      },
       orderBy: { startDateBs: 'asc' },
     });
     return res.json({ success: true, data: exams });
@@ -28,15 +33,20 @@ router.get('/', authenticate, async (req, res) => {
   if (academicYearId) where.academicYearId = parseInt(academicYearId);
   const exams = await prisma.exam.findMany({
     where,
-    include: { academicYear: true, examClasses: { include: { class: true } } },
+    include: {
+      academicYear: true,
+      examClasses: { include: { class: true } },
+      shifts: { orderBy: { orderIndex: 'asc' } },
+      schedules: { include: { class: true, subject: true, shift: true }, orderBy: [{ examDateBs: 'asc' }, { classId: 'asc' }] },
+    },
     orderBy: { startDateBs: 'asc' },
   });
   return res.json({ success: true, data: exams });
 });
 
-router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
-    const { classIds, name, nameNepali, startDateBs, endDateBs, shift, examTiming, academicYearId } = req.body;
+    const { classIds, name, nameNepali, startDateBs, endDateBs, shift, examTiming, academicYearId, shifts } = req.body;
     const exam = await prisma.exam.create({
       data: {
         name,
@@ -49,8 +59,23 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
         examClasses: classIds && Array.isArray(classIds) ? {
           create: classIds.map(cid => ({ classId: parseInt(cid) })),
         } : undefined,
+        shifts: shifts && Array.isArray(shifts) ? {
+          create: shifts.map((s, idx) => ({
+            name: s.name || `Shift ${idx + 1}`,
+            nameNepali: s.nameNepali || null,
+            startTime: s.startTime || '07:00 AM',
+            endTime: s.endTime || '10:00 AM',
+            classIds: s.classIds ? (typeof s.classIds === 'string' ? s.classIds : JSON.stringify(s.classIds)) : null,
+            orderIndex: idx,
+          })),
+        } : undefined,
       },
-      include: { academicYear: true, examClasses: { include: { class: true } } },
+      include: {
+        academicYear: true,
+        examClasses: { include: { class: true } },
+        shifts: { orderBy: { orderIndex: 'asc' } },
+        schedules: { include: { class: true, subject: true, shift: true } },
+      },
     });
     return res.status(201).json({ success: true, data: exam, message: 'Exam created successfully!' });
   } catch (err) {
@@ -58,10 +83,10 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
   }
 });
 
-router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const examId = parseInt(req.params.id);
-    const { classIds, name, nameNepali, startDateBs, endDateBs, shift, examTiming, academicYearId } = req.body;
+    const { classIds, name, nameNepali, startDateBs, endDateBs, shift, examTiming, academicYearId, shifts } = req.body;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -84,9 +109,29 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, 
       });
     }
 
+    if (shifts && Array.isArray(shifts)) {
+      await prisma.examShift.deleteMany({ where: { examId } });
+      await prisma.examShift.createMany({
+        data: shifts.map((s, idx) => ({
+          examId,
+          name: s.name || `Shift ${idx + 1}`,
+          nameNepali: s.nameNepali || null,
+          startTime: s.startTime || '07:00 AM',
+          endTime: s.endTime || '10:00 AM',
+          classIds: s.classIds ? (typeof s.classIds === 'string' ? s.classIds : JSON.stringify(s.classIds)) : null,
+          orderIndex: idx,
+        })),
+      });
+    }
+
     const updated = await prisma.exam.findUnique({
       where: { id: examId },
-      include: { academicYear: true, examClasses: { include: { class: true } } },
+      include: {
+        academicYear: true,
+        examClasses: { include: { class: true } },
+        shifts: { orderBy: { orderIndex: 'asc' } },
+        schedules: { include: { class: true, subject: true, shift: true } },
+      },
     });
 
     return res.json({ success: true, data: updated, message: 'Exam details updated successfully!' });
@@ -95,7 +140,7 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, 
   }
 });
 
-router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const examId = parseInt(req.params.id);
 
@@ -105,10 +150,190 @@ router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (re
     await prisma.markEntry.deleteMany({ where: { examSubjectId: { in: esIds } } });
     await prisma.markTitle.deleteMany({ where: { examSubjectId: { in: esIds } } });
     await prisma.examSubject.deleteMany({ where: { examId } });
+    await prisma.examSchedule.deleteMany({ where: { examId } });
+    await prisma.examShift.deleteMany({ where: { examId } });
+    await prisma.examSeatPlan.deleteMany({ where: { examId } });
     await prisma.examClass.deleteMany({ where: { examId } });
     await prisma.exam.delete({ where: { id: examId } });
 
     return res.json({ success: true, message: 'Exam deleted successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── EXAM SHIFTS & CLASS TIMING CONFIGURATION ───────────────────────────
+
+// GET /api/exams/:examId/shifts
+router.get('/:examId/shifts', authenticate, async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    const shifts = await prisma.examShift.findMany({
+      where: { examId },
+      orderBy: { orderIndex: 'asc' },
+    });
+    return res.json({ success: true, data: shifts });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/exams/:examId/shifts — create or bulk replace shifts
+router.post('/:examId/shifts', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    const { shifts } = req.body;
+
+    if (shifts && Array.isArray(shifts)) {
+      await prisma.examShift.deleteMany({ where: { examId } });
+      await prisma.examShift.createMany({
+        data: shifts.map((s, idx) => ({
+          examId,
+          name: s.name || `Shift ${idx + 1}`,
+          nameNepali: s.nameNepali || null,
+          startTime: s.startTime || '07:00 AM',
+          endTime: s.endTime || '10:00 AM',
+          classIds: s.classIds ? (typeof s.classIds === 'string' ? s.classIds : JSON.stringify(s.classIds)) : null,
+          orderIndex: idx,
+        })),
+      });
+    }
+
+    const updatedShifts = await prisma.examShift.findMany({
+      where: { examId },
+      orderBy: { orderIndex: 'asc' },
+    });
+
+    return res.json({ success: true, data: updatedShifts, message: 'Exam shifts updated successfully!' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/exams/:examId/shifts/:shiftId
+router.delete('/:examId/shifts/:shiftId', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const shiftId = parseInt(req.params.shiftId);
+    await prisma.examSchedule.updateMany({ where: { shiftId }, data: { shiftId: null } });
+    await prisma.examShift.delete({ where: { id: shiftId } });
+    return res.json({ success: true, message: 'Shift deleted successfully.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── EXAM SCHEDULE / ROUTINE (WHICH SUBJECT ON WHICH DAY) ───────────────────
+
+// GET /api/exams/:examId/schedules
+router.get('/:examId/schedules', authenticate, async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    const { classId, shiftId, dateBs } = req.query;
+    const where = { examId };
+    if (classId) where.classId = parseInt(classId);
+    if (shiftId) where.shiftId = parseInt(shiftId);
+    if (dateBs) where.examDateBs = String(dateBs);
+
+    const schedules = await prisma.examSchedule.findMany({
+      where,
+      include: {
+        class: true,
+        subject: true,
+        shift: true,
+      },
+      orderBy: [{ examDateBs: 'asc' }, { classId: 'asc' }, { startTime: 'asc' }],
+    });
+
+    return res.json({ success: true, data: schedules });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/exams/:examId/schedules — bulk upsert exam routine
+router.post('/:examId/schedules', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    const { schedules, replaceAll } = req.body;
+
+    if (!schedules || !Array.isArray(schedules)) {
+      return res.status(400).json({ success: false, message: 'Invalid schedules array.' });
+    }
+
+    if (replaceAll) {
+      await prisma.examSchedule.deleteMany({ where: { examId } });
+    }
+
+    const results = [];
+    for (const item of schedules) {
+      if (!item.classId || !item.subjectId || !item.examDateBs) continue;
+
+      const cId = parseInt(item.classId);
+      const sId = parseInt(item.subjectId);
+      const dBs = String(item.examDateBs);
+
+      const saved = await prisma.examSchedule.upsert({
+        where: {
+          examId_classId_examDateBs_subjectId: {
+            examId,
+            classId: cId,
+            examDateBs: dBs,
+            subjectId: sId,
+          },
+        },
+        update: {
+          shiftId: item.shiftId ? parseInt(item.shiftId) : null,
+          shiftName: item.shiftName || null,
+          dayName: item.dayName || null,
+          startTime: item.startTime || null,
+          endTime: item.endTime || null,
+          roomNo: item.roomNo || null,
+          remarks: item.remarks || null,
+        },
+        create: {
+          examId,
+          classId: cId,
+          subjectId: sId,
+          examDateBs: dBs,
+          shiftId: item.shiftId ? parseInt(item.shiftId) : null,
+          shiftName: item.shiftName || null,
+          dayName: item.dayName || null,
+          startTime: item.startTime || null,
+          endTime: item.endTime || null,
+          roomNo: item.roomNo || null,
+          remarks: item.remarks || null,
+        },
+      });
+      results.push(saved);
+    }
+
+    return res.json({
+      success: true,
+      data: results,
+      message: `Exam schedule updated successfully! (${results.length} routines saved)`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/exams/:examId/schedules/:scheduleId
+router.delete('/:examId/schedules/:scheduleId', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.scheduleId);
+    await prisma.examSchedule.delete({ where: { id } });
+    return res.json({ success: true, message: 'Schedule entry deleted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// DELETE /api/exams/:examId/schedules — clear all schedules for exam
+router.delete('/:examId/schedules', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    await prisma.examSchedule.deleteMany({ where: { examId } });
+    return res.json({ success: true, message: 'All exam schedules cleared.' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -126,7 +351,7 @@ router.get('/:examId/subjects', authenticate, async (req, res) => {
 });
 
 // POST /api/exams/:examId/subjects — add subject to exam with mark titles
-router.post('/:examId/subjects', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.post('/:examId/subjects', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const { subjectId, markTitles } = req.body;
     const es = await prisma.examSubject.create({
@@ -410,7 +635,7 @@ function getOverallGradeFromGpa(gpa) {
 }
 
 // POST /api/exams/:id/publish-result
-router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.post('/:id/publish-result', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const examId = parseInt(req.params.id);
     const { classIds, isPublished = true } = req.body;

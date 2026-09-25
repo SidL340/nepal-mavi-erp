@@ -2599,13 +2599,19 @@ export default function TeacherPortalPage() {
 
                       <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                         <Link
-                          href="/dashboard/exams/admit-cards"
+                          href={`/dashboard/exams?tab=schedules&examId=${exam.id}`}
+                          className="px-2.5 py-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white font-bold text-[10px] shadow-2xs transition"
+                        >
+                          📅 Routine & Shifts
+                        </Link>
+                        <Link
+                          href={`/dashboard/exams/admit-cards?examId=${exam.id}`}
                           className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] shadow-2xs transition"
                         >
                           🪪 Admit Cards
                         </Link>
                         <Link
-                          href="/dashboard/exams/seat-planning"
+                          href={`/dashboard/exams/seat-planning?examId=${exam.id}`}
                           className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-[#1e3a5f] font-bold text-[10px] shadow-2xs transition"
                         >
                           🪑 Seat Plan

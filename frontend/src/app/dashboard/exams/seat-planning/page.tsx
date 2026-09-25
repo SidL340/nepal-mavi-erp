@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import {
@@ -17,6 +17,10 @@ import {
   ArrowLeft,
   X,
   Layers,
+  Clock,
+  Sun,
+  Moon,
+  RotateCcw,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -25,6 +29,7 @@ export default function ExamSeatPlanningPage() {
   const queryClient = useQueryClient();
 
   const [selectedExamId, setSelectedExamId] = useState('');
+  const [selectedShift, setSelectedShift] = useState<string>('DAY');
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
   const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
@@ -64,13 +69,60 @@ export default function ExamSeatPlanningPage() {
     },
   });
 
-  // Fetch Seat Plan for selected exam and room
+  // Current Exam Object
+  const currentExam = examsData?.find((e: any) => e.id.toString() === selectedExamId);
+  const examShifts = currentExam?.shifts || [];
+
+  // When selected exam changes, set default shift
+  useEffect(() => {
+    if (currentExam) {
+      if (examShifts.length > 0) {
+        const firstShiftName = examShifts[0].name;
+        setSelectedShift(firstShiftName);
+      } else if (currentExam.shift) {
+        setSelectedShift(currentExam.shift);
+      }
+    }
+  }, [selectedExamId, currentExam]);
+
+  // When shift changes, auto-select classes belonging to that shift
+  useEffect(() => {
+    if (!currentExam) return;
+
+    if (examShifts.length > 0) {
+      const matchedShift = examShifts.find((s: any) => s.name === selectedShift);
+      if (matchedShift) {
+        let shiftCids: number[] = [];
+        try {
+          shiftCids = typeof matchedShift.classIds === 'string'
+            ? JSON.parse(matchedShift.classIds)
+            : (matchedShift.classIds || []);
+        } catch {
+          shiftCids = [];
+        }
+        if (shiftCids.length > 0) {
+          setSelectedClassIds(shiftCids);
+          return;
+        }
+      }
+    }
+
+    // Default to exam participating classes or all classes
+    if (currentExam.examClasses?.length > 0) {
+      setSelectedClassIds(currentExam.examClasses.map((ec: any) => ec.classId));
+    } else if (classesData?.length > 0) {
+      setSelectedClassIds(classesData.map((c: any) => c.id));
+    }
+  }, [selectedShift, selectedExamId, currentExam, classesData]);
+
+  // Fetch Seat Plan for selected exam, shift, and room
   const { data: seatPlansData, isLoading: isSeatsLoading } = useQuery({
-    queryKey: ['seat-plans', selectedExamId, selectedRoomId],
+    queryKey: ['seat-plans', selectedExamId, selectedRoomId, selectedShift],
     queryFn: async () => {
       if (!selectedExamId) return [];
       const params = new URLSearchParams();
       params.append('examId', selectedExamId);
+      if (selectedShift) params.append('shift', selectedShift);
       if (selectedRoomId) params.append('roomId', selectedRoomId);
       const res = await api.get(`/seat-plans?${params.toString()}`);
       return res.data?.data || [];
@@ -121,17 +173,34 @@ export default function ExamSeatPlanningPage() {
 
       const res = await api.post('/seat-plans/auto-generate', {
         examId: parseInt(selectedExamId),
+        shift: selectedShift || 'DAY',
         roomIds: allRoomIds,
         classIds: selectedClassIds,
       });
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Smart seat allocation complete!');
+      toast.success(data.message || `Smart seat allocation complete for ${selectedShift} shift!`);
       queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || err.message || 'Failed to generate seat plan');
+    },
+  });
+
+  // Clear Seat Plan for this Shift Mutation
+  const clearShiftSeatPlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedExamId) return;
+      const res = await api.delete(`/seat-plans/exam/${selectedExamId}?shift=${encodeURIComponent(selectedShift)}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success(`Cleared seat plan for ${selectedShift} shift.`);
+      queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to clear seat plan');
     },
   });
 
@@ -163,8 +232,11 @@ export default function ExamSeatPlanningPage() {
       return;
     }
 
-    const currentExam = examsData?.find((e: any) => e.id.toString() === selectedExamId);
     const examName = currentExam?.nameNepali || currentExam?.name || 'Examination';
+    const shiftInfo = examShifts.find((s: any) => s.name === selectedShift);
+    const shiftLabel = shiftInfo
+      ? `${shiftInfo.nameNepali || shiftInfo.name} (${shiftInfo.startTime || ''} - ${shiftInfo.endTime || ''})`
+      : `${selectedShift} SHIFT`;
 
     // Group seats by room
     const seatsByRoom: Record<string, any[]> = {};
@@ -191,8 +263,11 @@ export default function ExamSeatPlanningPage() {
           <div style="text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px;">
             <div style="font-size: 16px; font-weight: 900; color: #1e3a5f;">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
             <div style="font-size: 13px; font-weight: 800; color: #b91c1c; margin-top: 2px;">${examName} — परीक्षा कोठा सिट योजना (Door Notice)</div>
-            <div style="font-size: 14px; font-weight: 900; background: #fef3c7; color: #78350f; display: inline-block; padding: 2px 14px; border-radius: 4px; margin-top: 4px;">
-              ${rName} • कुल विद्यार्थी: ${seats.length}
+            <div style="font-size: 12px; font-weight: bold; color: #0284c7; margin-top: 3px;">
+              ⏱️ सत्र (Shift): ${shiftLabel}
+            </div>
+            <div style="font-size: 14px; font-weight: 900; background: #fef3c7; color: #78350f; display: inline-block; padding: 3px 16px; border-radius: 4px; margin-top: 6px;">
+              ${rName} • कुल विद्यार्थी: ${seats.length} जना
             </div>
           </div>
 
@@ -214,7 +289,7 @@ export default function ExamSeatPlanningPage() {
 
           <div style="margin-top: 24px; display: flex; justify-content: space-between; font-size: 11px; font-weight: bold;">
             <div>Room Invigilator (निरीक्षक)</div>
-            <div>Exam Controller (परीक्षा नियन्त्रक)</div>
+            <div>Exam Controller (परीक्षा प्रमुख)</div>
             <div>Headmaster / Seal (प्रधानाध्यापक)</div>
           </div>
         </div>
@@ -225,7 +300,7 @@ export default function ExamSeatPlanningPage() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Exam Door Notice - ${examName}</title>
+          <title>Exam Door Notice - ${examName} (${selectedShift})</title>
           <style>
             @page { size: A4 portrait; margin: 10mm; }
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -262,10 +337,10 @@ export default function ExamSeatPlanningPage() {
           </div>
           <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f] flex items-center gap-2">
             <Grid className="text-[#1e3a5f]" />
-            <span>Anti-Cheating Exam Seat Planning (परीक्षा सिट योजना)</span>
+            <span>Shift-Wise Anti-Cheating Seat Planning (सिट योजना)</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            कोठा क्षमता, बेन्च व्यवस्थापन, फरक कक्षाका विद्यार्थीहरूलाई एकान्तर (Interleaved) सिट प्लान र ढोका सूचना
+            शिफ्ट अनुसार (Morning/Day/Evening) कोठा क्षमता, बेन्च पुन:प्रयोग, एकान्तर (Interleaved) सिट प्लान र ढोका सूचना
           </p>
         </div>
 
@@ -284,7 +359,7 @@ export default function ExamSeatPlanningPage() {
             className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs disabled:opacity-50"
           >
             <Printer size={14} />
-            <span>Print Door Notice (ढोका टाँस)</span>
+            <span>Print Door Notice ({selectedShift})</span>
           </button>
 
           <button
@@ -297,12 +372,28 @@ export default function ExamSeatPlanningPage() {
         </div>
       </div>
 
-      {/* Control Panel: Exam & Class Selection */}
+      {/* Control Panel: Exam & Shift Selection */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-2xs space-y-4">
-        <h2 className="text-xs font-extrabold uppercase tracking-wider text-gray-700 flex items-center gap-2">
-          <Sparkles size={15} className="text-amber-500" />
-          <span>Smart Auto Allocation Settings (स्वचालित सिट योजना सेटिङ)</span>
-        </h2>
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <h2 className="text-xs font-extrabold uppercase tracking-wider text-gray-700 flex items-center gap-2">
+            <Sparkles size={15} className="text-amber-500" />
+            <span>1. Choose Exam & Exam Shift (परीक्षा र शिफ्ट चयन)</span>
+          </h2>
+          {seatPlans.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm(`Are you sure you want to clear seat plan for ${selectedShift} shift?`)) {
+                  clearShiftSeatPlanMutation.mutate();
+                }
+              }}
+              disabled={clearShiftSeatPlanMutation.isPending}
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 hover:underline"
+            >
+              <RotateCcw size={12} />
+              <span>Reset {selectedShift} Plan</span>
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           {/* Exam Selector */}
@@ -340,11 +431,101 @@ export default function ExamSeatPlanningPage() {
           </div>
         </div>
 
+        {/* ─── Shift Selector Pills ─── */}
+        <div className="space-y-2 pt-2 border-t border-gray-100">
+          <label className="block font-bold text-gray-800 text-xs flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Clock size={14} className="text-blue-600" />
+              <span>Select Shift for Seat Planning (कुन शिफ्टको सिट प्लान गर्ने?):</span>
+            </span>
+            <span className="text-[11px] text-gray-500 font-normal">
+              Rooms & benches are automatically reused across different shifts.
+            </span>
+          </label>
+
+          <div className="flex flex-wrap gap-2.5">
+            {examShifts.length > 0 ? (
+              examShifts.map((sh: any) => {
+                const isSelected = selectedShift === sh.name;
+                return (
+                  <button
+                    key={sh.id || sh.name}
+                    type="button"
+                    onClick={() => setSelectedShift(sh.name)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                      isSelected
+                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm scale-[1.02]'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {sh.name.toUpperCase().includes('MORN') ? (
+                      <Sun size={14} className={isSelected ? 'text-amber-300' : 'text-amber-600'} />
+                    ) : (
+                      <Moon size={14} className={isSelected ? 'text-blue-200' : 'text-indigo-600'} />
+                    )}
+                    <span>{sh.nameNepali || sh.name}</span>
+                    {(sh.startTime || sh.endTime) && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 border'
+                      }`}>
+                        {sh.startTime} - {sh.endTime}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelectedShift('MORNING')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                    selectedShift === 'MORNING'
+                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Sun size={14} className="text-amber-500" />
+                  <span>Morning Shift (बिहानी सत्र)</span>
+                  <span className="text-[10px] opacity-80 font-mono">07:00 - 10:00 AM</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedShift('DAY')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                    selectedShift === 'DAY'
+                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Sun size={14} className="text-amber-500" />
+                  <span>Day Shift (दिवा सत्र)</span>
+                  <span className="text-[10px] opacity-80 font-mono">11:00 AM - 02:00 PM</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedShift('EVENING')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition border ${
+                    selectedShift === 'EVENING'
+                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Moon size={14} className="text-indigo-500" />
+                  <span>Evening Shift (साँझ सत्र)</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Multi-class checklist for interleaving */}
         <div className="space-y-2 pt-2 border-t border-gray-100 text-xs">
           <div className="flex items-center justify-between">
             <label className="font-bold text-gray-700">
-              Select Classes to Interleave (एकै सिटमा मिलाउने कक्षाहरू):
+              Select Classes in {selectedShift} Shift to Interleave (यस शिफ्टमा मिलाउने कक्षाहरू):
             </label>
             <button
               type="button"
@@ -376,7 +557,7 @@ export default function ExamSeatPlanningPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
           <div className="text-[11px] text-gray-500 font-nepali">
             💡 प्रणालीले एकापसमा नजिक नहुने गरी (Anti-cheating) बायाँ र दायाँ बेन्चमा फरक कक्षाका विद्यार्थीहरूलाई
             स्वचालित रूपमा मिलाउँछ।
@@ -386,17 +567,17 @@ export default function ExamSeatPlanningPage() {
             type="button"
             disabled={autoGenerateMutation.isPending || !selectedExamId || selectedClassIds.length === 0}
             onClick={() => autoGenerateMutation.mutate()}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-6 py-2.5 font-bold text-white shadow-md hover:from-blue-800 hover:to-indigo-800 transition disabled:opacity-50 text-xs"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-6 py-2.5 font-bold text-white shadow-md hover:from-blue-800 hover:to-indigo-800 transition disabled:opacity-50 text-xs shrink-0"
           >
             {autoGenerateMutation.isPending ? (
               <>
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                <span>Generating Interleaved Seats...</span>
+                <span>Allocating Seats for {selectedShift}...</span>
               </>
             ) : (
               <>
                 <Sparkles size={16} />
-                <span>Generate Smart Seat Plan (सिट योजना तयार गर्नुहोस्)</span>
+                <span>Generate {selectedShift} Seat Plan (सिट योजना तयार गर्नुहोस्)</span>
               </>
             )}
           </button>
@@ -408,24 +589,24 @@ export default function ExamSeatPlanningPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
             <Layers size={16} />
-            <span>Room & Bench Visual Layout (कोठा तथा बेन्च सिट नक्सा)</span>
+            <span>Room & Bench Visual Layout — {selectedShift} Shift ({seatPlans.length} Students)</span>
           </h2>
           <span className="text-xs font-bold text-gray-600">
-            Total Seated: <strong className="text-[#1e3a5f]">{seatPlans.length}</strong> Students
+            Shift: <strong className="text-blue-700 font-mono">{selectedShift}</strong>
           </span>
         </div>
 
         {isSeatsLoading ? (
           <div className="py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100 p-8">
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
-            <p className="mt-2 text-xs">Loading seat plans...</p>
+            <p className="mt-2 text-xs">Loading seat plans for {selectedShift} shift...</p>
           </div>
         ) : seatPlans.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center space-y-3">
             <Grid size={36} className="mx-auto text-gray-300" />
-            <h3 className="text-sm font-bold text-gray-700">No Seat Plan Generated Yet</h3>
+            <h3 className="text-sm font-bold text-gray-700">No Seat Plan Generated for {selectedShift} Shift Yet</h3>
             <p className="text-xs text-gray-400 max-w-md mx-auto">
-              Select an exam and classes above, then click "Generate Smart Seat Plan" to allocate seats.
+              Select an exam, choose the shift ({selectedShift}), check classes above, then click &quot;Generate {selectedShift} Seat Plan&quot;.
             </p>
           </div>
         ) : (
@@ -499,7 +680,7 @@ export default function ExamSeatPlanningPage() {
                 <label className="block font-bold text-gray-700 mb-1">Building / Block</label>
                 <input
                   type="text"
-                  placeholder="Main Block / Science Block"
+                  placeholder="e.g. Main Block, Science Wing"
                   value={newRoom.building}
                   onChange={(e) => setNewRoom({ ...newRoom, building: e.target.value })}
                   className="erp-input"
@@ -508,32 +689,39 @@ export default function ExamSeatPlanningPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Total Benches *</label>
+                  <label className="block font-bold text-gray-700 mb-1">Total Benches</label>
                   <input
-                    required
                     type="number"
+                    min="1"
                     value={newRoom.totalBenches}
                     onChange={(e) => setNewRoom({ ...newRoom, totalBenches: e.target.value })}
-                    className="erp-input font-mono font-bold"
+                    className="erp-input font-bold"
                   />
                 </div>
+
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Seats per Bench</label>
                   <input
                     type="number"
+                    min="1"
+                    max="4"
                     value={newRoom.seatsPerBench}
                     onChange={(e) => setNewRoom({ ...newRoom, seatsPerBench: e.target.value })}
-                    className="erp-input font-mono font-bold"
+                    className="erp-input font-bold"
                   />
                 </div>
               </div>
+
+              <div className="rounded-xl bg-blue-50 p-3 text-[11px] text-blue-800">
+                Total Capacity: <strong>{parseInt(newRoom.totalBenches || '0') * parseInt(newRoom.seatsPerBench || '2')}</strong> Students per shift.
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setIsAddRoomModalOpen(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600"
+                className="px-4 py-2 font-bold text-gray-500 hover:text-gray-700"
               >
                 Cancel
               </button>
@@ -541,9 +729,9 @@ export default function ExamSeatPlanningPage() {
                 type="button"
                 disabled={createRoomMutation.isPending || !newRoom.roomNo}
                 onClick={() => createRoomMutation.mutate()}
-                className="rounded-xl bg-[#1e3a5f] px-5 py-2 font-bold text-white hover:bg-[#2a5280] disabled:opacity-60"
+                className="rounded-xl bg-[#1e3a5f] px-5 py-2 font-bold text-white shadow hover:bg-[#2a5280] transition disabled:opacity-50"
               >
-                {createRoomMutation.isPending ? 'Saving...' : 'Add Room'}
+                {createRoomMutation.isPending ? 'Saving...' : 'Save Room'}
               </button>
             </div>
           </div>

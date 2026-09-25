@@ -24,7 +24,7 @@ router.get('/rooms', authenticate, async (req, res) => {
 });
 
 // POST /api/seat-plans/rooms — create exam room
-router.post('/rooms', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.post('/rooms', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const { roomNo, building, totalBenches, seatsPerBench } = req.body;
     if (!roomNo || !totalBenches) {
@@ -52,7 +52,7 @@ router.post('/rooms', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (re
 });
 
 // DELETE /api/seat-plans/rooms/:id
-router.delete('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.delete('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await prisma.examSeatPlan.deleteMany({ where: { roomId: id } });
@@ -64,16 +64,17 @@ router.delete('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), asy
   }
 });
 
-// ── SMART AUTO SEAT PLANNING ─────────────────────────────────────────────────
+// ── SMART AUTO SEAT PLANNING (SHIFT-WISE) ───────────────────────────────────
 
-// GET /api/seat-plans — get seat plan for an exam
+// GET /api/seat-plans — get seat plan for an exam & shift
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { examId, roomId, classId } = req.query;
+    const { examId, roomId, classId, shift } = req.query;
     const where = {};
     if (examId) where.examId = parseInt(examId);
     if (roomId) where.roomId = parseInt(roomId);
     if (classId) where.classId = parseInt(classId);
+    if (shift) where.shift = String(shift);
 
     const seatPlans = await prisma.examSeatPlan.findMany({
       where,
@@ -96,15 +97,16 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/seat-plans/auto-generate — intelligent anti-cheating seat allocator
-router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+// POST /api/seat-plans/auto-generate — intelligent anti-cheating seat allocator for chosen shift
+router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
-    const { examId, roomIds, classIds } = req.body;
+    const { examId, roomIds, classIds, shift } = req.body;
     if (!examId || !Array.isArray(roomIds) || roomIds.length === 0 || !Array.isArray(classIds) || classIds.length === 0) {
       return res.status(400).json({ success: false, message: 'Exam, at least one Room, and at least one Class are required.' });
     }
 
     const exId = parseInt(examId);
+    const shiftName = shift ? String(shift).trim() : 'DAY';
     const parsedRoomIds = roomIds.map(id => parseInt(id));
     const parsedClassIds = classIds.map(id => parseInt(id));
 
@@ -151,18 +153,16 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
       });
     }
 
-    // 3. Clear existing seat plan for this exam and rooms
+    // 3. Clear existing seat plan for this exam, shift, and rooms
     await prisma.examSeatPlan.deleteMany({
-      where: { examId: exId, roomId: { in: parsedRoomIds } },
+      where: { examId: exId, shift: shiftName, roomId: { in: parsedRoomIds } },
     });
 
     // 4. Interleaving algorithm: alternate students from different classes across benches
-    // Queue of students
     const classQueues = studentsByClass.map(c => [...c.students]);
     let currentClassQueueIndex = 0;
 
     function getNextStudent(avoidClassId = null) {
-      // Try to find a student from a different class than avoidClassId
       let attempts = 0;
       while (attempts < classQueues.length) {
         const q = classQueues[currentClassQueueIndex];
@@ -174,7 +174,6 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
           return q.shift();
         }
       }
-      // If no different class left, take whatever is available
       for (const q of classQueues) {
         if (q.length > 0) return q.shift();
       }
@@ -194,6 +193,7 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
           prevBenchClassId = sLeft.classId;
           newSeatPlans.push({
             examId: exId,
+            shift: shiftName,
             roomId: room.id,
             benchNo: bench,
             seatPosition: 'LEFT',
@@ -210,6 +210,7 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
           if (sRight) {
             newSeatPlans.push({
               examId: exId,
+              shift: shiftName,
               roomId: room.id,
               benchNo: bench,
               seatPosition: 'RIGHT',
@@ -229,8 +230,8 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
 
     return res.json({
       success: true,
-      message: `सिट प्लानिङ (Seat Planning) सफलतापूर्वक तयार भयो! कुल ${newSeatPlans.length} जना विद्यार्थीहरूलाई ${rooms.length} वटा कोठामा व्यवस्थित गरियो।`,
-      data: { totalSeated: newSeatPlans.length },
+      message: `सिट प्लानिङ [${shiftName}] सफलतापूर्वक तयार भयो! कुल ${newSeatPlans.length} जना विद्यार्थीहरूलाई ${rooms.length} वटा कोठामा व्यवस्थित गरियो।`,
+      data: { totalSeated: newSeatPlans.length, shift: shiftName },
     });
   } catch (err) {
     console.error(err);
@@ -238,11 +239,15 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), a
   }
 });
 
-// DELETE /api/seat-plans/exam/:examId — clear seat plans for an exam
-router.delete('/exam/:examId', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+// DELETE /api/seat-plans/exam/:examId — clear seat plans for an exam (optionally for a shift)
+router.delete('/exam/:examId', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
-    await prisma.examSeatPlan.deleteMany({ where: { examId: parseInt(req.params.examId) } });
-    return res.json({ success: true, message: 'सिट प्लानिङ सफलतापूर्वक हटाइयो!' });
+    const { shift } = req.query;
+    const where = { examId: parseInt(req.params.examId) };
+    if (shift) where.shift = String(shift);
+
+    await prisma.examSeatPlan.deleteMany({ where });
+    return res.json({ success: true, message: `सिट प्लानिङ ${shift ? `[${shift}] ` : ''}सफलतापूर्वक हटाइयो!` });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
@@ -250,3 +255,4 @@ router.delete('/exam/:examId', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), 
 });
 
 module.exports = router;
+

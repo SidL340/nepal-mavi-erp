@@ -208,6 +208,7 @@ model Class {
   routines        ClassRoutine[]
   leaveRequests   LeaveRequest[]
   dailyTeachingLogs DailyTeachingLog[]
+  examSchedules   ExamSchedule[]
 }
 
 model ClassEnrollment {
@@ -238,6 +239,7 @@ model Subject {
   examSubjects    ExamSubject[]
   routines        ClassRoutine[]
   dailyTeachingLogs DailyTeachingLog[]
+  examSchedules   ExamSchedule[]
 }
 
 model ClassSubject {
@@ -280,6 +282,8 @@ model Exam {
   examClasses     ExamClass[]
   examSubjects    ExamSubject[]
   seatPlans       ExamSeatPlan[]
+  shifts          ExamShift[]
+  schedules       ExamSchedule[]
 }
 
 model ExamClass {
@@ -863,19 +867,60 @@ model ExamRoom {
 model ExamSeatPlan {
   id              Int      @id @default(autoincrement())
   examId          Int
-  exam            Exam     @relation(fields: [examId], references: [id])
+  exam            Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  shift           String   @default("DAY") // "MORNING", "DAY", "EVENING", "Shift 1"
   roomId          Int
-  room            ExamRoom @relation(fields: [roomId], references: [id])
+  room            ExamRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   benchNo         Int      // Bench 1, 2, 3...
   seatPosition    String   // "LEFT" | "RIGHT" | "MIDDLE"
   studentId       Int
-  student         Student  @relation(fields: [studentId], references: [id])
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   classId         Int
   rollNo          Int?
   seatNo          String   // e.g. "R101-B1-L"
   createdAt       DateTime @default(now())
 
-  @@unique([examId, roomId, benchNo, seatPosition])
+  @@unique([examId, shift, roomId, benchNo, seatPosition])
+}
+
+model ExamShift {
+  id              Int            @id @default(autoincrement())
+  examId          Int
+  exam            Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  name            String         // "Morning Shift", "Day Shift", "Shift 1"
+  nameNepali      String?        // "बिहानी सिफ्ट", "दिउँसो सिफ्ट"
+  startTime       String         // e.g. "07:00 AM"
+  endTime         String         // e.g. "10:00 AM"
+  classIds        String?        // JSON string e.g. "[8, 9, 10]"
+  orderIndex      Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  schedules       ExamSchedule[]
+}
+
+model ExamSchedule {
+  id              Int         @id @default(autoincrement())
+  examId          Int
+  exam            Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  shiftId         Int?
+  shift           ExamShift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  shiftName       String?     // e.g. "Morning Shift"
+  classId         Int
+  class           Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId       Int
+  subject         Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  examDateBs      String      // e.g. "2083-05-15"
+  examDateAd      DateTime?
+  dayName         String?     // "आइतबार (Sunday)"
+  startTime       String?     // e.g. "07:00 AM"
+  endTime         String?     // e.g. "10:00 AM"
+  roomNo          String?
+  remarks         String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([examId, classId, examDateBs, subjectId])
 }
 
 // ─── BUDGET MANAGEMENT (MONTHLY & YEARLY) ────────────────────────────────────
