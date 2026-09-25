@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -21,12 +21,15 @@ import {
   Filter,
   UserCheck,
   Settings2,
+  Clock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ClassRoutineView from '@/components/classes/ClassRoutineView';
 
 export default function ClassesPage() {
   const { user } = useAuthStore();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (user?.role === 'TEACHER') {
@@ -37,7 +40,15 @@ export default function ClassesPage() {
   }, [user, router]);
 
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'classes' | 'subjects'>('classes');
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'classes' | 'subjects' | 'routine'>(
+    tabParam === 'routine' ? 'routine' : tabParam === 'subjects' ? 'subjects' : 'classes'
+  );
+
+  useEffect(() => {
+    if (tabParam === 'routine') setActiveTab('routine');
+    else if (tabParam === 'subjects') setActiveTab('subjects');
+  }, [tabParam]);
   
   // Modals
   const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
@@ -379,27 +390,29 @@ export default function ClassesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f]">
-            Classes & Subjects (कक्षा तथा विषय व्यवस्थापन)
+          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f] flex items-center gap-2">
+            <School className="text-[#1e3a5f]" />
+            <span>Classes, Subjects & Routine (कक्षा, विषय तथा दैनिक रुटिन)</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            प्रारम्भिक बालविकास (Nursery) देखि कक्षा १२ सम्मको कक्षा सिर्जना, सम्पादन, हटाउने र विषयहरू व्यवस्थापन
+            प्रारम्भिक बालविकास देखि कक्षा १२ सम्मको कक्षा सिर्जना, विषय सूची, र घण्टी तथा विश्राम समय सहितको दैनिक रुटिन
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {activeTab === 'classes' ? (
+          {activeTab === 'classes' && (
             <button
               onClick={() => setIsAddClassModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition cursor-pointer"
             >
               <Plus size={14} />
               <span>Create Class (कक्षा थप्नुहोस्)</span>
             </button>
-          ) : (
+          )}
+          {activeTab === 'subjects' && (
             <button
               onClick={() => setIsAddSubjectModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-2xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 shadow-2xs transition cursor-pointer"
             >
               <Plus size={14} />
               <span>Add Custom Subject (विषय थप्नुहोस्)</span>
@@ -409,22 +422,33 @@ export default function ClassesPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-xl bg-slate-200/70 p-1 text-xs font-bold w-fit">
+      <div className="flex flex-wrap rounded-xl bg-slate-200/70 p-1 text-xs font-bold w-fit gap-1">
         <button
           onClick={() => setActiveTab('classes')}
-          className={`rounded-lg px-4 py-2 transition ${
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 transition cursor-pointer ${
             activeTab === 'classes' ? 'bg-white text-[#1e3a5f] shadow-xs' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          Classes & Sections ({classes.length})
+          <School size={14} />
+          <span>Classes & Sections ({classes.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('subjects')}
-          className={`rounded-lg px-4 py-2 transition ${
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 transition cursor-pointer ${
             activeTab === 'subjects' ? 'bg-white text-[#1e3a5f] shadow-xs' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          Subject Catalog ({subjects.length})
+          <BookOpen size={14} />
+          <span>Subject Catalog ({subjects.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('routine')}
+          className={`flex items-center gap-1.5 rounded-lg px-4 py-2 transition cursor-pointer ${
+            activeTab === 'routine' ? 'bg-white text-[#1e3a5f] shadow-xs' : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Clock size={14} />
+          <span>Class Routine & Timetable (दैनिक रुटिन)</span>
         </button>
       </div>
 
@@ -616,6 +640,11 @@ export default function ClassesPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* ─── TAB 3: CLASS ROUTINE & TIMETABLE (दैनिक रुटिन र समय तालिका) ─── */}
+      {activeTab === 'routine' && (
+        <ClassRoutineView />
       )}
 
       {/* ─── CLASS DETAIL & SUBJECT CUSTOMIZER MODAL ───────────────────────── */}

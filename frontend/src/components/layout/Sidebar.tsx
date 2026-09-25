@@ -71,8 +71,7 @@ const navConfig: (NavItem | NavSection)[] = [
     roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'],
     items: [
       { label: 'Students', nepaliLabel: 'विद्यार्थीहरू', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Classes & Routine', nepaliLabel: 'कक्षा र विषय', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Class Routine', nepaliLabel: 'दैनिक समय तालिका', href: '/dashboard/classes/routine', icon: Clock, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+      { label: 'Classes & Routine', nepaliLabel: 'कक्षा, विषय र रुटिन', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Attendance', nepaliLabel: 'हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
       { label: 'Leave Approvals', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Exams & Marks', nepaliLabel: 'परीक्षा र लब्धाङ्क', href: '/dashboard/exams', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
