@@ -113,7 +113,6 @@ const navConfig: (NavItem | NavSection)[] = [
     nepaliSection: 'सेवा तथा सञ्चार',
     roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN', 'TEACHER', 'ACCOUNTANT'],
     items: [
-      { label: 'Official Webmail', nepaliLabel: 'इमेल केन्द्र (Webmail)', href: '/dashboard/email', icon: Mail, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Library', nepaliLabel: 'पुस्तकालय', href: '/dashboard/library', icon: Library, roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'] },
       { label: 'Inventory (Jinsi)', nepaliLabel: 'जिन्सी खाता', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
       { label: 'Notices & SMS', nepaliLabel: 'सूचना / SMS', href: '/dashboard/notices', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'] },

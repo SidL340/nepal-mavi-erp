@@ -121,11 +121,11 @@ export default function DashboardPage() {
               <span>New Admission (नयाँ भर्ना)</span>
             </Link>
             <Link
-              href="/dashboard/email"
+              href="/dashboard/leaves"
               className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2.5 text-xs font-bold text-white transition"
             >
-              <Mail size={15} />
-              <span>School Webmail (इमेल)</span>
+              <UserCheck size={15} />
+              <span>Leave Approvals (बिदा स्वीकृति)</span>
             </Link>
           </div>
         </div>
@@ -175,14 +175,14 @@ export default function DashboardPage() {
           </Link>
 
           <Link
-            href="/dashboard/email"
-            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-sky-300 hover:bg-sky-50/50 transition text-center group"
+            href="/dashboard/leaves"
+            className="flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 hover:border-amber-300 hover:bg-amber-50/50 transition text-center group"
           >
-            <div className="h-9 w-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
-              <Mail size={17} />
+            <div className="h-9 w-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition">
+              <UserCheck size={17} />
             </div>
-            <span className="text-xs font-bold text-gray-800">School Mail</span>
-            <span className="text-[10px] text-gray-400 font-nepali">विद्यालय इमेल</span>
+            <span className="text-xs font-bold text-gray-800">Leave Approvals</span>
+            <span className="text-[10px] text-gray-400 font-nepali">बिदा स्वीकृति</span>
           </Link>
 
           <Link
