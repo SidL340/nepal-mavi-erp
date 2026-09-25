@@ -325,10 +325,10 @@ router.delete('/:id', authenticate, async (req, res) => {
     const leave = await prisma.leaveRequest.findUnique({ where: { id: leaveId } });
     if (!leave) return res.status(404).json({ success: false, message: 'आवेदन फेला परेन।' });
 
-    // Allow author to delete if still PENDING, or admin anytime
-    if (['SUPER_ADMIN', 'ADMIN'].includes(req.user.role)) {
+    // Allow author to delete if still PENDING, or admin/accountant anytime
+    if (['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'].includes(req.user.role)) {
       await prisma.leaveRequest.delete({ where: { id: leaveId } });
-      return res.json({ success: true, message: 'बिदा आवेदन हटाइयो।' });
+      return res.json({ success: true, message: 'बिदा आवेदन हटाइयो (Leave application deleted).' });
     }
 
     if (leave.status !== 'PENDING') {

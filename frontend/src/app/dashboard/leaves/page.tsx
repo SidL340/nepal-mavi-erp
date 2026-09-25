@@ -20,6 +20,7 @@ import {
   PhoneCall,
   CheckCircle2,
   FileText,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -62,6 +63,21 @@ export default function LeaveManagementPage() {
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || 'कारबाही गर्न सकिएन।');
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/leaves/${id}`);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || 'बिदाको आवेदन हटाइयो!');
+      queryClient.invalidateQueries({ queryKey: ['all-leaves'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'बिदा हटाउन सकिएन।');
     },
   });
 
@@ -249,8 +265,8 @@ export default function LeaveManagementPage() {
                     )}
                   </div>
 
-                  {/* Actions for Admin / Accountant */}
-                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Actions for Admin / Accountant */}
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     {l.status === 'PENDING' ? (
                       <>
                         <button
@@ -288,6 +304,20 @@ export default function LeaveManagementPage() {
                         निर्णय संशोधन गर्नुहोस् (Change)
                       </button>
                     )}
+
+                    <button
+                      onClick={() => {
+                        if (confirm('के तपाईं यो बिदाको आवेदन स्थायी रूपमा हटाउन (Delete गर्न) चाहनुहुन्छ? यो फिर्ता हुने छैन।')) {
+                          deleteMutation.mutate(l.id);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer ml-1"
+                      title="Delete Leave Application"
+                    >
+                      <Trash2 size={14} />
+                      <span>हटाउनुहोस् (Delete)</span>
+                    </button>
                   </div>
                 </div>
               );

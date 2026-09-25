@@ -1,88 +1,29 @@
 const express = require('express');
+const nodemailer = require('nodemailer');
 const prisma = require('../lib/prisma');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Seed sample school emails if table is empty
-async function seedDefaultEmailsIfEmpty() {
-  const count = await prisma.schoolEmail.count();
-  if (count === 0) {
-    await prisma.schoolEmail.createMany({
-      data: [
-        {
-          folder: 'INBOX',
-          fromAddress: 'info@doe.gov.np',
-          fromName: 'शिक्षा तथा मानव स्रोत विकास केन्द्र (CEHRD / DoE)',
-          toAddress: 'nepalsecondaryschool.bdn@gmail.com',
-          toName: 'श्री नेपाल मा.वि. विश्रामपुर',
-          subject: 'शैक्षिक सत्र २०८३/८४ को वार्षिक कार्यतालिका तथा छात्रवृत्ति कोटा विवरण सम्बन्धमा',
-          body: `श्री प्रधानाध्यापक ज्यू,
-श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, वृन्दावन-२, रौतहट।
+// Helper to configure real Gmail/SMTP transporter if env vars are present
+function getSmtpTransporter() {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER || 'nepalsecondaryschool.bdn@gmail.com';
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
 
-विषय: शैक्षिक सत्र २०८३/८४ को वार्षिक कार्यतालिका र छात्रवृत्ति कोटा वितरण सम्बन्धमा।
+  if (!pass) return null;
 
-उपर्युक्त विषयमा शिक्षा तथा मानव स्रोत विकास केन्द्रबाट स्वीकृत चालु शैक्षिक सत्रको वार्षिक कार्यतालिका अनुसार विद्यालयमा सञ्चालन गरिने विभिन्न शैक्षिक तथा अतिरिक्त क्रियाकलापहरू समयमै सम्पन्न गर्न हुन अनुरोध छ। साथै विपन्न, दलित तथा जेहेन्दार विद्यार्थीहरूका लागि तोकिएको छात्रवृत्ति कोटा विवरण यसैसाथ संलग्न गरिएको छ।
-
-भवदीय,
-शिक्षा शाखा अधिकृत
-शिक्षा तथा मानव स्रोत विकास केन्द्र, सानोठिमी, भक्तपुर`,
-          isRead: false,
-          isStarred: true,
-          receivedOrSentAt: new Date(),
-        },
-        {
-          folder: 'INBOX',
-          fromAddress: 'education@brindawanmun.gov.np',
-          fromName: 'वृन्दावन नगरपालिका - शिक्षा, युवा तथा खेलकुद शाखा',
-          toAddress: 'nepalsecondaryschool.bdn@gmail.com',
-          toName: 'श्री नेपाल माध्यमिक विद्यालय',
-          subject: 'मासिक शिक्षक हाजिरी प्रतिवेदन तथा दिवा खाजा कार्यक्रमको निकासा सम्बन्धमा',
-          body: `श्री प्रधानाध्यापक ज्यू,
-श्री नेपाल मा.वि., विश्रामपुर, रौतहट।
-
-विषय: मासिक प्रगति तथा दिवा खाजा निकासा सम्बन्धी।
-
-चालु महिनाको दिवा खाजा कार्यक्रम अन्तर्गतको विद्यार्थी उपस्थिति तथा शिक्षक कर्मचारीहरूको मासिक हाजिरी विवरण तत्काल नगरपालिकाको शिक्षा शाखामा पेश गरी निकासा प्रक्रिया अगाडि बढाउनुहुन सूचित गरिन्छ।
-
-शिक्षा शाखा प्रमुख
-वृन्दावन नगरपालिका, रौतहट`,
-          isRead: true,
-          isStarred: false,
-          receivedOrSentAt: new Date(Date.now() - 86400000 * 2),
-        },
-        {
-          folder: 'SENT',
-          fromAddress: 'nepalsecondaryschool.bdn@gmail.com',
-          fromName: 'श्री नेपाल मा.वि. विश्रामपुर, रौतहट',
-          toAddress: 'education@brindawanmun.gov.np',
-          toName: 'वृन्दावन नगरपालिका शिक्षा शाखा',
-          subject: 'शैक्षिक सत्र २०८३ को विद्यार्थी भर्ना तथा कक्षागत तथ्याङ्क प्रतिवेदन',
-          body: `श्री शिक्षा अधिकृत ज्यू,
-वृन्दावन नगरपालिका, रौतहट।
-
-विषय: नयाँ भर्ना तथ्याङ्क सम्बन्धमा।
-
-यस श्री नेपाल माध्यमिक विद्यालय विश्रामपुरमा चालु शैक्षिक सत्र २०८३ मा भर्ना भएका सम्पूर्ण कक्षा १ देखि १२ सम्मका छात्रछात्राहरूको एकीकृत तथ्याङ्क तथा EMIS प्रतिवेदन जानकारी तथा आवश्यक कार्यार्थ प्रेषित गरिएको छ।
-
-भवदीय,
-प्रेमलाल प्रसाद राउत
-प्रधानाध्यापक
-श्री नेपाल मा.वि., विश्रामपुर, रौतहट`,
-          isRead: true,
-          isStarred: true,
-          receivedOrSentAt: new Date(Date.now() - 86400000 * 4),
-        }
-      ]
-    });
-  }
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user,
+      pass,
+    },
+  });
 }
 
 // GET /api/email — list emails by folder
 router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
-    await seedDefaultEmailsIfEmpty();
-
     const { folder = 'INBOX', search, starredOnly } = req.query;
     const where = {};
 
@@ -123,6 +64,22 @@ router.get('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), a
   }
 });
 
+// DELETE /api/email/empty-trash — empty all emails in trash folder
+router.delete('/empty-trash', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const deleted = await prisma.schoolEmail.deleteMany({
+      where: { folder: 'TRASH' },
+    });
+    return res.json({
+      success: true,
+      message: `रद्दीटोकरीका सबै ${deleted.count} इमेल स्थायी रूपमा हटाइयो (Trash emptied).`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // GET /api/email/:id — view email and mark as read
 router.get('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
@@ -145,7 +102,7 @@ router.get('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
   }
 });
 
-// POST /api/email/send — compose & send email
+// POST /api/email/send — compose & send email (Real SMTP if configured, saved to Sent folder)
 router.post('/send', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const { toAddress, toName, ccAddress, subject, body, attachments } = req.body;
@@ -157,6 +114,26 @@ router.post('/send', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
     const school = await prisma.school.findFirst();
     const fromAddress = school?.email || 'nepalsecondaryschool.bdn@gmail.com';
     const fromName = school?.name || 'श्री नेपाल माध्यमिक विद्यालय विश्रामपुर';
+
+    let realMailSent = false;
+    let smtpError = null;
+
+    const transporter = getSmtpTransporter();
+    if (transporter) {
+      try {
+        await transporter.sendMail({
+          from: `"${fromName}" <${fromAddress}>`,
+          to: toAddress,
+          cc: ccAddress || undefined,
+          subject: subject,
+          text: body,
+        });
+        realMailSent = true;
+      } catch (mailErr) {
+        console.warn('Real SMTP sending warning:', mailErr.message);
+        smtpError = mailErr.message;
+      }
+    }
 
     const sentEmail = await prisma.schoolEmail.create({
       data: {
@@ -174,10 +151,16 @@ router.post('/send', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT
       },
     });
 
+    const successMessage = realMailSent
+      ? 'इमेल सफलतापूर्वक पठाइयो र वास्तविक मेलबक्सबाट डेलिभर गरियो (Real Email Dispatched via Gmail SMTP)!'
+      : 'इमेल सुरक्षित गरियो र आधिकारिक पत्राचार अभिलेखमा दर्ता भयो (Email recorded in official mailbox)!';
+
     return res.json({
       success: true,
-      message: 'इमेल सफलतापूर्वक पठाइयो (Email Sent Successfully)!',
+      message: successMessage,
       data: sentEmail,
+      realMailSent,
+      smtpError,
     });
   } catch (err) {
     console.error(err);
@@ -208,10 +191,11 @@ router.patch('/:id/star', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOU
 router.delete('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const { permanent } = req.query;
     const email = await prisma.schoolEmail.findUnique({ where: { id } });
     if (!email) return res.status(404).json({ success: false, message: 'Email not found.' });
 
-    if (email.folder === 'TRASH') {
+    if (email.folder === 'TRASH' || permanent === 'true') {
       await prisma.schoolEmail.delete({ where: { id } });
       return res.json({ success: true, message: 'इमेल स्थायी रूपमा हटाइयो (Permanently Deleted).' });
     } else {

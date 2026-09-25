@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 import {
   Mail,
   Send,
@@ -19,6 +20,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  ExternalLink,
+  Globe,
+  Trash,
 } from 'lucide-react';
 
 export default function SchoolEmailPage() {
@@ -70,12 +74,31 @@ export default function SchoolEmailPage() {
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await api.delete(`/email/${id}`);
+    mutationFn: async ({ id, permanent }: { id: number; permanent?: boolean }) => {
+      await api.delete(`/email/${id}${permanent ? '?permanent=true' : ''}`);
     },
     onSuccess: () => {
+      toast.success('इमेल हटाइयो।');
       queryClient.invalidateQueries({ queryKey: ['school-emails'] });
       setSelectedEmail(null);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'इमेल हटाउन सकिएन।');
+    },
+  });
+
+  // Empty Trash mutation
+  const emptyTrashMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.delete('/email/empty-trash');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message || 'रद्दीटोकरी खाली गरियो!');
+      queryClient.invalidateQueries({ queryKey: ['school-emails'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || 'रद्दीटोकरी खाली गर्न सकिएन।');
     },
   });
 
@@ -144,7 +167,19 @@ export default function SchoolEmailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Direct Live Gmail Sign-In / Launcher */}
+          <a
+            href="https://mail.google.com/mail/u/?authuser=nepalsecondaryschool.bdn@gmail.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition"
+          >
+            <Globe size={14} />
+            <span>Open Real Gmail (जिमेल खोल्नुहोस्)</span>
+            <ExternalLink size={12} />
+          </a>
+
           <button
             onClick={() => refetch()}
             disabled={isFetching}
@@ -158,7 +193,7 @@ export default function SchoolEmailPage() {
               setIsComposeOpen(true);
               setComposeMsg(null);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white text-xs font-bold shadow-sm transition cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white text-xs font-bold shadow-sm transition cursor-pointer"
           >
             <Plus size={16} />
             <span>नयाँ इमेल लेख्नुहोस् (Compose)</span>
@@ -265,9 +300,9 @@ export default function SchoolEmailPage() {
 
         {/* Right Main Panel: List or Detailed View */}
         <div className="md:col-span-9 flex flex-col">
-          {/* Top Search Filter */}
-          <div className="p-3.5 border-b border-gray-100 flex items-center gap-3">
-            <div className="relative flex-1">
+          {/* Top Search Filter & Actions */}
+          <div className="p-3.5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={15} />
               <input
                 type="text"
@@ -277,6 +312,22 @@ export default function SchoolEmailPage() {
                 className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
+            {selectedFolder === 'TRASH' && emails.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('के तपाईं रद्दीटोकरी (Trash) का सबै इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ? यो फिर्ता आउने छैन।')) {
+                    emptyTrashMutation.mutate();
+                  }
+                }}
+                disabled={emptyTrashMutation.isPending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition cursor-pointer"
+              >
+                <Trash2 size={14} />
+                <span>{emptyTrashMutation.isPending ? 'मेटाउँदै...' : 'Empty Trash (रद्दीटोकरी खाली गर्नुहोस्)'}</span>
+              </button>
+            )}
           </div>
 
           {/* Content Area */}
@@ -306,12 +357,16 @@ export default function SchoolEmailPage() {
                     </button>
                     <button
                       onClick={() => {
-                        if (confirm('के तपाईं यो इमेल हटाउन चाहनुहुन्छ?')) {
-                          deleteMutation.mutate(selectedEmail.id);
+                        const isTrash = selectedEmail.folder === 'TRASH';
+                        const promptMsg = isTrash
+                          ? 'के तपाईं यो इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ (Permanently Delete)?'
+                          : 'के तपाईं यो इमेल रद्दीटोकरी (Trash) मा सार्न चाहनुहुन्छ?';
+                        if (confirm(promptMsg)) {
+                          deleteMutation.mutate({ id: selectedEmail.id, permanent: isTrash });
                         }
                       }}
                       className="p-2 rounded-lg hover:bg-rose-50 text-gray-400 hover:text-rose-600 transition cursor-pointer"
-                      title="Delete"
+                      title={selectedEmail.folder === 'TRASH' ? 'Permanently Delete' : 'Move to Trash'}
                     >
                       <Trash2 size={18} />
                     </button>
@@ -391,7 +446,7 @@ export default function SchoolEmailPage() {
                   <div
                     key={item.id}
                     onClick={() => handleOpenEmail(item)}
-                    className={`flex items-center gap-3 p-3.5 hover:bg-blue-50/40 cursor-pointer transition ${
+                    className={`flex items-center gap-3 p-3.5 hover:bg-blue-50/40 cursor-pointer transition group ${
                       !item.isRead ? 'bg-blue-50/20 font-bold' : ''
                     }`}
                   >
@@ -424,6 +479,24 @@ export default function SchoolEmailPage() {
                     <div className="text-[11px] text-gray-400 whitespace-nowrap">
                       {new Date(item.receivedOrSentAt).toLocaleDateString()}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const isTrash = item.folder === 'TRASH' || selectedFolder === 'TRASH';
+                        const promptMsg = isTrash
+                          ? 'के तपाईं यो इमेल स्थायी रूपमा मेटाउन चाहनुहुन्छ?'
+                          : 'के तपाईं यो इमेल रद्दीटोकरी (Trash) मा सार्न चाहनुहुन्छ?';
+                        if (confirm(promptMsg)) {
+                          deleteMutation.mutate({ id: item.id, permanent: isTrash });
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      title={item.folder === 'TRASH' ? 'Permanently Delete' : 'Move to Trash'}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 ))
               )}
