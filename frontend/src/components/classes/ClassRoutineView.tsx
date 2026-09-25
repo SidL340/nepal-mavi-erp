@@ -52,49 +52,20 @@ export interface PeriodConfig {
   breakTime?: string;
 }
 
-export const TIMING_PRESETS = [
-  {
-    id: 'day_standard',
-    name: '☀️ मानक दिवा सत्र (Day Shift: 10:25 AM - 04:15 PM)',
-    periods: [
-      { num: 1, startTime: '10:25 AM', endTime: '11:15 AM' },
-      { num: 2, startTime: '11:15 AM', endTime: '12:00 PM' },
-      { num: 3, startTime: '12:00 PM', endTime: '12:45 PM' },
-      { num: 4, startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
-      { num: 5, startTime: '01:55 PM', endTime: '02:35 PM' },
-      { num: 6, startTime: '02:35 PM', endTime: '03:15 PM' },
-      { num: 7, startTime: '03:15 PM', endTime: '03:55 PM' },
-      { num: 8, startTime: '03:55 PM', endTime: '04:15 PM' },
-    ],
-  },
-  {
-    id: 'morning_standard',
-    name: '🌅 बिहानी सत्र (Morning Shift: 06:30 AM - 11:00 AM)',
-    periods: [
-      { num: 1, startTime: '06:30 AM', endTime: '07:10 AM' },
-      { num: 2, startTime: '07:10 AM', endTime: '07:50 AM' },
-      { num: 3, startTime: '07:50 AM', endTime: '08:30 AM', hasBreakAfter: true, breakTitle: 'विश्राम (Break)', breakTime: '08:30 - 08:50 AM' },
-      { num: 4, startTime: '08:50 AM', endTime: '09:30 AM' },
-      { num: 5, startTime: '09:30 AM', endTime: '10:15 AM' },
-      { num: 6, startTime: '10:15 AM', endTime: '11:00 AM' },
-    ],
-  },
-  {
-    id: 'winter_standard',
-    name: '❄️ हिउँदे / छोटो समय (Winter Shift: 10:00 AM - 03:30 PM)',
-    periods: [
-      { num: 1, startTime: '10:00 AM', endTime: '10:45 AM' },
-      { num: 2, startTime: '10:45 AM', endTime: '11:30 AM' },
-      { num: 3, startTime: '11:30 AM', endTime: '12:15 PM' },
-      { num: 4, startTime: '12:15 PM', endTime: '01:00 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:00 - 01:25 PM' },
-      { num: 5, startTime: '01:25 PM', endTime: '02:05 PM' },
-      { num: 6, startTime: '02:05 PM', endTime: '02:45 PM' },
-      { num: 7, startTime: '02:45 PM', endTime: '03:30 PM' },
-    ],
-  },
+export const STANDARD_SCHOOL_TIMINGS: PeriodConfig[] = [
+  { num: 1, startTime: '10:25 AM', endTime: '11:15 AM', hasBreakAfter: false },
+  { num: 2, startTime: '11:15 AM', endTime: '12:00 PM', hasBreakAfter: false },
+  { num: 3, startTime: '12:00 PM', endTime: '12:45 PM', hasBreakAfter: false },
+  { num: 4, startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
+  { num: 5, startTime: '01:55 PM', endTime: '02:35 PM', hasBreakAfter: false },
+  { num: 6, startTime: '02:35 PM', endTime: '03:15 PM', hasBreakAfter: false },
+  { num: 7, startTime: '03:15 PM', endTime: '03:55 PM', hasBreakAfter: false },
+  { num: 8, startTime: '03:55 PM', endTime: '04:15 PM', hasBreakAfter: false },
+  { num: 9, startTime: '04:15 PM', endTime: '04:55 PM', hasBreakAfter: false },
+  { num: 10, startTime: '04:55 PM', endTime: '05:35 PM', hasBreakAfter: false },
 ];
 
-const DEFAULT_PERIODS: PeriodConfig[] = TIMING_PRESETS[0].periods;
+const DEFAULT_PERIODS: PeriodConfig[] = STANDARD_SCHOOL_TIMINGS.slice(0, 8);
 
 export default function ClassRoutineView({ initialClassId }: { initialClassId?: string }) {
   const queryClient = useQueryClient();
@@ -215,28 +186,30 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
       // Adjust period list if routine has custom count
       const periodCount = Math.max(maxPeriod, 4);
-      setPeriods((prev) => {
+      setPeriods(() => {
         const newPeriods: PeriodConfig[] = [];
         for (let i = 1; i <= periodCount; i++) {
-          const existing = prev.find((p) => p.num === i);
           const loaded = loadedPeriodsMap[i];
-          const std = DEFAULT_PERIODS[i - 1];
+          const std = STANDARD_SCHOOL_TIMINGS[i - 1];
 
-          const validStartTime = (loaded?.startTime && loaded.startTime.trim().length > 0 && !loaded.startTime.startsWith('Period'))
+          // Guard against old corrupted 04:00 PM on period 5
+          const isCorruptedTime = (i === 5 && loaded?.startTime?.startsWith('04:'));
+
+          const validStartTime = (!isCorruptedTime && loaded?.startTime && loaded.startTime.trim().length > 0 && !loaded.startTime.startsWith('Period'))
             ? loaded.startTime
-            : (existing?.startTime && !existing.startTime.startsWith('Period') ? existing.startTime : (std?.startTime || `Period ${i}`));
+            : (std?.startTime || `10:${i * 40} AM`);
 
-          const validEndTime = (loaded?.endTime && loaded.endTime.trim().length > 0)
+          const validEndTime = (!isCorruptedTime && loaded?.endTime && loaded.endTime.trim().length > 0)
             ? loaded.endTime
-            : (existing?.endTime || (std?.endTime || ''));
+            : (std?.endTime || '');
 
           newPeriods.push({
             num: i,
             startTime: validStartTime,
             endTime: validEndTime,
-            hasBreakAfter: loaded?.isBreak !== undefined ? loaded.isBreak : (existing?.hasBreakAfter ?? (i === 4)),
-            breakTitle: loaded?.breakTitle || existing?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
-            breakTime: existing?.breakTime || (i === 4 ? '01:30 - 01:55 PM' : ''),
+            hasBreakAfter: loaded?.isBreak !== undefined ? loaded.isBreak : (std?.hasBreakAfter || (i === 4)),
+            breakTitle: loaded?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
+            breakTime: (i === 4 ? '01:30 - 01:55 PM' : ''),
           });
         }
         return newPeriods;
@@ -244,17 +217,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     } else if (routineData && routineData.length === 0) {
       // Clear grid for unconfigured class
       setRoutineGrid({});
-      // Keep standard school periods
-      const savedDefault = typeof window !== 'undefined' ? localStorage.getItem('school_default_routine_timings') : null;
-      if (savedDefault) {
-        try {
-          setPeriods(JSON.parse(savedDefault));
-        } catch {
-          setPeriods(DEFAULT_PERIODS);
-        }
-      } else {
-        setPeriods(DEFAULT_PERIODS);
-      }
+      setPeriods(DEFAULT_PERIODS);
     }
   }, [routineData]);
 
@@ -331,12 +294,13 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
   // Add new period to class
   const handleAddPeriod = () => {
     const nextNum = periods.length + 1;
+    const std = STANDARD_SCHOOL_TIMINGS[nextNum - 1];
     setPeriods([
       ...periods,
       {
         num: nextNum,
-        startTime: `0${Math.min(nextNum + 2, 4)}:00 PM`,
-        endTime: `0${Math.min(nextNum + 2, 4)}:40 PM`,
+        startTime: std?.startTime || `0${nextNum}:00 PM`,
+        endTime: std?.endTime || `0${nextNum}:40 PM`,
         hasBreakAfter: false,
       },
     ]);
@@ -356,30 +320,18 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
   // Set explicit period count (e.g., 5, 6, 7, 8)
   const handleSetPeriodCount = (count: number) => {
-    if (count < 1 || count > 12) return;
-    setPeriods((prev) => {
-      const defaultTimes = [
-        { startTime: '10:25 AM', endTime: '11:15 AM', hasBreakAfter: false },
-        { startTime: '11:15 AM', endTime: '12:00 PM', hasBreakAfter: false },
-        { startTime: '12:00 PM', endTime: '12:45 PM', hasBreakAfter: false },
-        { startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
-        { startTime: '01:55 PM', endTime: '02:35 PM', hasBreakAfter: false },
-        { startTime: '02:35 PM', endTime: '03:15 PM', hasBreakAfter: false },
-        { startTime: '03:15 PM', endTime: '03:55 PM', hasBreakAfter: false },
-        { startTime: '03:55 PM', endTime: '04:15 PM', hasBreakAfter: false },
-      ];
-
+    if (count < 1 || count > 10) return;
+    setPeriods(() => {
       const newPeriods: PeriodConfig[] = [];
       for (let i = 1; i <= count; i++) {
-        const existing = prev.find((p) => p.num === i);
-        const std = defaultTimes[i - 1];
+        const std = STANDARD_SCHOOL_TIMINGS[i - 1];
         newPeriods.push({
           num: i,
-          startTime: existing?.startTime || std?.startTime || `10:${i * 40} AM`,
-          endTime: existing?.endTime || std?.endTime || '',
-          hasBreakAfter: existing?.hasBreakAfter ?? (i === 4),
-          breakTitle: existing?.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
-          breakTime: existing?.breakTime || (i === 4 ? '01:30 - 01:55 PM' : ''),
+          startTime: std.startTime,
+          endTime: std.endTime,
+          hasBreakAfter: std.hasBreakAfter || (i === 4),
+          breakTitle: std.breakTitle || (i === 4 ? 'खाजा समय (Tiffin Break)' : ''),
+          breakTime: std.breakTime || (i === 4 ? '01:30 - 01:55 PM' : ''),
         });
       }
       return newPeriods;
@@ -535,13 +487,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     },
   });
 
-  // Load Preset
-  const handleLoadPreset = (presetId: string) => {
-    const preset = TIMING_PRESETS.find((p) => p.id === presetId);
-    if (!preset) return;
-    setPeriods(preset.periods);
-    toast.success(`'${preset.name.split('(')[0].trim()}' घण्टी ढाँचा लोड भयो!`);
-  };
+
 
   // Copy Timing From Another Class
   const handleCopyTimingFromClass = (sourceClassIdStr: string) => {
