@@ -487,13 +487,18 @@ export default function LibraryPage() {
   const issues = issuesData || [];
   const overdueIssues = overdueData || [];
 
+  const totalCopiesCount = books.reduce((acc: number, b: any) => acc + (b.totalCopies || 1), 0);
+  const availableCopiesCount = books.reduce((acc: number, b: any) => acc + (b.availableCopies !== undefined ? b.availableCopies : (b.totalCopies || 1)), 0);
+  const activeIssuesCount = issues.filter((i: any) => i.status === 'ISSUED').length;
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f]">
-            Library Management (पुस्तकालय व्यवस्थापन)
+          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f] flex items-center gap-2">
+            <Library className="text-[#1e3a5f]" size={26} />
+            <span>Library Management (पुस्तकालय व्यवस्थापन)</span>
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
             Manage catalogue, issue books, process returns & renew/reissue borrowed books
@@ -504,7 +509,7 @@ export default function LibraryPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setIsAddCategoryModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
             >
               <FolderPlus size={15} />
               <span>+ Add Category (विधा थप्नुहोस्)</span>
@@ -512,7 +517,7 @@ export default function LibraryPage() {
 
             <button
               onClick={() => setIsBulkModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-xs font-extrabold text-white shadow-xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-4 py-2 text-xs font-extrabold text-white shadow-xs transition cursor-pointer"
             >
               <FileSpreadsheet size={15} />
               <span>Bulk Book Entry (एकमुष्ट प्रविष्टि)</span>
@@ -520,13 +525,52 @@ export default function LibraryPage() {
 
             <button
               onClick={() => setIsAddBookModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-4 py-2 text-xs font-bold text-white shadow-xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
             >
               <Plus size={15} />
               <span>Add Single Book (नयाँ पुस्तक)</span>
             </button>
           </div>
         )}
+      </div>
+
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">कुल पुस्तक शीर्षक</span>
+            <BookOpen size={18} className="text-blue-600" />
+          </div>
+          <p className="mt-2 text-2xl font-black text-gray-900">{books.length}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Book Titles Catalogued</p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">कुल प्रति (Copies)</span>
+            <Layers size={18} className="text-emerald-600" />
+          </div>
+          <p className="mt-2 text-2xl font-black text-emerald-700">{totalCopiesCount}</p>
+          <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">{availableCopiesCount} प्रतियां मौज्दात उपलब्ध</p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">जारी गरिएका पुस्तक</span>
+            <BookMarked size={18} className="text-amber-600" />
+          </div>
+          <p className="mt-2 text-2xl font-black text-amber-700">{activeIssuesCount}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Currently Borrowed</p>
+        </div>
+
+        <div className="rounded-2xl border border-rose-100 bg-rose-50/50 p-4 shadow-xs">
+          <div className="flex items-center justify-between text-rose-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700">म्याद नाघेका पुस्तक</span>
+            <Clock size={18} className="text-rose-600" />
+          </div>
+          <p className="mt-2 text-2xl font-black text-rose-700">{overdueIssues.length}</p>
+          <p className="text-[10px] text-rose-600 mt-0.5 font-medium">Overdue Returns Pending</p>
+        </div>
       </div>
 
       {/* Tabs */}

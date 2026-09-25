@@ -41,12 +41,15 @@ router.get('/', authenticate, async (req, res) => {
 
       where.classId = enrollment.classId;
     } else if (req.user.role === 'TEACHER') {
-      // If teacher specifies no classId and no teacherId, filter by their own teacher profile or assigned classes
-      if (teacherId) {
-        where.teacherId = parseInt(teacherId);
-      } else if (!classId && req.query.mine === 'true') {
-        where.teacherId = req.user.teacher?.id;
+      // Force teachers to strictly see only their own teaching logs
+      const myTeacherId = req.user.teacher?.id;
+      if (!myTeacherId) {
+        return res.json({
+          success: true,
+          data: { logs: [], total: 0, page: 1, totalPages: 0 },
+        });
       }
+      where.teacherId = myTeacherId;
     } else if (teacherId) {
       where.teacherId = parseInt(teacherId);
     }

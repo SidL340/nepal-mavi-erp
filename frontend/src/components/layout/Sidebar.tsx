@@ -58,99 +58,192 @@ interface NavSection {
 // ─── Navigation Config ────────────────────────────────────────────────────────
 
 const navConfig: (NavItem | NavSection)[] = [
+  // ── 1. GLOBAL ROOT DASHBOARD LINKS (Role specific) ──
   {
     label: 'Dashboard',
     nepaliLabel: 'ड्यासबोर्ड',
     href: '/dashboard',
     icon: LayoutDashboard,
-    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER', 'LIBRARIAN', 'STUDENT'],
+    roles: ['SUPER_ADMIN', 'ADMIN'],
   },
   {
-    section: 'STUDENTS & ACADEMICS',
-    nepaliSection: 'विद्यार्थी तथा शैक्षिक',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'],
-    items: [
-      { label: 'Students', nepaliLabel: 'विद्यार्थीहरू', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Classes & Routine', nepaliLabel: 'कक्षा, विषय र रुटिन', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
-      { label: 'Daily Teaching Logs', nepaliLabel: 'दैनिक शिक्षण लग', href: '/dashboard/teaching-logs', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
-      { label: 'Attendance', nepaliLabel: 'हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
-      { label: 'Leave Approvals', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Exams & Marks', nepaliLabel: 'परीक्षा र लब्धाङ्क', href: '/dashboard/exams', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
-      { label: 'Seat Planning', nepaliLabel: 'परीक्षा सिट योजना', href: '/dashboard/exams/seat-planning', icon: Grid, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Certificates', nepaliLabel: 'प्रमाणपत्र (CC/TC)', href: '/dashboard/certificates', icon: Award, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-    ],
+    label: 'Teacher Dashboard',
+    nepaliLabel: 'शिक्षक ड्यासबोर्ड',
+    href: '/teacher',
+    icon: LayoutDashboard,
+    roles: ['TEACHER'],
   },
   {
-    section: 'FINANCE & PAYROLL',
-    nepaliSection: 'आर्थिक तथा तलब',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
-    items: [
-      { label: 'Finance Portal Hub', nepaliLabel: 'वित्तीय हब पोर्टल', href: '/dashboard/finance', icon: Building2, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Income / Grants', nepaliLabel: 'आम्दानी तथा अनुदान', href: '/dashboard/finance/income', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Expenses', nepaliLabel: 'खर्च', href: '/dashboard/finance/expenses', icon: TrendingDown, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Fee Collection', nepaliLabel: 'शुल्क संकलन', href: '/dashboard/finance/fees', icon: Receipt, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Teacher Payroll', nepaliLabel: 'शिक्षक तलब भत्ता', href: '/dashboard/finance/payroll', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Budget & Variance', nepaliLabel: 'बजेट विनियोजन', href: '/dashboard/finance/budget', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Journal Vouchers', nepaliLabel: 'गोश्वारा भौचर', href: '/dashboard/finance/journal', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Financial Reports', nepaliLabel: 'वित्तीय प्रतिवेदन (Trial Balance)', href: '/dashboard/finance/reports', icon: Scale, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Parties & Suppliers', nepaliLabel: 'पार्टी तथा सप्लायर', href: '/dashboard/finance?tab=parties', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Masters & Heads', nepaliLabel: 'शीर्षक व्यवस्थापन', href: '/dashboard/finance/heads', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-    ],
+    label: 'Student Dashboard',
+    nepaliLabel: 'विद्यार्थी ड्यासबोर्ड',
+    href: '/student',
+    icon: LayoutDashboard,
+    roles: ['STUDENT'],
+  },
+  {
+    label: 'Finance Hub',
+    nepaliLabel: 'लेखा ड्यासबोर्ड',
+    href: '/dashboard/finance',
+    icon: LayoutDashboard,
+    roles: ['ACCOUNTANT'],
+  },
+  {
+    label: 'Library Desk',
+    nepaliLabel: 'पुस्तकालय ड्यासबोर्ड',
+    href: '/dashboard/library',
+    icon: LayoutDashboard,
+    roles: ['LIBRARIAN'],
+  },
 
-  },
+  // ── 2. ADMIN ACADEMIC MANAGEMENT ──
   {
-    section: 'STAFF & TEACHERS',
-    nepaliSection: 'शिक्षक तथा कर्मचारी',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT', 'TEACHER'],
+    section: 'ACADEMIC MANAGEMENT',
+    nepaliSection: 'शैक्षिक व्यवस्थापन',
+    roles: ['SUPER_ADMIN', 'ADMIN'],
     items: [
-      { label: 'Teachers & Staff', nepaliLabel: 'शिक्षक कर्मचारी विवरण', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Daily Teaching Log', nepaliLabel: 'दैनिक शिक्षण डायरी', href: '/dashboard/teaching-logs', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
-      { label: 'Leave Approvals', nepaliLabel: 'कर्मचारी बिदा स्वीकृति', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+      { label: 'Students', nepaliLabel: 'विद्यार्थीहरू', href: '/dashboard/students', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Teachers & Staff', nepaliLabel: 'शिक्षक तथा कर्मचारी', href: '/dashboard/teachers', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Classes & Routine', nepaliLabel: 'कक्षा तथा रुटिन', href: '/dashboard/classes', icon: School, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Daily Teaching Logs', nepaliLabel: 'दैनिक शिक्षण लग', href: '/dashboard/teaching-logs', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Daily Attendance', nepaliLabel: 'दैनिक हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Exams & Marks', nepaliLabel: 'परीक्षा तथा लब्धाङ्क', href: '/dashboard/exams', icon: Award, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Seat Planning', nepaliLabel: 'परीक्षा सिट योजना', href: '/dashboard/exams/seat-planning', icon: Grid, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Certificates (CC/TC)', nepaliLabel: 'प्रमाणपत्र व्यवस्थापन', href: '/dashboard/certificates', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ],
   },
+
+  // ── 3. ADMIN FINANCIAL MANAGEMENT ──
   {
-    section: 'SERVICES & COMMUNICATION',
-    nepaliSection: 'सेवा तथा सञ्चार',
-    roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN', 'TEACHER', 'ACCOUNTANT'],
+    section: 'FINANCIAL MANAGEMENT',
+    nepaliSection: 'आर्थिक व्यवस्थापन',
+    roles: ['SUPER_ADMIN', 'ADMIN'],
     items: [
-      { label: 'Library', nepaliLabel: 'पुस्तकालय', href: '/dashboard/library', icon: Library, roles: ['SUPER_ADMIN', 'ADMIN', 'LIBRARIAN'] },
-      { label: 'Inventory (Jinsi)', nepaliLabel: 'जिन्सी खाता', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
-      { label: 'Notices & SMS', nepaliLabel: 'सूचना / SMS', href: '/dashboard/notices', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'ACCOUNTANT'] },
-      { label: 'User Management', nepaliLabel: 'प्रयोगकर्ता व्यवस्थापन', href: '/dashboard/users', icon: UserCog, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'App Usage & Logins', nepaliLabel: 'प्रयोग अनुगमन तथा लगइन लग', href: '/dashboard/usage-tracking', icon: Clock, roles: ['SUPER_ADMIN', 'ADMIN'] },
-      { label: 'Website Portal', nepaliLabel: 'मुख्य वेभसाइट', href: '/dashboard/website', icon: Globe, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Finance Portal Hub', nepaliLabel: 'वित्तीय हब पोर्टल', href: '/dashboard/finance', icon: Building2, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Fee Collection', nepaliLabel: 'शुल्क संकलन', href: '/dashboard/finance/fees', icon: Receipt, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Income & Grants', nepaliLabel: 'आम्दानी तथा अनुदान', href: '/dashboard/finance/income', icon: TrendingUp, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Expenses Entry', nepaliLabel: 'खर्च प्रविष्टि', href: '/dashboard/finance/expenses', icon: TrendingDown, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Staff Payroll', nepaliLabel: 'शिक्षक कर्मचारी तलब', href: '/dashboard/finance/payroll', icon: Wallet, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Budget & Variance', nepaliLabel: 'बजेट विनियोजन', href: '/dashboard/finance/budget', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Journal Vouchers', nepaliLabel: 'गोश्वारा भौचर', href: '/dashboard/finance/journal', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Financial Reports', nepaliLabel: 'वित्तीय प्रतिवेदन', href: '/dashboard/finance/reports', icon: Scale, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Account Masters & Heads', nepaliLabel: 'शीर्षक व्यवस्थापन', href: '/dashboard/finance/heads', icon: Layers, roles: ['SUPER_ADMIN', 'ADMIN'] },
+    ],
+  },
+
+  // ── 4. ADMIN SERVICES & ADMINISTRATION ──
+  {
+    section: 'SERVICES & ADMINISTRATION',
+    nepaliSection: 'प्रशासन तथा सेवाहरू',
+    roles: ['SUPER_ADMIN', 'ADMIN'],
+    items: [
+      { label: 'Leave Management', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: Mail, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Library Management', nepaliLabel: 'पुस्तकालय व्यवस्थापन', href: '/dashboard/library', icon: Library, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Inventory (Jinsi)', nepaliLabel: 'जिन्सी खाता', href: '/dashboard/inventory', icon: Package, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Notices & SMS', nepaliLabel: 'सूचना / SMS प्रसारण', href: '/dashboard/notices', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'User Accounts', nepaliLabel: 'प्रयोगकर्ता व्यवस्थापन', href: '/dashboard/users', icon: UserCog, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'App Usage & Logins', nepaliLabel: 'प्रयोग अनुगमन तथा सक्रिय लग', href: '/dashboard/usage-tracking', icon: Clock, roles: ['SUPER_ADMIN', 'ADMIN'] },
       { label: 'School Profile', nepaliLabel: 'विद्यालय प्रोफाइल', href: '/dashboard/school', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN'] },
+      { label: 'Public Website', nepaliLabel: 'मुख्य वेभसाइट', href: '/dashboard/website', icon: Globe, roles: ['SUPER_ADMIN', 'ADMIN'] },
     ],
   },
+
+  // ── 5. TEACHER PORTAL SECTIONS ──
   {
-    section: 'TEACHER PORTAL',
-    nepaliSection: 'शिक्षक पोर्टल',
+    section: 'CLASSROOM & TEACHING',
+    nepaliSection: 'दैनिक कक्षा तथा शिक्षण',
     roles: ['TEACHER'],
     items: [
-      { label: 'Overview', nepaliLabel: 'ड्यासबोर्ड', href: '/teacher', icon: LayoutDashboard, roles: ['TEACHER'] },
-      { label: 'Daily Teaching Log', nepaliLabel: 'दैनिक शिक्षण लग', href: '/teacher?tab=daily_log', icon: BookOpen, roles: ['TEACHER'] },
+      { label: 'Daily Teaching Log', nepaliLabel: 'दैनिक शिक्षण डायरी', href: '/teacher?tab=daily_log', icon: BookOpen, roles: ['TEACHER'] },
+      { label: 'Class Attendance', nepaliLabel: 'कक्षा हाजिरी', href: '/dashboard/attendance', icon: CalendarCheck, roles: ['TEACHER'] },
       { label: 'Class Routine', nepaliLabel: 'साप्ताहिक रुटिन', href: '/teacher?tab=routine', icon: Clock, roles: ['TEACHER'] },
-      { label: 'My Leaves', nepaliLabel: 'बिदा निवेदन', href: '/teacher?tab=leaves', icon: UserCheck, roles: ['TEACHER'] },
-      { label: 'Student Leaves', nepaliLabel: 'विद्यार्थी बिदा सिफारिस', href: '/teacher?tab=students_leave', icon: FileText, roles: ['TEACHER'] },
-      { label: 'Assigned Duties', nepaliLabel: 'तोकिएका जिम्मेवारीहरू', href: '/teacher?tab=tasks', icon: Layers, roles: ['TEACHER'] },
+      { label: 'Exams & Marks', nepaliLabel: 'परीक्षा तथा लब्धाङ्क', href: '/dashboard/exams', icon: Award, roles: ['TEACHER'] },
+      { label: 'Student Leave Requests', nepaliLabel: 'विद्यार्थी बिदा सिफारिस', href: '/teacher?tab=students_leave', icon: FileText, roles: ['TEACHER'] },
     ],
   },
   {
-    section: 'STUDENT PORTAL',
-    nepaliSection: 'विद्यार्थी पोर्टल',
+    section: 'MY PORTAL & DUTIES',
+    nepaliSection: 'मेरो विवरण तथा जिम्मेवारी',
+    roles: ['TEACHER'],
+    items: [
+      { label: 'Assigned Duties & Tasks', nepaliLabel: 'तोकिएका जिम्मेवारीहरू', href: '/teacher?tab=tasks', icon: Layers, roles: ['TEACHER'] },
+      { label: 'My Leave Requests', nepaliLabel: 'मेरो बिदा निवेदन', href: '/teacher?tab=leaves', icon: UserCheck, roles: ['TEACHER'] },
+      { label: 'School Notices', nepaliLabel: 'सूचना तथा क्यालेन्डर', href: '/teacher?tab=notices', icon: Bell, roles: ['TEACHER'] },
+    ],
+  },
+
+  // ── 6. STUDENT PORTAL SECTIONS ──
+  {
+    section: 'MY ACADEMICS',
+    nepaliSection: 'मेरो पढाइ तथा परीक्षा',
     roles: ['STUDENT'],
     items: [
-      { label: 'Overview', nepaliLabel: 'ड्यासबोर्ड', href: '/student', icon: LayoutDashboard, roles: ['STUDENT'] },
       { label: 'Today\'s Lessons & HW', nepaliLabel: 'दैनिक पढाइ र गृहकार्य', href: '/student?tab=lessons', icon: BookOpen, roles: ['STUDENT'] },
       { label: 'Class Routine', nepaliLabel: 'कक्षा रुटिन', href: '/student?tab=routine', icon: Clock, roles: ['STUDENT'] },
       { label: 'My Attendance', nepaliLabel: 'हाजिरी विवरण', href: '/student?tab=attendance', icon: CalendarCheck, roles: ['STUDENT'] },
-      { label: 'Leave Application', nepaliLabel: 'बिदा निवेदन', href: '/student?tab=leave', icon: FileText, roles: ['STUDENT'] },
       { label: 'Marksheets & Grades', nepaliLabel: 'लब्धाङ्क पत्र / ग्रेडसिट', href: '/student?tab=exams', icon: Award, roles: ['STUDENT'] },
-      { label: 'Fee Receipts', nepaliLabel: 'शुल्क विवरण', href: '/student?tab=fees', icon: Receipt, roles: ['STUDENT'] },
+      { label: 'Homework & Tasks', nepaliLabel: 'गृहकार्य तथा अभ्यास', href: '/student?tab=homework', icon: FileText, roles: ['STUDENT'] },
+    ],
+  },
+  {
+    section: 'SERVICES & ID',
+    nepaliSection: 'सेवा तथा परिचय',
+    roles: ['STUDENT'],
+    items: [
+      { label: 'Fee Receipts', nepaliLabel: 'शुल्क विवरण र रसिद', href: '/student?tab=fees', icon: Receipt, roles: ['STUDENT'] },
       { label: 'Library Books', nepaliLabel: 'पुस्तकालय', href: '/student?tab=library', icon: Library, roles: ['STUDENT'] },
+      { label: 'Apply for Leave', nepaliLabel: 'बिदा निवेदन', href: '/student?tab=leave', icon: UserCheck, roles: ['STUDENT'] },
       { label: 'Notice Board', nepaliLabel: 'सूचना पाटी', href: '/student?tab=notices', icon: Bell, roles: ['STUDENT'] },
-      { label: 'Student ID Card', nepaliLabel: 'परिचय पत्र', href: '/student?tab=idcard', icon: Award, roles: ['STUDENT'] },
+      { label: 'Digital ID Card', nepaliLabel: 'परिचय पत्र', href: '/student?tab=idcard', icon: GraduationCap, roles: ['STUDENT'] },
+    ],
+  },
+
+  // ── 7. ACCOUNTANT PORTAL SECTIONS ──
+  {
+    section: 'BILLING & FEES',
+    nepaliSection: 'शुल्क तथा आम्दानी',
+    roles: ['ACCOUNTANT'],
+    items: [
+      { label: 'Fee Collection', nepaliLabel: 'विद्यार्थी शुल्क संकलन', href: '/dashboard/finance/fees', icon: Receipt, roles: ['ACCOUNTANT'] },
+      { label: 'Student Accounts', nepaliLabel: 'विद्यार्थी लेजर', href: '/dashboard/students', icon: Users, roles: ['ACCOUNTANT'] },
+      { label: 'Income & Grants', nepaliLabel: 'आम्दानी तथा अनुदान', href: '/dashboard/finance/income', icon: TrendingUp, roles: ['ACCOUNTANT'] },
+    ],
+  },
+  {
+    section: 'EXPENSES & ACCOUNTS',
+    nepaliSection: 'खर्च तथा लेखा',
+    roles: ['ACCOUNTANT'],
+    items: [
+      { label: 'Expense Vouchers', nepaliLabel: 'खर्च प्रविष्टि', href: '/dashboard/finance/expenses', icon: TrendingDown, roles: ['ACCOUNTANT'] },
+      { label: 'Staff Payroll', nepaliLabel: 'तलब भत्ता', href: '/dashboard/finance/payroll', icon: Wallet, roles: ['ACCOUNTANT'] },
+      { label: 'Budget Allocation', nepaliLabel: 'बजेट विनियोजन', href: '/dashboard/finance/budget', icon: Layers, roles: ['ACCOUNTANT'] },
+      { label: 'Journal Vouchers', nepaliLabel: 'गोश्वारा भौचर', href: '/dashboard/finance/journal', icon: FileText, roles: ['ACCOUNTANT'] },
+      { label: 'Financial Reports', nepaliLabel: 'वित्तीय प्रतिवेदन', href: '/dashboard/finance/reports', icon: Scale, roles: ['ACCOUNTANT'] },
+      { label: 'Account Heads', nepaliLabel: 'शीर्षक व्यवस्थापन', href: '/dashboard/finance/heads', icon: Layers, roles: ['ACCOUNTANT'] },
+    ],
+  },
+  {
+    section: 'OPERATIONS',
+    nepaliSection: 'सञ्चालन तथा सेवा',
+    roles: ['ACCOUNTANT'],
+    items: [
+      { label: 'Inventory (Jinsi)', nepaliLabel: 'जिन्सी खाता', href: '/dashboard/inventory', icon: Package, roles: ['ACCOUNTANT'] },
+      { label: 'Leave Management', nepaliLabel: 'बिदा व्यवस्थापन', href: '/dashboard/leaves', icon: UserCheck, roles: ['ACCOUNTANT'] },
+      { label: 'Official Letters', nepaliLabel: 'लेटरप्याड र चलानी', href: '/dashboard/letters', icon: Mail, roles: ['ACCOUNTANT'] },
+      { label: 'Notices', nepaliLabel: 'सूचनाहरू', href: '/dashboard/notices', icon: Bell, roles: ['ACCOUNTANT'] },
+    ],
+  },
+
+  // ── 8. LIBRARIAN PORTAL SECTIONS ──
+  {
+    section: 'LIBRARY CIRCULATION',
+    nepaliSection: 'पुस्तकालय सेवा',
+    roles: ['LIBRARIAN'],
+    items: [
+      { label: 'Book Catalog', nepaliLabel: 'पुस्तक सूची', href: '/dashboard/library?tab=books', icon: BookOpen, roles: ['LIBRARIAN'] },
+      { label: 'Issue & Returns', nepaliLabel: 'पुस्तक जारी तथा फिर्ता', href: '/dashboard/library?tab=issues', icon: Library, roles: ['LIBRARIAN'] },
+      { label: 'Overdue & Fines', nepaliLabel: 'म्याद नाघेका पुस्तक', href: '/dashboard/library?tab=overdue', icon: Clock, roles: ['LIBRARIAN'] },
+      { label: 'School Notices', nepaliLabel: 'सूचनाहरू', href: '/dashboard/notices', icon: Bell, roles: ['LIBRARIAN'] },
     ],
   },
 ];
@@ -159,6 +252,8 @@ function getRoleHref(href: string, role?: string): string {
   if (href === '/dashboard') {
     if (role === 'TEACHER') return '/teacher';
     if (role === 'STUDENT') return '/student';
+    if (role === 'ACCOUNTANT') return '/dashboard/finance';
+    if (role === 'LIBRARIAN') return '/dashboard/library';
   }
   return href;
 }
@@ -168,8 +263,9 @@ function isActive(href: string, pathname: string, role?: string): boolean {
   if (target === '/dashboard' || target === '/teacher' || target === '/student') {
     return pathname === target;
   }
-  if (target.startsWith('/student?tab=')) {
-    return pathname === '/student';
+  if (target.includes('?')) {
+    const basePath = target.split('?')[0];
+    return pathname === basePath;
   }
   return pathname === target || pathname.startsWith(target + '/');
 }
