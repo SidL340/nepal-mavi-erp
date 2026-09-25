@@ -982,8 +982,48 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
             </p>
           </div>
 
-          {/* Bulk Sync Action */}
-          <div className="flex items-center gap-2">
+          {/* 2 Shift Buttons, Save Preset and Bulk Sync Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 2 Shifts Buttons */}
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 gap-1">
+              <button
+                type="button"
+                onClick={() => handleLoadShift('day')}
+                className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="दिवा सत्र ढाँचा लोड गर्नुहोस् (Load Day Shift: 10:25 AM)"
+              >
+                ☀️ दिवा सत्र (Day Shift)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLoadShift('morning')}
+                className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition shadow-2xs cursor-pointer"
+                title="बिहानी सत्र ढाँचा लोड गर्नुहोस् (Load Morning Shift: 06:30 AM)"
+              >
+                🌅 बिहानी सत्र (Morning Shift)
+              </button>
+            </div>
+
+            {/* Save Current Time as Custom Preset for Day/Morning Shift */}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'save-day') handleSaveCurrentAsShiftPreset('day');
+                else if (val === 'save-morning') handleSaveCurrentAsShiftPreset('morning');
+                else if (val === 'reset-all') handleResetShiftPreset('all');
+                e.target.value = '';
+              }}
+              className="rounded-xl border border-indigo-200 bg-indigo-50/90 px-2.5 py-1.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 focus:outline-hidden cursor-pointer"
+              title="Save current periods as reusable Shift Preset"
+            >
+              <option value="" disabled>💾 यो समयलाई सत्र ढाँचामा सेभ गर्नुहोस् (Save Preset)...</option>
+              <option value="save-day">☀️ हालको समयलाई 'दिवा सत्र' ढाँचामा सेभ गर्नुहोस्</option>
+              <option value="save-morning">🌅 हालको समयलाई 'बिहानी सत्र' ढाँचामा सेभ गर्नुहोस्</option>
+              <option value="reset-all">🔄 ढाँचा मानकमा रिसेट गर्नुहोस् (Reset Defaults)</option>
+            </select>
+
+            {/* Bulk Sync Action */}
             <button
               type="button"
               disabled={syncTimingsMutation.isPending}
