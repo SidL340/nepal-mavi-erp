@@ -538,54 +538,60 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     toast.success(`${srcName} को तालिका चयनित ${checkedDays.length} दिनहरूमा सफलतापूर्वक लागू गरियो!`);
   };
 
-  // Copy a single period across all checked days
-  const handleApplySinglePeriodToCheckedDays = (periodNum: number) => {
-    if (checkedDays.length === 0) {
-      toast.error('कृपया माथिबाट कम्तीमा एउटा दिनको Checkbox छान्नुहोस्।');
-      return;
-    }
-
+  // Toggle or assign current period's subject & teacher to/from a specific day
+  const handleToggleDayForPeriod = (periodNum: number, targetDayKey: string) => {
     const sourceKey = `${selectedDay}_${periodNum}`;
     const sourceCell = routineGrid[sourceKey];
     if (!sourceCell || (!sourceCell.subjectId && !sourceCell.teacherId)) {
-      toast.error('यो पिरियडमा कुनै विषय वा शिक्षक तोकिएको छैन।');
+      setSelectedDay(targetDayKey);
       return;
     }
 
+    const targetKey = `${targetDayKey}_${periodNum}`;
+    const targetCell = routineGrid[targetKey];
+    const isSameSubject = targetCell?.subjectId === sourceCell.subjectId && !!sourceCell.subjectId;
+
     setRoutineGrid((prev) => {
       const next = { ...prev };
-      checkedDays.forEach((targetDay) => {
-        const destKey = `${targetDay}_${periodNum}`;
-        next[destKey] = { ...sourceCell };
-      });
+      if (isSameSubject && targetDayKey !== selectedDay) {
+        // Toggle OFF (clear target day for this period)
+        next[targetKey] = { subjectId: '', teacherId: '', roomNo: '' };
+      } else {
+        // Assign current subject and teacher to target day
+        next[targetKey] = { ...sourceCell };
+      }
       return next;
     });
 
-    toast.success(`घण्टी ${periodNum} चयनित ${checkedDays.length} दिनहरूमा लागू गरियो!`);
+    const dayName = DAYS.find((d) => d.key === targetDayKey)?.short || targetDayKey;
+    const subName = classSubjects.find((s) => s.id.toString() === sourceCell.subjectId)?.name || 'विषय';
+    if (!isSameSubject || targetDayKey === selectedDay) {
+      toast.success(`घण्टी ${periodNum}: '${subName}' ${dayName} को लागि तोकियो!`, { id: `day-toggle-${periodNum}-${targetDayKey}`, duration: 2000 });
+    } else {
+      toast.success(`घण्टी ${periodNum}: ${dayName} बाट हटाइयो।`, { id: `day-toggle-${periodNum}-${targetDayKey}`, duration: 2000 });
+    }
   };
 
-  // Copy a single period across specific chosen days (e.g. Sun-Tue, Wed-Fri)
-  const handleApplySinglePeriodToSpecificDays = (periodNum: number, targetDays: string[]) => {
-    if (!targetDays || targetDays.length === 0) return;
-
+  // Apply current period to ALL days
+  const handleApplyPeriodToAllDays = (periodNum: number) => {
     const sourceKey = `${selectedDay}_${periodNum}`;
     const sourceCell = routineGrid[sourceKey];
     if (!sourceCell || (!sourceCell.subjectId && !sourceCell.teacherId)) {
-      toast.error('यो पिरियडमा कुनै विषय वा शिक्षक तोकिएको छैन।');
+      toast.error('कृपया पहिले विषय वा शिक्षक छान्नुहोस्।');
       return;
     }
 
     setRoutineGrid((prev) => {
       const next = { ...prev };
-      targetDays.forEach((targetDay) => {
-        const destKey = `${targetDay}_${periodNum}`;
+      DAYS.forEach((d) => {
+        const destKey = `${d.key}_${periodNum}`;
         next[destKey] = { ...sourceCell };
       });
       return next;
     });
 
-    const daysLabel = targetDays.map((k) => DAYS.find((d) => d.key === k)?.short || k).join(', ');
-    toast.success(`घण्टी ${periodNum} (${daysLabel}) दिनहरूमा सफलतापूर्वक लागू गरियो!`);
+    const subName = classSubjects.find((s) => s.id.toString() === sourceCell.subjectId)?.name || 'विषय';
+    toast.success(`घण्टी ${periodNum} (${subName}) आइतबारदेखि शुक्रबारसम्म सबै दिन लागू गरियो!`);
   };
 
   // List all conflicts currently in routineGrid across the entire week
@@ -1165,44 +1171,11 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
           <div className="space-y-0.5">
             <div className="flex items-center gap-2 text-xs font-black text-[#1e3a5f]">
               <CheckSquare size={16} className="text-blue-700" />
-              <span>रुटिन दोहोर्‍याउने दिनहरू छान्नुहोस् (Repeat Routine Days Checkbox):</span>
+              <span>रुटिन दोहोर्‍याउने दिनहरू (Repeat Routine Days):</span>
             </div>
             <p className="text-[11px] text-gray-600 font-nepali">
               कुन-कुन दिन कक्षा सञ्चालन हुन्छ, टिक लगाउनुहोस् र <strong className="text-blue-900">{DAYS.find((d) => d.key === selectedDay)?.name.split(' ')[0]}</strong> को रुटिन एकै क्लिकमा लागू गर्नुहोस्।
             </p>
-          </div>
-
-          {/* Preset Buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-[11px] font-bold text-gray-500 mr-1">Presets:</span>
-            <button
-              type="button"
-              onClick={() => selectPresetDays('SUN_THU')}
-              className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 text-[11px] font-bold hover:bg-blue-100 transition cursor-pointer"
-            >
-              आइत - बिही (Sun-Thu)
-            </button>
-            <button
-              type="button"
-              onClick={() => selectPresetDays('SUN_FRI')}
-              className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 text-[11px] font-bold hover:bg-blue-100 transition cursor-pointer"
-            >
-              आइत - शुक्र (Sun-Fri)
-            </button>
-            <button
-              type="button"
-              onClick={() => selectPresetDays('ALL')}
-              className="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-800 text-[11px] font-bold hover:bg-blue-100 transition cursor-pointer"
-            >
-              सबै ७ दिन (All)
-            </button>
-            <button
-              type="button"
-              onClick={() => selectPresetDays('CLEAR')}
-              className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-600 text-[11px] font-bold hover:bg-gray-100 transition cursor-pointer"
-            >
-              खाली (Clear)
-            </button>
           </div>
         </div>
 
@@ -1439,52 +1412,94 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                       </div>
                     )}
 
-                    {/* Alternating/Different Subjects Across the Week Preview */}
+                  </div>
+
+                  {/* ─── INTERACTIVE DAY SELECTOR FOR THIS SUBJECT ─── */}
+                  <div className="pt-2.5 border-t border-gray-100 space-y-2 mt-2">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-700">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} className="text-blue-600" />
+                        <span>यो विषय कुन-कुन दिन पढाउने? (Select Days):</span>
+                      </span>
+                      {cell.subjectId && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPeriodToAllDays(period.num)}
+                          className="text-[9px] font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+                          title="Apply this subject to all school days"
+                        >
+                          सबै दिन लागू
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Interactive Days Row (Sun - Fri) */}
+                    <div className="grid grid-cols-6 gap-1">
+                      {DAYS.filter((d) => d.key !== 'SATURDAY').map((d) => {
+                        const dKey = `${d.key}_${period.num}`;
+                        const dCell = routineGrid[dKey];
+                        const hasCurrentSubject = !!(cell.subjectId && dCell?.subjectId === cell.subjectId);
+                        const hasOtherSubject = !!(dCell?.subjectId && dCell.subjectId !== cell.subjectId);
+                        const isSelectedDay = selectedDay === d.key;
+                        const otherSub = hasOtherSubject ? classSubjects.find((s) => s.id.toString() === dCell?.subjectId) : null;
+
+                        return (
+                          <button
+                            key={d.key}
+                            type="button"
+                            onClick={() => {
+                              if (hasOtherSubject && !isSelectedDay) {
+                                setSelectedDay(d.key);
+                              } else {
+                                handleToggleDayForPeriod(period.num, d.key);
+                              }
+                            }}
+                            className={`py-1.5 px-0.5 rounded-lg text-[10px] font-black transition flex flex-col items-center justify-center border cursor-pointer ${
+                              isSelectedDay
+                                ? 'ring-2 ring-[#1e3a5f] bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
+                                : hasCurrentSubject
+                                ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold hover:bg-emerald-100'
+                                : hasOtherSubject
+                                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-100'
+                            }`}
+                            title={
+                              hasOtherSubject
+                                ? `${d.name}: '${otherSub?.name || 'अर्को विषय'}' तोकिएको छ (क्लिक गरी ${d.short} मा जानुहोस्)`
+                                : hasCurrentSubject
+                                ? `${d.name}: यो विषय तोकिएको छ (क्लिक गरी हटाउनुहोस्)`
+                                : `${d.name}: खाली (क्लिक गरी यो विषय तोक्नुहोस्)`
+                            }
+                          >
+                            <span>{d.short}</span>
+                            {hasCurrentSubject && !isSelectedDay && <span className="text-[8px] text-emerald-700">✓</span>}
+                            {hasOtherSubject && !isSelectedDay && <span className="text-[7px] text-amber-700 truncate max-w-full font-bold">फरक</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Alternating Subjects Summary */}
                     {otherDaysSummary.length > 0 && (
-                      <div className="rounded-lg bg-slate-100 border border-gray-200 p-1.5 text-[10px] text-gray-600 space-y-0.5">
+                      <div className="rounded-lg bg-slate-50 border border-gray-200/80 p-1.5 text-[9px] text-gray-600 space-y-0.5">
                         <div className="font-bold text-gray-700 flex items-center justify-between">
                           <span>📅 अन्य दिनका विषय (Other Days):</span>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {otherDaysSummary.map((od: any, idx: number) => (
-                            <span key={idx} className="px-1.5 py-0.5 bg-white rounded border border-gray-200 text-[9px] font-semibold text-[#1e3a5f]">
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setSelectedDay(od.dayKey)}
+                              className="px-1.5 py-0.5 bg-white rounded border border-gray-200 text-[9px] font-semibold text-[#1e3a5f] hover:bg-blue-50 cursor-pointer"
+                              title={`Click to edit ${od.dayShort}`}
+                            >
                               {od.dayShort}: <strong>{od.subName}</strong> {od.teachName ? `(${od.teachName})` : ''}
-                            </span>
+                            </button>
                           ))}
                         </div>
                       </div>
                     )}
-                  </div>
-
-                  {/* Quick Multi-Day Split & Repeat Controls */}
-                  <div className="pt-2 border-t border-gray-100/80 mt-2 space-y-1.5">
-                    <div className="text-[9px] font-bold text-gray-500 uppercase">यो घण्टी अन्य दिनमा लागू गर्नुहोस्:</div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleApplySinglePeriodToSpecificDays(period.num, ['SUNDAY', 'MONDAY', 'TUESDAY'])}
-                        className="text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 py-1 px-1 rounded-lg transition text-center cursor-pointer"
-                        title="Apply to Sunday, Monday, Tuesday"
-                      >
-                        आइत-मंग (Sun-Tue)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleApplySinglePeriodToSpecificDays(period.num, ['WEDNESDAY', 'THURSDAY', 'FRIDAY'])}
-                        className="text-[9px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 py-1 px-1 rounded-lg transition text-center cursor-pointer"
-                        title="Apply to Wednesday, Thursday, Friday"
-                      >
-                        बुध-शुक्र (Wed-Fri)
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleApplySinglePeriodToCheckedDays(period.num)}
-                      className="w-full text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50/60 hover:bg-blue-100/80 py-1 rounded-lg transition text-center cursor-pointer border border-blue-100"
-                      title={`Apply Period ${period.num} to all checked days`}
-                    >
-                      ↳ चेक गरिएका दिनहरूमा लागू
-                    </button>
                   </div>
                 </div>
               );
