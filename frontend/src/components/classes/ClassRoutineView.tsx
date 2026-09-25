@@ -495,10 +495,20 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
   // Toggle single day checkbox
   const toggleDayCheckbox = (dayKey: string) => {
-    setCheckedDays((prev) =>
-      prev.includes(dayKey) ? prev.filter((d) => d !== dayKey) : [...prev, dayKey]
-    );
+    setCheckedDays((prev) => {
+      const next = prev.includes(dayKey) ? prev.filter((d) => d !== dayKey) : [...prev, dayKey];
+      // If the currently selected day was unchecked, switch active day to first available checked day
+      if (prev.includes(dayKey) && selectedDay === dayKey && next.length > 0) {
+        setSelectedDay(next[0]);
+      }
+      return next;
+    });
   };
+
+  // Only show the days which are checked above in the checkbox toolbar!
+  const displayDays = React.useMemo(() => {
+    return checkedDays.length > 0 ? DAYS.filter((d) => checkedDays.includes(d.key)) : DAYS;
+  }, [checkedDays]);
 
   // Preset day selections
   const selectPresetDays = (preset: 'SUN_THU' | 'SUN_FRI' | 'ALL' | 'CLEAR') => {
@@ -572,7 +582,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     }
   };
 
-  // Apply current period to ALL days
+  // Apply current period to ALL checked days
   const handleApplyPeriodToAllDays = (periodNum: number) => {
     const sourceKey = `${selectedDay}_${periodNum}`;
     const sourceCell = routineGrid[sourceKey];
@@ -583,7 +593,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
     setRoutineGrid((prev) => {
       const next = { ...prev };
-      DAYS.forEach((d) => {
+      displayDays.forEach((d) => {
         const destKey = `${d.key}_${periodNum}`;
         next[destKey] = { ...sourceCell };
       });
@@ -591,7 +601,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
     });
 
     const subName = classSubjects.find((s) => s.id.toString() === sourceCell.subjectId)?.name || 'विषय';
-    toast.success(`घण्टी ${periodNum} (${subName}) आइतबारदेखि शुक्रबारसम्म सबै दिन लागू गरियो!`);
+    toast.success(`घण्टी ${periodNum} (${subName}) चयनित सबै दिनहरूमा लागू गरियो!`);
   };
 
   // List all conflicts currently in routineGrid across the entire week
@@ -796,7 +806,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
       return;
     }
 
-    const rowsHtml = DAYS.map((d) => {
+    const rowsHtml = displayDays.map((d) => {
       const periodCells = periods.map((p) => {
         const key = `${d.key}_${p.num}`;
         const cell = routineGrid[key];
@@ -1234,9 +1244,9 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
               </p>
             </div>
 
-            {/* Day Selector Buttons */}
+            {/* Day Selector Buttons - strictly show only checked days */}
             <div className="flex flex-wrap rounded-xl bg-slate-100 p-1 text-xs font-bold gap-1">
-              {DAYS.map((d) => (
+              {displayDays.map((d) => (
                 <button
                   key={d.key}
                   onClick={() => setSelectedDay(d.key)}
@@ -1272,8 +1282,8 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
               const cell = routineGrid[key] || { subjectId: '', teacherId: '', roomNo: '' };
               const conflictInfo = checkConflict(selectedDay, period.num, cell.teacherId);
 
-              // Gather other days assignments for this period to help with alternating/split subjects
-              const otherDaysSummary = DAYS
+              // Gather other checked days assignments for this period to help with alternating/split subjects
+              const otherDaysSummary = displayDays
                 .filter((d) => d.key !== selectedDay)
                 .map((d) => {
                   const oKey = `${d.key}_${period.num}`;
@@ -1414,7 +1424,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
                   </div>
 
-                  {/* ─── INTERACTIVE DAY SELECTOR FOR THIS SUBJECT ─── */}
+                  {/* ─── INTERACTIVE DAY SELECTOR FOR THIS SUBJECT (Filtered by Checked Days) ─── */}
                   <div className="pt-2.5 border-t border-gray-100 space-y-2 mt-2">
                     <div className="flex items-center justify-between text-[10px] font-bold text-gray-700">
                       <span className="flex items-center gap-1">
@@ -1426,16 +1436,16 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                           type="button"
                           onClick={() => handleApplyPeriodToAllDays(period.num)}
                           className="text-[9px] font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
-                          title="Apply this subject to all school days"
+                          title="Apply this subject to all checked school days"
                         >
                           सबै दिन लागू
                         </button>
                       )}
                     </div>
 
-                    {/* Interactive Days Row (Sun - Fri) */}
-                    <div className="grid grid-cols-6 gap-1">
-                      {DAYS.filter((d) => d.key !== 'SATURDAY').map((d) => {
+                    {/* Interactive Days Row (Only Checked Days) */}
+                    <div className="flex flex-wrap gap-1">
+                      {displayDays.map((d) => {
                         const dKey = `${d.key}_${period.num}`;
                         const dCell = routineGrid[dKey];
                         const hasCurrentSubject = !!(cell.subjectId && dCell?.subjectId === cell.subjectId);
@@ -1454,7 +1464,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                                 handleToggleDayForPeriod(period.num, d.key);
                               }
                             }}
-                            className={`py-1.5 px-0.5 rounded-lg text-[10px] font-black transition flex flex-col items-center justify-center border cursor-pointer ${
+                            className={`flex-1 min-w-[36px] py-1.5 px-1 rounded-lg text-[10px] font-black transition flex flex-col items-center justify-center border cursor-pointer ${
                               isSelectedDay
                                 ? 'ring-2 ring-[#1e3a5f] bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
                                 : hasCurrentSubject
@@ -1543,7 +1553,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {DAYS.map((d) => (
+                {displayDays.map((d) => (
                   <tr key={d.key} className="hover:bg-blue-50/20 transition">
                     <td
                       onClick={() => {
