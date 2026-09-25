@@ -1484,25 +1484,20 @@ export default function TeachersPage() {
                 </div>
               )}
 
-              {/* Sync Login Access Role */}
+              {/* Incharge Access Notice */}
               {targetInchargeRoles.length > 0 && (
-                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                  <label className="flex items-start gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={syncUserRole}
-                      onChange={(e) => setSyncUserRole(e.target.checked)}
-                      className="mt-0.5 rounded text-blue-700 focus:ring-blue-600 h-4 w-4"
-                    />
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-extrabold text-blue-950 block">
-                        Sync System Access Role (सफ्टवेयर लगइन पहुँच अद्यावधिक गर्ने)
+                      <span className="font-extrabold text-emerald-950 block text-xs">
+                        Teacher Portal Preserved + Incharge Hub Activated (शिक्षक पोर्टल यथावत रहने)
                       </span>
-                      <span className="text-[11px] text-blue-800">
-                        लेखापाल समावेश भएमा ACCOUNTANT र पुस्तकालय भएमा LIBRARIAN पोर्टल मोड्युल पहुँच दिने।
+                      <span className="text-[11px] text-emerald-800">
+                        शिक्षकको मुख्य Teacher Portal हट्ने छैन। निजको शिक्षक पोर्टलभित्रै तोकिएका शाखाहरू (पुस्तकालय, लेखा, परीक्षा, आदि) को विशेष विभागीय पहुँच र कार्यहरू स्वतः खुल्नेछ।
                       </span>
                     </div>
-                  </label>
+                  </div>
                 </div>
               )}
 

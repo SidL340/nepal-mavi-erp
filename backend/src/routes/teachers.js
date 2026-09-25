@@ -174,17 +174,13 @@ router.post('/:id/assign-role', authenticate, authorize('SUPER_ADMIN', 'ADMIN'),
       },
     });
 
-    // Sync user role if requested
-    if (syncUserRole && teacher.userId) {
-      let targetRole = null;
-      if (rolesArray.includes('ACCOUNTANT')) targetRole = 'ACCOUNTANT';
-      else if (rolesArray.includes('LIBRARIAN')) targetRole = 'LIBRARIAN';
-      else if (rolesArray.includes('ADMIN') || rolesArray.includes('EXAM_INCHARGE')) targetRole = 'ADMIN';
-
-      if (targetRole) {
+    // Ensure teacher's user account ALWAYS maintains TEACHER portal access
+    if (teacher.userId) {
+      const userRec = await prisma.user.findUnique({ where: { id: teacher.userId } });
+      if (userRec && userRec.role !== 'SUPER_ADMIN' && userRec.role !== 'ADMIN') {
         await prisma.user.update({
           where: { id: teacher.userId },
-          data: { role: targetRole },
+          data: { role: 'TEACHER' },
         });
       }
     }

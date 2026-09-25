@@ -728,6 +728,140 @@ export default function TeacherPortalPage() {
             </div>
           )}
 
+          {/* ─── SPECIAL INCHARGE ROLE PORTALS HUB (विभागीय पहुँच तथा जिम्मेवारी) ─── */}
+          {hasAnyInchargeRole && (
+            <div className="rounded-2xl border-2 border-purple-200 bg-gradient-to-r from-purple-50/80 via-indigo-50/60 to-purple-50/80 p-5 shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/60 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-700 text-white shadow-2xs font-bold">
+                    <Layers size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-purple-950 flex items-center gap-2">
+                      <span>Assigned Incharge Roles & Portals (विशेष जिम्मेवारी तथा विभागीय पोर्टलहरू)</span>
+                    </h3>
+                    <p className="text-[11px] text-purple-800">
+                      तपाईंलाई तोकिएका विशेष पदहरूको सम्पूर्ण अधिकार तपाईंको यही शिक्षक खाताबाट सञ्चालन गर्न सक्नुहुन्छ:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold bg-purple-200/80 text-purple-900 px-2.5 py-1 rounded-lg">
+                    {inchargeRolesList.length} Roles Assigned
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                {hasLibraryIncharge && (
+                  <div className="rounded-xl border border-blue-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-blue-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                        पुस्तकालय प्रमुख
+                      </span>
+                      <BookOpen size={16} className="text-blue-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Library Incharge Desk</p>
+                    <p className="text-[10px] text-gray-500">पुस्तक दर्ता, वितरण तथा फिर्ता व्यवस्थापन</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_library')}
+                        className="flex-1 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
+                      </button>
+                      <Link
+                        href="/dashboard/library"
+                        className="rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-[11px] font-bold px-2 py-1.5 text-center transition"
+                        title="Open Full Screen Library Dashboard"
+                      >
+                        Full Desk ↗
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {hasAccountantIncharge && (
+                  <div className="rounded-xl border border-emerald-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-emerald-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                        लेखापाल / लेखा प्रमुख
+                      </span>
+                      <DollarSign size={16} className="text-emerald-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Finance & Fee Portal</p>
+                    <p className="text-[10px] text-gray-500">शुल्क संकलन, खर्च तथा बजेट खाता</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_account')}
+                        className="flex-1 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
+                      </button>
+                      <Link
+                        href="/dashboard/finance"
+                        className="rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-[11px] font-bold px-2 py-1.5 text-center transition"
+                        title="Open Full Screen Finance Dashboard"
+                      >
+                        Full Hub ↗
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {hasExamIncharge && (
+                  <div className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-purple-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                        परीक्षा प्रमुख
+                      </span>
+                      <Award size={16} className="text-purple-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Exam Controller Desk</p>
+                    <p className="text-[10px] text-gray-500">परीक्षा तालिका, सिट प्लानिङ र लब्धाङ्क</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_exam')}
+                        className="flex-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
+                      </button>
+                      <Link
+                        href="/dashboard/exams"
+                        className="rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-[11px] font-bold px-2 py-1.5 text-center transition"
+                        title="Open Full Screen Exam Dashboard"
+                      >
+                        Exams ↗
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {(hasCoordinatorIncharge || hasDisciplineIncharge || hasEcaIncharge || hasLabIncharge) && (
+                  <div className="rounded-xl border border-indigo-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-indigo-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        विभागीय समन्वय
+                      </span>
+                      <Layers size={16} className="text-indigo-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Departmental Duties</p>
+                    <p className="text-[10px] text-gray-500">अनुशासन, खेलकुद तथा प्रयोगशाला कार्यहरू</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_coordinator')}
+                        className="w-full rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        View Assigned Duties →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Quick Action Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Link

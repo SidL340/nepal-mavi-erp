@@ -322,13 +322,27 @@ function NavTree({
   pathname,
   collapsed,
   onNavigate,
+  user,
 }: {
   role: string;
   pathname: string;
   collapsed: boolean;
   onNavigate?: () => void;
+  user?: any;
 }) {
   const userRole = role?.toUpperCase() || '';
+  const inchargeRoleStr = (user?.teacher?.inchargeRole || '').toUpperCase();
+  const inchargeRoles = inchargeRoleStr.split(',').map((s: string) => s.trim()).filter(Boolean);
+
+  const hasLibIncharge = inchargeRoles.includes('LIBRARIAN') || inchargeRoles.includes('LIBRARY');
+  const hasAccIncharge = inchargeRoles.includes('ACCOUNTANT') || inchargeRoles.includes('ACCOUNT');
+  const hasExamIncharge = inchargeRoles.includes('EXAM_INCHARGE') || inchargeRoles.includes('EXAM');
+  const hasCoordIncharge =
+    inchargeRoles.includes('ACADEMIC_COORDINATOR') ||
+    inchargeRoles.includes('DISCIPLINE_INCHARGE') ||
+    inchargeRoles.includes('ECA_INCHARGE') ||
+    inchargeRoles.includes('LAB_INCHARGE') ||
+    inchargeRoles.includes('SPECIAL');
 
   return (
     <ul className="space-y-1">
@@ -371,6 +385,69 @@ function NavTree({
           </li>
         );
       })}
+
+      {/* ── Dynamic Incharge Portals for Teachers ── */}
+      {userRole === 'TEACHER' && (hasLibIncharge || hasAccIncharge || hasExamIncharge || hasCoordIncharge) && (
+        <li className="pt-3 border-t border-[#2a4f7c]/80 mt-2">
+          {!collapsed ? (
+            <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-amber-400 font-nepali">
+              विशेष विभागीय पहुँच (INCHARGE PORTALS)
+            </p>
+          ) : (
+            <div className="mx-auto my-2 h-px w-6 bg-amber-400/50" />
+          )}
+          <ul className="space-y-0.5">
+            {hasLibIncharge && (
+              <li>
+                <NavLink
+                  item={{
+                    label: 'Library Management',
+                    nepaliLabel: 'पुस्तकालय शाखा',
+                    href: '/dashboard/library',
+                    icon: Library,
+                    roles: ['TEACHER'],
+                  }}
+                  pathname={pathname}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              </li>
+            )}
+            {hasAccIncharge && (
+              <li>
+                <NavLink
+                  item={{
+                    label: 'Finance & Accounts',
+                    nepaliLabel: 'लेखा तथा शुल्क शाखा',
+                    href: '/dashboard/finance',
+                    icon: Building2,
+                    roles: ['TEACHER'],
+                  }}
+                  pathname={pathname}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              </li>
+            )}
+            {hasExamIncharge && (
+              <li>
+                <NavLink
+                  item={{
+                    label: 'Exams & Seat Plan',
+                    nepaliLabel: 'परीक्षा शाखा',
+                    href: '/dashboard/exams',
+                    icon: Award,
+                    roles: ['TEACHER'],
+                  }}
+                  pathname={pathname}
+                  collapsed={collapsed}
+                  onNavigate={onNavigate}
+                />
+              </li>
+            )}
+          </ul>
+        </li>
+      )}
     </ul>
   );
 }
@@ -434,7 +511,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
 
         {/* Navigation list */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          <NavTree role={role} pathname={pathname} collapsed={collapsed} />
+          <NavTree role={role} pathname={pathname} collapsed={collapsed} user={user} />
         </nav>
 
         {/* Footer info & collapse toggle */}
@@ -517,6 +594,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose = () => {} }: Sideba
                 pathname={pathname}
                 collapsed={false}
                 onNavigate={onMobileClose}
+                user={user}
               />
             </nav>
 
