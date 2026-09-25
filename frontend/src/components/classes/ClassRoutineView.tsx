@@ -115,6 +115,29 @@ export const SCHOOL_SHIFTS = [
   },
 ];
 
+export const SHIFT_STORAGE_KEYS = {
+  day: 'custom_shift_day_timings',
+  morning: 'custom_shift_morning_timings',
+};
+
+// Retrieve shift preset (prioritizes user-saved custom timings from localStorage)
+export function getShiftPeriods(shiftId: string): PeriodConfig[] {
+  if (typeof window !== 'undefined') {
+    const key = shiftId === 'morning' ? SHIFT_STORAGE_KEYS.morning : SHIFT_STORAGE_KEYS.day;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error('Failed to parse saved shift preset', e);
+      }
+    }
+  }
+  const defaultShift = SCHOOL_SHIFTS.find((s) => s.id === shiftId);
+  return defaultShift ? defaultShift.periods : SCHOOL_SHIFTS[0].periods;
+}
+
 export const STANDARD_SCHOOL_TIMINGS: PeriodConfig[] = SCHOOL_SHIFTS[0].periods;
 const DEFAULT_PERIODS: PeriodConfig[] = SCHOOL_SHIFTS[0].periods;
 
@@ -125,7 +148,7 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
   const [viewTab, setViewTab] = useState<'editor' | 'timetable'>('editor');
 
   // Dynamic Periods configuration
-  const [periods, setPeriods] = useState<PeriodConfig[]>(DEFAULT_PERIODS);
+  const [periods, setPeriods] = useState<PeriodConfig[]>(() => getShiftPeriods('day'));
 
   // Days Checkbox state for repeating/applying routine
   const [checkedDays, setCheckedDays] = useState<string[]>([
@@ -340,6 +363,37 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
   const getTeacherConflictForSlot = (day: string, period: number, teacherId: string | number) => {
     const res = checkConflict(day, period, teacherId);
     return res ? res.className : null;
+  };
+
+  // Load Shift (checks for customized preset in localStorage first, falls back to default)
+  const handleLoadShift = (shiftId: string) => {
+    const loaded = getShiftPeriods(shiftId);
+    setPeriods(loaded);
+    const shiftName = shiftId === 'morning' ? 'बिहानी सत्र (Morning Shift)' : 'दिवा सत्र (Day Shift)';
+    toast.success(`'${shiftName}' को समय तालिका लोड गरियो!`);
+  };
+
+  // Save Current Periods as Custom Shift Preset
+  const handleSaveCurrentAsShiftPreset = (shiftId: string) => {
+    if (typeof window !== 'undefined') {
+      const key = shiftId === 'morning' ? SHIFT_STORAGE_KEYS.morning : SHIFT_STORAGE_KEYS.day;
+      localStorage.setItem(key, JSON.stringify(periods));
+    }
+    const shiftName = shiftId === 'morning' ? 'बिहानी सत्र (Morning Shift)' : 'दिवा सत्र (Day Shift)';
+    toast.success(`हालको घण्टी समयलाई '${shiftName}' ढाँचा (Preset) को रूपमा सुरक्षित गरियो! अब यो ढाँचा जहिले पनि लोड गर्न सकिनेछ।`);
+  };
+
+  // Reset Shift Preset to original factory default
+  const handleResetShiftPreset = (shiftId: 'day' | 'morning' | 'all') => {
+    if (typeof window !== 'undefined') {
+      if (shiftId === 'all') {
+        localStorage.removeItem(SHIFT_STORAGE_KEYS.day);
+        localStorage.removeItem(SHIFT_STORAGE_KEYS.morning);
+      } else {
+        localStorage.removeItem(shiftId === 'morning' ? SHIFT_STORAGE_KEYS.morning : SHIFT_STORAGE_KEYS.day);
+      }
+    }
+    toast.success('ढाँचा (Preset) पूर्वनिर्धारित मानकमा रिसेट गरियो!');
   };
 
   // Add new period to class
@@ -939,23 +993,44 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
 
           {/* 2 Shift Presets, Copy and Bulk Sync Actions */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* 2 Shift Presets Toggle */}
+            {/* 2 Shift Presets Load Buttons */}
             <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 gap-1">
-              {SCHOOL_SHIFTS.map((shift) => (
-                <button
-                  key={shift.id}
-                  type="button"
-                  onClick={() => {
-                    setPeriods(shift.periods);
-                    toast.success(`'${shift.name.split('(')[0].trim()}' समय लोड भयो!`);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition cursor-pointer"
-                  title={shift.name}
-                >
-                  {shift.id === 'day' ? '☀️ दिवा सत्र (Day Shift)' : '🌅 बिहानी सत्र (Morning Shift)'}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => handleLoadShift('day')}
+                className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition cursor-pointer"
+                title="दिवा सत्र ढाँचा लोड गर्नुहोस् (Load Day Shift Preset)"
+              >
+                ☀️ दिवा सत्र (Day Shift)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleLoadShift('morning')}
+                className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition cursor-pointer"
+                title="बिहानी सत्र ढाँचा लोड गर्नुहोस् (Load Morning Shift Preset)"
+              >
+                🌅 बिहानी सत्र (Morning Shift)
+              </button>
             </div>
+
+            {/* Save & Manage Custom Shift Presets */}
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'save-day') handleSaveCurrentAsShiftPreset('day');
+                else if (val === 'save-morning') handleSaveCurrentAsShiftPreset('morning');
+                else if (val === 'reset-all') handleResetShiftPreset('all');
+                e.target.value = '';
+              }}
+              className="rounded-xl border border-indigo-200 bg-indigo-50/90 px-2.5 py-1.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 focus:outline-hidden cursor-pointer"
+              title="Save currently modified periods as a reusable shift preset"
+            >
+              <option value="" disabled>💾 ढाँचा सेभ गर्नुहोस् (Save to Preset)...</option>
+              <option value="save-day">☀️ हालको समयलाई 'दिवा सत्र' ढाँचामा सेभ गर्नुहोस्</option>
+              <option value="save-morning">🌅 हालको समयलाई 'बिहानी सत्र' ढाँचामा सेभ गर्नुहोस्</option>
+              <option value="reset-all">🔄 ढाँचा मानकमा रिसेट गर्नुहोस् (Reset Defaults)</option>
+            </select>
 
             {/* Copy From Another Class */}
             <select
