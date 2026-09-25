@@ -52,20 +52,71 @@ export interface PeriodConfig {
   breakTime?: string;
 }
 
-export const STANDARD_SCHOOL_TIMINGS: PeriodConfig[] = [
-  { num: 1, startTime: '10:25 AM', endTime: '11:15 AM', hasBreakAfter: false },
-  { num: 2, startTime: '11:15 AM', endTime: '12:00 PM', hasBreakAfter: false },
-  { num: 3, startTime: '12:00 PM', endTime: '12:45 PM', hasBreakAfter: false },
-  { num: 4, startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
-  { num: 5, startTime: '01:55 PM', endTime: '02:35 PM', hasBreakAfter: false },
-  { num: 6, startTime: '02:35 PM', endTime: '03:15 PM', hasBreakAfter: false },
-  { num: 7, startTime: '03:15 PM', endTime: '03:55 PM', hasBreakAfter: false },
-  { num: 8, startTime: '03:55 PM', endTime: '04:15 PM', hasBreakAfter: false },
-  { num: 9, startTime: '04:15 PM', endTime: '04:55 PM', hasBreakAfter: false },
-  { num: 10, startTime: '04:55 PM', endTime: '05:35 PM', hasBreakAfter: false },
+// Convert "10:25 AM" or "01:30 PM" to "10:25" or "13:30" for input[type="time"]
+export function toTimeInputValue(timeStr: string): string {
+  if (!timeStr) return '';
+  const trimmed = timeStr.trim();
+  if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+    const [h, m] = trimmed.split(':');
+    return `${h.padStart(2, '0')}:${m}`;
+  }
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (match) {
+    let hour = parseInt(match[1]);
+    const min = match[2];
+    const meridiem = match[3]?.toUpperCase();
+    if (meridiem === 'PM' && hour < 12) hour += 12;
+    if (meridiem === 'AM' && hour === 12) hour = 0;
+    return `${hour.toString().padStart(2, '0')}:${min}`;
+  }
+  return '';
+}
+
+// Convert "13:30" or "10:25" back to "01:30 PM" / "10:25 AM"
+export function fromTimeInputValue(time24: string): string {
+  if (!time24) return '';
+  const parts = time24.split(':');
+  if (parts.length < 2) return time24;
+  let hour = parseInt(parts[0]);
+  const min = parts[1] || '00';
+  const meridiem = hour >= 12 ? 'PM' : 'AM';
+  if (hour === 0) hour = 12;
+  else if (hour > 12) hour -= 12;
+  return `${hour.toString().padStart(2, '0')}:${min} ${meridiem}`;
+}
+
+// 2 Standard School Shifts (दिवा सत्र र बिहानी सत्र)
+export const SCHOOL_SHIFTS = [
+  {
+    id: 'day',
+    name: '☀️ दिवा सत्र (Day Shift: 10:25 AM)',
+    periods: [
+      { num: 1, startTime: '10:25 AM', endTime: '11:15 AM', hasBreakAfter: false },
+      { num: 2, startTime: '11:15 AM', endTime: '12:00 PM', hasBreakAfter: false },
+      { num: 3, startTime: '12:00 PM', endTime: '12:45 PM', hasBreakAfter: false },
+      { num: 4, startTime: '12:45 PM', endTime: '01:30 PM', hasBreakAfter: true, breakTitle: 'खाजा समय (Tiffin Break)', breakTime: '01:30 - 01:55 PM' },
+      { num: 5, startTime: '01:55 PM', endTime: '02:35 PM', hasBreakAfter: false },
+      { num: 6, startTime: '02:35 PM', endTime: '03:15 PM', hasBreakAfter: false },
+      { num: 7, startTime: '03:15 PM', endTime: '03:55 PM', hasBreakAfter: false },
+      { num: 8, startTime: '03:55 PM', endTime: '04:15 PM', hasBreakAfter: false },
+    ],
+  },
+  {
+    id: 'morning',
+    name: '🌅 बिहानी सत्र (Morning Shift: 06:30 AM)',
+    periods: [
+      { num: 1, startTime: '06:30 AM', endTime: '07:10 AM', hasBreakAfter: false },
+      { num: 2, startTime: '07:10 AM', endTime: '07:50 AM', hasBreakAfter: false },
+      { num: 3, startTime: '07:50 AM', endTime: '08:30 AM', hasBreakAfter: true, breakTitle: 'विश्राम (Break)', breakTime: '08:30 - 08:50 AM' },
+      { num: 4, startTime: '08:50 AM', endTime: '09:30 AM', hasBreakAfter: false },
+      { num: 5, startTime: '09:30 AM', endTime: '10:15 AM', hasBreakAfter: false },
+      { num: 6, startTime: '10:15 AM', endTime: '11:00 AM', hasBreakAfter: false },
+    ],
+  },
 ];
 
-const DEFAULT_PERIODS: PeriodConfig[] = STANDARD_SCHOOL_TIMINGS.slice(0, 8);
+export const STANDARD_SCHOOL_TIMINGS: PeriodConfig[] = SCHOOL_SHIFTS[0].periods;
+const DEFAULT_PERIODS: PeriodConfig[] = SCHOOL_SHIFTS[0].periods;
 
 export default function ClassRoutineView({ initialClassId }: { initialClassId?: string }) {
   const queryClient = useQueryClient();
@@ -886,8 +937,26 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
             </p>
           </div>
 
-          {/* Copy and Bulk Sync Actions */}
+          {/* 2 Shift Presets, Copy and Bulk Sync Actions */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* 2 Shift Presets Toggle */}
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 gap-1">
+              {SCHOOL_SHIFTS.map((shift) => (
+                <button
+                  key={shift.id}
+                  type="button"
+                  onClick={() => {
+                    setPeriods(shift.periods);
+                    toast.success(`'${shift.name.split('(')[0].trim()}' समय लोड भयो!`);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition cursor-pointer"
+                  title={shift.name}
+                >
+                  {shift.id === 'day' ? '☀️ दिवा सत्र (Day Shift)' : '🌅 बिहानी सत्र (Morning Shift)'}
+                </button>
+              ))}
+            </div>
+
             {/* Copy From Another Class */}
             <select
               defaultValue=""
@@ -945,26 +1014,40 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
                 )}
               </div>
 
-              {/* Start & End Time Inputs */}
-              <div className="grid grid-cols-2 gap-1.5">
+              {/* Start & End Time Inputs using Time format */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[9px] font-bold text-gray-500 uppercase">From (सुरु):</label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase">From (सुरु):</label>
+                    <span className="text-[10px] font-mono font-bold text-[#1e3a5f]">{p.startTime}</span>
+                  </div>
                   <input
-                    type="text"
-                    value={p.startTime}
-                    onChange={(e) => handleUpdatePeriodConfig(p.num, { startTime: e.target.value })}
-                    placeholder="10:15 AM"
-                    className="w-full px-2 py-1 text-xs font-semibold rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    type="time"
+                    value={toTimeInputValue(p.startTime)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        handleUpdatePeriodConfig(p.num, { startTime: fromTimeInputValue(val) });
+                      }
+                    }}
+                    className="w-full px-2 py-1 text-xs font-semibold rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   />
                 </div>
                 <div>
-                  <label className="block text-[9px] font-bold text-gray-500 uppercase">To (अन्त्य):</label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase">To (अन्त्य):</label>
+                    <span className="text-[10px] font-mono font-bold text-[#1e3a5f]">{p.endTime}</span>
+                  </div>
                   <input
-                    type="text"
-                    value={p.endTime}
-                    onChange={(e) => handleUpdatePeriodConfig(p.num, { endTime: e.target.value })}
-                    placeholder="11:00 AM"
-                    className="w-full px-2 py-1 text-xs font-semibold rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    type="time"
+                    value={toTimeInputValue(p.endTime)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        handleUpdatePeriodConfig(p.num, { endTime: fromTimeInputValue(val) });
+                      }
+                    }}
+                    className="w-full px-2 py-1 text-xs font-semibold rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   />
                 </div>
               </div>
