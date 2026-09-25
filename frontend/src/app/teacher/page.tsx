@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
@@ -55,6 +55,7 @@ const DAYS_MAP: Record<number, string> = {
 
 export default function TeacherPortalPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { user } = useAuthStore();
   const searchParams = useSearchParams();
   const teacherId = user?.teacher?.id;
@@ -79,6 +80,15 @@ export default function TeacherPortalPage() {
       setActiveTab(tabFromUrl as any);
     }
   }, [tabFromUrl]);
+
+  const switchTab = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      router.replace('/teacher', { scroll: false });
+    } else {
+      router.replace(`/teacher?tab=${tab}`, { scroll: false });
+    }
+  };
   const [taskStatusFilter, setTaskStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
   const [dailyLog, setDailyLog] = useState('');
   const [selectedClassLog, setSelectedClassLog] = useState('');
@@ -516,187 +526,172 @@ export default function TeacherPortalPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {hasAnyInchargeRole && (
-            <Link
-              href="/dashboard"
-              className="rounded-xl bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-3.5 py-2 text-xs font-black transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <LayoutDashboard size={14} />
-              <span>Full ERP Dashboard (प्रशासनिक ड्यासबोर्ड) →</span>
-            </Link>
-          )}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setActiveTab('tasks')}
-            className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+            onClick={() => setIsNoticeModalOpen(true)}
+            className="rounded-xl bg-white/20 hover:bg-white/30 text-white px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
           >
-            <CheckSquare size={14} />
-            <span>My Tasks ({pendingTasksCount} Pending)</span>
-          </button>
-          <button
-            onClick={() => setIsLeaveModalOpen(true)}
-            className="rounded-xl bg-amber-400/90 hover:bg-amber-400 text-[#1e3a5f] px-3.5 py-2 text-xs font-bold transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
-          >
-            <FileText size={14} />
-            <span>Apply for Leave (बिदाको निवेदन)</span>
+            <Bell size={14} />
+            <span>Send Notice (सूचना)</span>
           </button>
           <button
             onClick={() => setIsProblemModalOpen(true)}
-            className="rounded-xl bg-rose-500/90 hover:bg-rose-600 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
+            className="rounded-xl bg-rose-500/80 hover:bg-rose-600 text-white px-3.5 py-2 text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
           >
-            ⚠️ Report Issue
-          </button>
-          <button
-            onClick={() => setIsNoticeModalOpen(true)}
-            className="rounded-xl bg-white/20 hover:bg-white/30 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm cursor-pointer"
-          >
-            📢 Send Notice
+            <AlertTriangle size={14} />
+            <span>Report Issue</span>
           </button>
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-2">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-            activeTab === 'overview'
-              ? 'bg-[#1e3a5f] text-white shadow-xs'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <LayoutDashboard size={15} />
-          <span>Dashboard Overview</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('daily_log')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-            activeTab === 'daily_log'
-              ? 'bg-blue-700 text-white shadow-xs'
-              : 'bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200'
-          }`}
-        >
-          <BookOpen size={15} className="text-amber-400" />
-          <span>Daily Teaching Log (दैनिक शिक्षण लग)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('tasks')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-            activeTab === 'tasks'
-              ? 'bg-purple-700 text-white shadow-xs'
-              : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
-          }`}
-        >
-          <CheckSquare size={15} />
-          <span>My Tasks & Duties (कार्यहरू)</span>
-          {pendingTasksCount > 0 && (
-            <span className="h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
-              {pendingTasksCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('routine')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-            activeTab === 'routine'
-              ? 'bg-[#1e3a5f] text-white shadow-xs'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <Clock size={15} />
-          <span>My Timetable (घण्टी तालिका)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('leaves')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-            activeTab === 'leaves'
-              ? 'bg-[#1e3a5f] text-white shadow-xs'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          <FileText size={15} />
-          <span>My Leaves (मेरो बिदा)</span>
-        </button>
-
-        {myAssignedClasses.length > 0 && (
+      {/* ─── BOXED TAB NAVIGATION BAR (बक्स ट्याब नेभिगेसन) ─── */}
+      <div className="rounded-2xl border border-gray-200/90 bg-white p-2 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setActiveTab('students_leave')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-              activeTab === 'students_leave'
-                ? 'bg-emerald-700 text-white shadow-xs'
-                : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+            onClick={() => switchTab('overview')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+              activeTab === 'overview'
+                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
+                : 'bg-slate-50 text-gray-700 hover:bg-slate-100 hover:text-gray-900 border-gray-200/80'
             }`}
           >
-            <UserCheck size={15} />
-            <span>Student Leaves (विद्यार्थी बिदा)</span>
-            {pendingStudentLeavesCount > 0 && (
-              <span className="h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
-                {pendingStudentLeavesCount}
+            <LayoutDashboard size={15} />
+            <span>Dashboard Overview</span>
+          </button>
+
+          <button
+            onClick={() => switchTab('daily_log')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+              activeTab === 'daily_log'
+                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-blue-300'
+                : 'bg-blue-50/70 text-blue-900 hover:bg-blue-100 border-blue-200/80'
+            }`}
+          >
+            <BookOpen size={15} className={activeTab === 'daily_log' ? 'text-amber-400' : 'text-blue-600'} />
+            <span>Daily Teaching Log (दैनिक शिक्षण लग)</span>
+          </button>
+
+          <button
+            onClick={() => switchTab('tasks')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+              activeTab === 'tasks'
+                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-purple-300'
+                : 'bg-purple-50/70 text-purple-900 hover:bg-purple-100 border-purple-200/80'
+            }`}
+          >
+            <CheckSquare size={15} className={activeTab === 'tasks' ? 'text-purple-300' : 'text-purple-600'} />
+            <span>My Tasks & Duties (कार्यहरू)</span>
+            {pendingTasksCount > 0 && (
+              <span className={`h-5 px-1.5 rounded-full text-[10px] font-extrabold flex items-center justify-center ${
+                activeTab === 'tasks' ? 'bg-amber-400 text-[#1e3a5f]' : 'bg-rose-500 text-white'
+              }`}>
+                {pendingTasksCount}
               </span>
             )}
           </button>
-        )}
 
-        {/* ─── DYNAMIC INCHARGE ROLE SUB-PORTAL TABS (Added seamlessly without disturbing teacher tabs) ─── */}
-        {hasExamIncharge && (
           <button
-            onClick={() => setActiveTab('incharge_exam')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-              activeTab === 'incharge_exam'
-                ? 'bg-purple-800 text-white shadow-xs ring-2 ring-purple-300'
-                : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200'
+            onClick={() => switchTab('routine')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+              activeTab === 'routine'
+                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
+                : 'bg-slate-50 text-gray-700 hover:bg-slate-100 hover:text-gray-900 border-gray-200/80'
             }`}
           >
-            <Award size={15} className="text-purple-600" />
-            <span>Exam Department (परीक्षा शाखा)</span>
+            <Clock size={15} />
+            <span>My Timetable (घण्टी तालिका)</span>
           </button>
-        )}
 
-        {hasLibraryIncharge && (
           <button
-            onClick={() => setActiveTab('incharge_library')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-              activeTab === 'incharge_library'
-                ? 'bg-blue-800 text-white shadow-xs ring-2 ring-blue-300'
-                : 'bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200'
+            onClick={() => switchTab('leaves')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+              activeTab === 'leaves'
+                ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs'
+                : 'bg-slate-50 text-gray-700 hover:bg-slate-100 hover:text-gray-900 border-gray-200/80'
             }`}
           >
-            <BookOpen size={15} className="text-blue-600" />
-            <span>Library Portal (पुस्तकालय शाखा)</span>
+            <FileText size={15} />
+            <span>My Leaves (मेरो बिदा)</span>
           </button>
-        )}
 
-        {hasAccountantIncharge && (
-          <button
-            onClick={() => setActiveTab('incharge_account')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-              activeTab === 'incharge_account'
-                ? 'bg-emerald-800 text-white shadow-xs ring-2 ring-emerald-300'
-                : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200'
-            }`}
-          >
-            <DollarSign size={15} className="text-emerald-600" />
-            <span>Account & Finance (लेखा शाखा)</span>
-          </button>
-        )}
+          {myAssignedClasses.length > 0 && (
+            <button
+              onClick={() => switchTab('students_leave')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'students_leave'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-emerald-300'
+                  : 'bg-emerald-50/70 text-emerald-900 hover:bg-emerald-100 border-emerald-200/80'
+              }`}
+            >
+              <UserCheck size={15} className={activeTab === 'students_leave' ? 'text-emerald-300' : 'text-emerald-600'} />
+              <span>Student Leaves (विद्यार्थी बिदा)</span>
+              {pendingStudentLeavesCount > 0 && (
+                <span className={`h-5 px-1.5 rounded-full text-[10px] font-extrabold flex items-center justify-center ${
+                  activeTab === 'students_leave' ? 'bg-amber-400 text-[#1e3a5f]' : 'bg-rose-500 text-white'
+                }`}>
+                  {pendingStudentLeavesCount}
+                </span>
+              )}
+            </button>
+          )}
 
-        {(hasCoordinatorIncharge || hasDisciplineIncharge || hasEcaIncharge || hasLabIncharge) && (
-          <button
-            onClick={() => setActiveTab('incharge_coordinator')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
-              activeTab === 'incharge_coordinator'
-                ? 'bg-indigo-800 text-white shadow-xs ring-2 ring-indigo-300'
-                : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
-            }`}
-          >
-            <Layers size={15} className="text-indigo-600" />
-            <span>Incharge Coordination (विभागीय समन्वय)</span>
-          </button>
-        )}
+          {/* ─── DYNAMIC INCHARGE ROLE SUB-PORTAL TABS ─── */}
+          {hasExamIncharge && (
+            <button
+              onClick={() => switchTab('incharge_exam')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_exam'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-purple-300'
+                  : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border-purple-200'
+              }`}
+            >
+              <Award size={15} className={activeTab === 'incharge_exam' ? 'text-amber-400' : 'text-purple-600'} />
+              <span>Exam Department (परीक्षा शाखा)</span>
+            </button>
+          )}
+
+          {hasLibraryIncharge && (
+            <button
+              onClick={() => switchTab('incharge_library')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_library'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-blue-300'
+                  : 'bg-blue-50 text-blue-900 hover:bg-blue-100 border-blue-200'
+              }`}
+            >
+              <BookOpen size={15} className={activeTab === 'incharge_library' ? 'text-amber-400' : 'text-blue-600'} />
+              <span>Library Portal (पुस्तकालय शाखा)</span>
+            </button>
+          )}
+
+          {hasAccountantIncharge && (
+            <button
+              onClick={() => switchTab('incharge_account')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_account'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-emerald-300'
+                  : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border-emerald-200'
+              }`}
+            >
+              <DollarSign size={15} className={activeTab === 'incharge_account' ? 'text-amber-400' : 'text-emerald-600'} />
+              <span>Account & Finance (लेखा शाखा)</span>
+            </button>
+          )}
+
+          {(hasCoordinatorIncharge || hasDisciplineIncharge || hasEcaIncharge || hasLabIncharge) && (
+            <button
+              onClick={() => switchTab('incharge_coordinator')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_coordinator'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-indigo-300'
+                  : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border-indigo-200'
+              }`}
+            >
+              <Layers size={15} className={activeTab === 'incharge_coordinator' ? 'text-amber-400' : 'text-indigo-600'} />
+              <span>Incharge Coordination (विभागीय समन्वय)</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ─── TAB 1: OVERVIEW & DIARY ──────────────────────────────────────── */}
