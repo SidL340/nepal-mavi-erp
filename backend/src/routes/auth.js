@@ -31,7 +31,22 @@ router.post('/login', async (req, res) => {
         ],
       },
       include: {
-        teacher: { select: { id: true, fullName: true, photoUrl: true, email: true, phone: true } },
+        teacher: {
+          select: {
+            id: true,
+            fullName: true,
+            fullNameNepali: true,
+            photoUrl: true,
+            email: true,
+            phone: true,
+            inchargeRole: true,
+            inchargeTitle: true,
+            shreni: true,
+            post: true,
+            type: true,
+            isTeachingStaff: true,
+          },
+        },
         student: { select: { id: true, fullName: true, studentId: true, emisId: true, photoUrl: true, phone: true } },
       },
     });
@@ -47,7 +62,22 @@ router.post('/login', async (req, res) => {
           ],
         },
         include: {
-          teacher: { select: { id: true, fullName: true, photoUrl: true, email: true, phone: true } },
+          teacher: {
+            select: {
+              id: true,
+              fullName: true,
+              fullNameNepali: true,
+              photoUrl: true,
+              email: true,
+              phone: true,
+              inchargeRole: true,
+              inchargeTitle: true,
+              shreni: true,
+              post: true,
+              type: true,
+              isTeachingStaff: true,
+            },
+          },
           student: { select: { id: true, fullName: true, studentId: true, emisId: true, photoUrl: true, phone: true } },
         },
       });

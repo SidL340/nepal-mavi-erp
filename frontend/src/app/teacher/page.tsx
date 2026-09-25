@@ -27,6 +27,16 @@ import {
   UserCheck,
   Send,
   CheckSquare,
+  DollarSign,
+  Layers,
+  LayoutDashboard,
+  ArrowRight,
+  Sparkles,
+  FileSpreadsheet,
+  Printer,
+  ShieldCheck,
+  Trophy,
+  Laptop,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -46,7 +56,17 @@ export default function TeacherPortalPage() {
   const { user } = useAuthStore();
   const teacherId = user?.teacher?.id;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'routine' | 'leaves' | 'students_leave'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    | 'overview'
+    | 'tasks'
+    | 'routine'
+    | 'leaves'
+    | 'students_leave'
+    | 'incharge_exam'
+    | 'incharge_library'
+    | 'incharge_account'
+    | 'incharge_coordinator'
+  >('overview');
   const [taskStatusFilter, setTaskStatusFilter] = useState<'ALL' | 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
   const [dailyLog, setDailyLog] = useState('');
   const [selectedClassLog, setSelectedClassLog] = useState('');
@@ -332,6 +352,31 @@ export default function TeacherPortalPage() {
 
   const displayName = user?.teacher?.fullName || user?.username || 'Teacher';
 
+  const teacherProfile = teacherDetails || (user?.teacher as any) || {};
+  const inchargeString = teacherProfile.inchargeRole || '';
+  const inchargeRolesList = inchargeString
+    .split(',')
+    .map((r: string) => r.trim().toUpperCase())
+    .filter(Boolean);
+
+  const hasExamIncharge =
+    inchargeRolesList.includes('EXAM_INCHARGE') || inchargeRolesList.includes('EXAM');
+  const hasLibraryIncharge =
+    inchargeRolesList.includes('LIBRARIAN') ||
+    inchargeRolesList.includes('LIBRARY') ||
+    user?.role === 'LIBRARIAN';
+  const hasAccountantIncharge =
+    inchargeRolesList.includes('ACCOUNTANT') ||
+    inchargeRolesList.includes('ACCOUNT') ||
+    user?.role === 'ACCOUNTANT';
+  const hasCoordinatorIncharge = inchargeRolesList.includes('ACADEMIC_COORDINATOR');
+  const hasDisciplineIncharge = inchargeRolesList.includes('DISCIPLINE_INCHARGE');
+  const hasEcaIncharge = inchargeRolesList.includes('ECA_INCHARGE');
+  const hasLabIncharge = inchargeRolesList.includes('LAB_INCHARGE');
+  const hasAnyInchargeRole =
+    inchargeRolesList.length > 0 ||
+    ['ADMIN', 'SUPER_ADMIN', 'ACCOUNTANT', 'LIBRARIAN'].includes(user?.role || '');
+
   return (
     <div className="space-y-6 pb-12">
       {/* Welcome Banner */}
@@ -398,6 +443,15 @@ export default function TeacherPortalPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {hasAnyInchargeRole && (
+            <Link
+              href="/dashboard"
+              className="rounded-xl bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-3.5 py-2 text-xs font-black transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <LayoutDashboard size={14} />
+              <span>Full ERP Dashboard (प्रशासनिक ड्यासबोर्ड) →</span>
+            </Link>
+          )}
           <button
             onClick={() => setActiveTab('tasks')}
             className="rounded-xl bg-purple-600 hover:bg-purple-700 px-3.5 py-2 text-xs font-bold text-white transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
@@ -407,7 +461,7 @@ export default function TeacherPortalPage() {
           </button>
           <button
             onClick={() => setIsLeaveModalOpen(true)}
-            className="rounded-xl bg-amber-400 hover:bg-amber-300 px-3.5 py-2 text-xs font-bold text-[#1e3a5f] transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+            className="rounded-xl bg-amber-400/90 hover:bg-amber-400 text-[#1e3a5f] px-3.5 py-2 text-xs font-bold transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
           >
             <FileText size={14} />
             <span>Apply for Leave (बिदाको निवेदन)</span>
@@ -450,7 +504,7 @@ export default function TeacherPortalPage() {
           }`}
         >
           <CheckSquare size={15} />
-          <span>My Tasks & Incharge Duties (जिम्मेवारी तथा कार्यहरू)</span>
+          <span>My Tasks & Duties (कार्यहरू)</span>
           {pendingTasksCount > 0 && (
             <span className="h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
               {pendingTasksCount}
@@ -498,6 +552,63 @@ export default function TeacherPortalPage() {
                 {pendingStudentLeavesCount}
               </span>
             )}
+          </button>
+        )}
+
+        {/* ─── DYNAMIC INCHARGE ROLE SUB-PORTAL TABS (Added seamlessly without disturbing teacher tabs) ─── */}
+        {hasExamIncharge && (
+          <button
+            onClick={() => setActiveTab('incharge_exam')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'incharge_exam'
+                ? 'bg-purple-800 text-white shadow-xs ring-2 ring-purple-300'
+                : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200'
+            }`}
+          >
+            <Award size={15} className="text-purple-600" />
+            <span>Exam Department (परीक्षा शाखा)</span>
+          </button>
+        )}
+
+        {hasLibraryIncharge && (
+          <button
+            onClick={() => setActiveTab('incharge_library')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'incharge_library'
+                ? 'bg-blue-800 text-white shadow-xs ring-2 ring-blue-300'
+                : 'bg-blue-50 text-blue-900 hover:bg-blue-100 border border-blue-200'
+            }`}
+          >
+            <BookOpen size={15} className="text-blue-600" />
+            <span>Library Portal (पुस्तकालय शाखा)</span>
+          </button>
+        )}
+
+        {hasAccountantIncharge && (
+          <button
+            onClick={() => setActiveTab('incharge_account')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'incharge_account'
+                ? 'bg-emerald-800 text-white shadow-xs ring-2 ring-emerald-300'
+                : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200'
+            }`}
+          >
+            <DollarSign size={15} className="text-emerald-600" />
+            <span>Account & Finance (लेखा शाखा)</span>
+          </button>
+        )}
+
+        {(hasCoordinatorIncharge || hasDisciplineIncharge || hasEcaIncharge || hasLabIncharge) && (
+          <button
+            onClick={() => setActiveTab('incharge_coordinator')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'incharge_coordinator'
+                ? 'bg-indigo-800 text-white shadow-xs ring-2 ring-indigo-300'
+                : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
+            }`}
+          >
+            <Layers size={15} className="text-indigo-600" />
+            <span>Incharge Coordination (विभागीय समन्वय)</span>
           </button>
         )}
       </div>
@@ -1143,6 +1254,700 @@ export default function TeacherPortalPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: EXAM INCHARGE SUB-PORTAL ─────────────────────────────────── */}
+      {activeTab === 'incharge_exam' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-purple-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <Award size={14} />
+                <span>परीक्षा शाखा नियन्त्रण कक्ष (Examination Department Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Exam Incharge (परीक्षा प्रमुख)'}
+              </h2>
+              <p className="text-xs text-purple-200 mt-1">
+                परीक्षा तालिका निर्माण, प्रवेश पत्र (Admit Card) छपाई, सिट प्लानिङ, प्राप्ताङ्क लेजर तथा नतिजा प्रकाशन व्यवस्थापन
+              </p>
+            </div>
+            <Link
+              href="/dashboard/exams"
+              className="inline-flex items-center gap-2 bg-white text-purple-950 hover:bg-purple-50 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0"
+            >
+              <span>Full Exam Dashboard (पूर्ण मोड्युल)</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {/* Quick Launch Cards for Exam Incharge */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              href="/dashboard/exams"
+              className="p-4 rounded-2xl border border-purple-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-purple-50 text-purple-700 group-hover:scale-110 transition">
+                  <Calendar size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                  तालिका
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Exam Schedules & Routine</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                परीक्षा तालिका, विषय, पूर्णाङ्क तथा समय व्यवस्थापन
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/exams/admit-cards"
+              className="p-4 rounded-2xl border border-indigo-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-700 group-hover:scale-110 transition">
+                  <Printer size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                  प्रवेश पत्र
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Admit Card Generator</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                विद्यार्थी परीक्षा प्रवेश पत्र तथा फोटो सहितको कार्ड छपाई
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/exams/seat-planning"
+              className="p-4 rounded-2xl border border-amber-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700 group-hover:scale-110 transition">
+                  <Users size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                  सिट योजना
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Seat Planning & Halls</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                रोल नम्बर अनुसार सिट योजना, हल र डेस्क स्लिप
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/certificates"
+              className="p-4 rounded-2xl border border-emerald-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-700 group-hover:scale-110 transition">
+                  <Award size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  प्रमाणपत्र
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Certificates & Character</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                चारित्रिक प्रमाणपत्र तथा स्थानान्तरण प्रमाणपत्र (TC)
+              </p>
+            </Link>
+          </div>
+
+          {/* Active Exams & Tasks List */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-7 rounded-2xl border border-purple-100 bg-white p-5 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between border-b pb-2.5">
+                <h3 className="font-extrabold text-sm text-purple-950 flex items-center gap-2">
+                  <Award size={16} className="text-purple-700" />
+                  <span>Active Examinations (चालु तथा आगामी परीक्षाहरू)</span>
+                </h3>
+                <Link
+                  href="/dashboard/exams"
+                  className="text-[11px] font-bold text-purple-700 hover:underline"
+                >
+                  Manage All →
+                </Link>
+              </div>
+
+              {examsData?.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-xs bg-slate-50 rounded-xl">
+                  कुनै सक्रिय परीक्षा फेला परेन।
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {examsData?.map((exam: any) => (
+                    <div
+                      key={exam.id}
+                      className="p-3 rounded-xl bg-purple-50/40 border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div>
+                        <p className="font-extrabold text-xs text-purple-950">
+                          {exam.name} {exam.nameNepali ? `(${exam.nameNepali})` : ''}
+                        </p>
+                        <p className="text-[10px] text-gray-500 font-mono mt-0.5">
+                          📅 {exam.startDateBs} देखि {exam.endDateBs} सम्म • Shift: {exam.shift || 'DAY'}
+                        </p>
+                        <p className="text-[10px] text-purple-800 font-bold mt-1">
+                          कक्षा: {exam.examClasses?.map((ec: any) => ec.class?.name).join(', ') || 'सबै कक्षा'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                        <Link
+                          href="/dashboard/exams/admit-cards"
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] shadow-2xs transition"
+                        >
+                          🪪 Admit Cards
+                        </Link>
+                        <Link
+                          href="/dashboard/exams/seat-planning"
+                          className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-[#1e3a5f] font-bold text-[10px] shadow-2xs transition"
+                        >
+                          🪑 Seat Plan
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Exam Duties / Tasks */}
+            <div className="lg:col-span-5 rounded-2xl border border-purple-100 bg-white p-5 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between border-b pb-2.5">
+                <h3 className="font-extrabold text-sm text-purple-950 flex items-center gap-2">
+                  <CheckSquare size={16} className="text-purple-700" />
+                  <span>Exam Incharge Duties (परीक्षा जिम्मेवारी)</span>
+                </h3>
+                <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                  {myTasksData?.filter((t: any) => t.category === 'EXAM' && t.status !== 'COMPLETED').length} Pending
+                </span>
+              </div>
+
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {myTasksData?.filter((t: any) => t.category === 'EXAM').length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-6">कुनै परीक्षा कार्य तोकिएको छैन।</p>
+                ) : (
+                  myTasksData
+                    ?.filter((t: any) => t.category === 'EXAM')
+                    .map((task: any) => {
+                      const isDone = task.status === 'COMPLETED';
+                      return (
+                        <div
+                          key={task.id}
+                          className={`p-2.5 rounded-xl border text-xs transition ${
+                            isDone ? 'bg-emerald-50/50 border-emerald-200 opacity-70' : 'bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={isDone}
+                                onChange={() =>
+                                  updateTaskStatusMutation.mutate({
+                                    id: task.id,
+                                    status: isDone ? 'PENDING' : 'COMPLETED',
+                                  })
+                                }
+                                className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                              />
+                              <div>
+                                <span className={`font-bold block ${isDone ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                  {task.title}
+                                </span>
+                                {task.description && (
+                                  <span className="text-[10px] text-gray-500 block">{task.description}</span>
+                                )}
+                              </div>
+                            </label>
+                            <span className="text-[9px] font-mono font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded shrink-0">
+                              {task.dueDateBs}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: LIBRARY INCHARGE SUB-PORTAL ───────────────────────────────── */}
+      {activeTab === 'incharge_library' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-blue-900 via-sky-900 to-indigo-950 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-blue-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <BookOpen size={14} />
+                <span>पुस्तकालय व्यवस्थापन कक्ष (Library Department Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Librarian Incharge (पुस्तकालय प्रमुख)'}
+              </h2>
+              <p className="text-xs text-blue-200 mt-1">
+                पुस्तक दर्ता तथा वर्गीकरण, विद्यार्थी तथा शिक्षकलाई पुस्तक वितरण (Issue), फिर्ता (Return) र जरिवाना हिसाब
+              </p>
+            </div>
+            <Link
+              href="/dashboard/library"
+              className="inline-flex items-center gap-2 bg-white text-blue-950 hover:bg-blue-50 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0"
+            >
+              <span>Full Library Dashboard (पुस्तकालय पूर्ण मोड्युल)</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {/* Quick Launch Cards for Library Incharge */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Link
+              href="/dashboard/library"
+              className="p-5 rounded-2xl border border-blue-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700 group-hover:scale-110 transition">
+                  <BookOpen size={22} />
+                </div>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  पुस्तक सूची
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Book Catalog & Inventory</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                सबै पुस्तकहरूको सूची, वर्गीकरण, लेखक र नयाँ पुस्तक प्रविष्टि
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/library"
+              className="p-5 rounded-2xl border border-emerald-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-700 group-hover:scale-110 transition">
+                  <Users size={22} />
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  जारी (Issue)
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Issue Books to Students / Staff</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                विद्यार्थी तथा शिक्षकलाई पुस्तक जारी, बारकोड स्क्यान र म्याद
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/library"
+              className="p-5 rounded-2xl border border-amber-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700 group-hover:scale-110 transition">
+                  <Clock size={22} />
+                </div>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                  फिर्ता र जरिवाना
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Book Returns & Overdue Tracker</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                पुस्तक फिर्ता लिने, समय नाघेका किताबहरू र जरिवाना हिसाब
+              </p>
+            </Link>
+          </div>
+
+          {/* Library Duties / Tasks */}
+          <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <h3 className="font-extrabold text-sm text-blue-950 flex items-center gap-2">
+                <CheckSquare size={16} className="text-blue-700" />
+                <span>Library Incharge Duties (पुस्तकालय जिम्मेवारी तथा कार्यहरू)</span>
+              </h3>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                {myTasksData?.filter((t: any) => t.category === 'LIBRARY' && t.status !== 'COMPLETED').length} Pending
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {myTasksData?.filter((t: any) => t.category === 'LIBRARY').length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">कुनै पुस्तकालय कार्य तोकिएको छैन।</p>
+              ) : (
+                myTasksData
+                  ?.filter((t: any) => t.category === 'LIBRARY')
+                  .map((task: any) => {
+                    const isDone = task.status === 'COMPLETED';
+                    return (
+                      <div
+                        key={task.id}
+                        className={`p-3 rounded-xl border text-xs transition ${
+                          isDone ? 'bg-emerald-50/50 border-emerald-200 opacity-70' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <label className="flex items-start gap-2.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isDone}
+                              onChange={() =>
+                                updateTaskStatusMutation.mutate({
+                                  id: task.id,
+                                  status: isDone ? 'PENDING' : 'COMPLETED',
+                                })
+                              }
+                              className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                            />
+                            <div>
+                              <span className={`font-bold text-sm block ${isDone ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                {task.title}
+                              </span>
+                              {task.description && (
+                                <span className="text-xs text-gray-500 block mt-0.5">{task.description}</span>
+                              )}
+                            </div>
+                          </label>
+                          <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded shrink-0">
+                            Due: {task.dueDateBs}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: ACCOUNTANT INCHARGE SUB-PORTAL ────────────────────────────── */}
+      {activeTab === 'incharge_account' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-emerald-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <DollarSign size={14} />
+                <span>लेखा तथा आर्थिक प्रशासन कक्ष (Finance & Account Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Accountant / Finance Incharge (लेखापाल / लेखा प्रमुख)'}
+              </h2>
+              <p className="text-xs text-emerald-200 mt-1">
+                विद्यार्थी शुल्क संकलन र बिलिङ, दैनिक खर्च प्रविष्टि, कर्मचारी तलब भुक्तानी तथा आय-व्यय प्रतिवेदन
+              </p>
+            </div>
+            <Link
+              href="/dashboard/finance"
+              className="inline-flex items-center gap-2 bg-white text-emerald-950 hover:bg-emerald-50 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0"
+            >
+              <span>Full Finance Portal (लेखा पूर्ण मोड्युल)</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {/* Quick Launch Cards for Accountant */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              href="/dashboard/finance/fees"
+              className="p-4 rounded-2xl border border-emerald-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-700 group-hover:scale-110 transition">
+                  <DollarSign size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  शुल्क
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Student Fee Collection</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                विद्यार्थी मासिक शुल्क संकलन, बिलिङ र रसिद छपाई
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/finance/expenses"
+              className="p-4 rounded-2xl border border-rose-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-rose-50 text-rose-700 group-hover:scale-110 transition">
+                  <FileText size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
+                  खर्च
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Expense Vouchers & Bills</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                दैनिक विद्यालय खर्च प्रविष्टि, भौचर र भुक्तानी
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/finance/payroll"
+              className="p-4 rounded-2xl border border-indigo-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-700 group-hover:scale-110 transition">
+                  <Users size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                  तलब
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Staff Payroll & Salaries</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                कर्मचारी तलब शिट, सञ्चय कोष र पे-स्लिप
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/finance/reports"
+              className="p-4 rounded-2xl border border-blue-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700 group-hover:scale-110 transition">
+                  <FileSpreadsheet size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  प्रतिवेदन
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Financial Reports & Audit</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                आम्दानी-खर्च, ब्यालेन्स सिट तथा अडिट रिपोर्ट
+              </p>
+            </Link>
+          </div>
+
+          {/* Account Duties / Tasks */}
+          <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <h3 className="font-extrabold text-sm text-emerald-950 flex items-center gap-2">
+                <CheckSquare size={16} className="text-emerald-700" />
+                <span>Accounting Duties (लेखा जिम्मेवारी तथा कार्यहरू)</span>
+              </h3>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                {myTasksData?.filter((t: any) => t.category === 'ACCOUNT' && t.status !== 'COMPLETED').length} Pending
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {myTasksData?.filter((t: any) => t.category === 'ACCOUNT').length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">कुनै लेखा कार्य तोकिएको छैन।</p>
+              ) : (
+                myTasksData
+                  ?.filter((t: any) => t.category === 'ACCOUNT')
+                  .map((task: any) => {
+                    const isDone = task.status === 'COMPLETED';
+                    return (
+                      <div
+                        key={task.id}
+                        className={`p-3 rounded-xl border text-xs transition ${
+                          isDone ? 'bg-emerald-50/50 border-emerald-200 opacity-70' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <label className="flex items-start gap-2.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isDone}
+                              onChange={() =>
+                                updateTaskStatusMutation.mutate({
+                                  id: task.id,
+                                  status: isDone ? 'PENDING' : 'COMPLETED',
+                                })
+                              }
+                              className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                            />
+                            <div>
+                              <span className={`font-bold text-sm block ${isDone ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                {task.title}
+                              </span>
+                              {task.description && (
+                                <span className="text-xs text-gray-500 block mt-0.5">{task.description}</span>
+                              )}
+                            </div>
+                          </label>
+                          <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded shrink-0">
+                            Due: {task.dueDateBs}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: COORDINATION & SPECIAL INCHARGE SUB-PORTAL ────────────────── */}
+      {activeTab === 'incharge_coordinator' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-indigo-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <Layers size={14} />
+                <span>विभागीय तथा शैक्षिक समन्वय कक्ष (Department Coordination Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Academic & Incharge Coordinator'}
+              </h2>
+              <p className="text-xs text-indigo-200 mt-1">
+                शैक्षिक योजना, घण्टी तालिका समन्वय, अनुशासन तथा अतिरिक्त क्रियाकलाप अनुगमन
+              </p>
+            </div>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 bg-white text-indigo-950 hover:bg-indigo-50 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0"
+            >
+              <span>Full ERP Modules (प्रशासनिक पहुँच)</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {/* Quick Launch Cards for Coordinator */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              href="/dashboard/classes/routine"
+              className="p-4 rounded-2xl border border-indigo-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-700 group-hover:scale-110 transition">
+                  <Clock size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                  रुटिन
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Master Class Routines</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                सम्पूर्ण विद्यालयको कक्षा तथा शिक्षक घण्टी तालिका
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/teachers"
+              className="p-4 rounded-2xl border border-purple-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-purple-50 text-purple-700 group-hover:scale-110 transition">
+                  <Users size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                  शिक्षक
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Faculty & Staff Directory</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                शिक्षक तथा कर्मचारी नामावली र जिम्मेवारी
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/students"
+              className="p-4 rounded-2xl border border-blue-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700 group-hover:scale-110 transition">
+                  <GraduationCap size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  विद्यार्थी
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Student Directory & Classes</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                कक्षागत विद्यार्थी सूची, EMIS तथा प्रोफाइल
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/notices"
+              className="p-4 rounded-2xl border border-amber-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700 group-hover:scale-110 transition">
+                  <Send size={20} />
+                </div>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                  सूचना
+                </span>
+              </div>
+              <h3 className="font-extrabold text-sm text-gray-900">Broadcast Notice / SMS</h3>
+              <p className="text-[11px] text-gray-500 font-nepali">
+                विद्यालयव्यापी सूचना तथा SMS सम्प्रेषण
+              </p>
+            </Link>
+          </div>
+
+          {/* Coordination Duties / Tasks */}
+          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <h3 className="font-extrabold text-sm text-indigo-950 flex items-center gap-2">
+                <CheckSquare size={16} className="text-indigo-700" />
+                <span>Coordinator Duties & Responsibilities (समन्वय कार्यहरू)</span>
+              </h3>
+              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                {myTasksData?.filter((t: any) => t.category === 'ACADEMIC' && t.status !== 'COMPLETED').length} Pending
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {myTasksData?.filter((t: any) => t.category === 'ACADEMIC' || t.category === 'GENERAL').length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">कुनै समन्वय कार्य तोकिएको छैन।</p>
+              ) : (
+                myTasksData
+                  ?.filter((t: any) => t.category === 'ACADEMIC' || t.category === 'GENERAL')
+                  .map((task: any) => {
+                    const isDone = task.status === 'COMPLETED';
+                    return (
+                      <div
+                        key={task.id}
+                        className={`p-3 rounded-xl border text-xs transition ${
+                          isDone ? 'bg-emerald-50/50 border-emerald-200 opacity-70' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <label className="flex items-start gap-2.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isDone}
+                              onChange={() =>
+                                updateTaskStatusMutation.mutate({
+                                  id: task.id,
+                                  status: isDone ? 'PENDING' : 'COMPLETED',
+                                })
+                              }
+                              className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                            />
+                            <div>
+                              <span className={`font-bold text-sm block ${isDone ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                {task.title}
+                              </span>
+                              {task.description && (
+                                <span className="text-xs text-gray-500 block mt-0.5">{task.description}</span>
+                              )}
+                            </div>
+                          </label>
+                          <span className="text-[10px] font-mono font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded shrink-0">
+                            Due: {task.dueDateBs}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -13,8 +13,23 @@ const authenticate = async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
       include: {
-        teacher: { select: { id: true, fullName: true } },
-        student: { select: { id: true, fullName: true, studentId: true } },
+        teacher: {
+          select: {
+            id: true,
+            fullName: true,
+            fullNameNepali: true,
+            inchargeRole: true,
+            inchargeTitle: true,
+            shreni: true,
+            post: true,
+            type: true,
+            isTeachingStaff: true,
+            photoUrl: true,
+            email: true,
+            phone: true,
+          },
+        },
+        student: { select: { id: true, fullName: true, studentId: true, photoUrl: true } },
       },
     });
     if (!user || !user.isActive) {
@@ -29,14 +44,48 @@ const authenticate = async (req, res, next) => {
 
 const authorize = (...roles) => {
   return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     // SUPER_ADMIN and ADMIN always have full access to all system features
-    if (req.user && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
+    if (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN') {
       return next();
     }
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Forbidden. Insufficient permissions.' });
+
+    // Direct role match on user.role
+    if (roles.includes(req.user.role)) {
+      return next();
     }
-    next();
+
+    // Check teacher inchargeRole extra permissions
+    const incharge = req.user.teacher?.inchargeRole || '';
+    const inchargeList = incharge.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+
+    const hasInchargePermission = roles.some((role) => {
+      const r = role.toUpperCase();
+      if ((r === 'ACCOUNTANT' || r === 'ACCOUNT') && (inchargeList.includes('ACCOUNTANT') || inchargeList.includes('ACCOUNT_INCHARGE'))) {
+        return true;
+      }
+      if ((r === 'LIBRARIAN' || r === 'LIBRARY') && (inchargeList.includes('LIBRARIAN') || inchargeList.includes('LIBRARY_INCHARGE'))) {
+        return true;
+      }
+      if ((r === 'EXAM' || r === 'EXAM_INCHARGE') && inchargeList.includes('EXAM_INCHARGE')) {
+        return true;
+      }
+      if (r === 'TEACHER' && req.user.teacher) {
+        return true;
+      }
+      if (inchargeList.includes(r)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (hasInchargePermission) {
+      return next();
+    }
+
+    return res.status(403).json({ success: false, message: 'Forbidden. Insufficient permissions.' });
   };
 };
 
