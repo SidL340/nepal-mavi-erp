@@ -399,13 +399,35 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
   // Add new period to class
   const handleAddPeriod = () => {
     const nextNum = periods.length + 1;
-    const std = STANDARD_SCHOOL_TIMINGS[nextNum - 1];
+    const prevPeriod = periods[periods.length - 1];
+    let newStart = '';
+    let newEnd = '';
+
+    if (prevPeriod && prevPeriod.endTime) {
+      newStart = prevPeriod.endTime;
+      const start24 = toTimeInputValue(newStart);
+      if (start24) {
+        const [h, m] = start24.split(':').map(Number);
+        const totalMinutes = h * 60 + m + 40;
+        const newH = Math.floor(totalMinutes / 60) % 24;
+        const newM = totalMinutes % 60;
+        const time24Str = `${newH.toString().padStart(2, '0')}:${newM.toString().padStart(2, '0')}`;
+        newEnd = fromTimeInputValue(time24Str);
+      }
+    }
+
+    if (!newStart) {
+      const std = STANDARD_SCHOOL_TIMINGS[nextNum - 1];
+      newStart = std?.startTime || `0${nextNum}:00 PM`;
+      newEnd = std?.endTime || `0${nextNum}:40 PM`;
+    }
+
     setPeriods([
       ...periods,
       {
         num: nextNum,
-        startTime: std?.startTime || `0${nextNum}:00 PM`,
-        endTime: std?.endTime || `0${nextNum}:40 PM`,
+        startTime: newStart,
+        endTime: newEnd,
         hasBreakAfter: false,
       },
     ]);
@@ -960,74 +982,13 @@ export default function ClassRoutineView({ initialClassId }: { initialClassId?: 
             </p>
           </div>
 
-          {/* 2 Shift Presets, Copy and Bulk Sync Actions */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* 2 Shift Presets Load Buttons */}
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 gap-1">
-              <button
-                type="button"
-                onClick={() => handleLoadShift('day')}
-                className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition cursor-pointer"
-                title="दिवा सत्र ढाँचा लोड गर्नुहोस् (Load Day Shift Preset)"
-              >
-                ☀️ दिवा सत्र (Day Shift)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLoadShift('morning')}
-                className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-[#1e3a5f] hover:bg-blue-50 text-xs font-bold transition cursor-pointer"
-                title="बिहानी सत्र ढाँचा लोड गर्नुहोस् (Load Morning Shift Preset)"
-              >
-                🌅 बिहानी सत्र (Morning Shift)
-              </button>
-            </div>
-
-            {/* Save & Manage Custom Shift Presets */}
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === 'save-day') handleSaveCurrentAsShiftPreset('day');
-                else if (val === 'save-morning') handleSaveCurrentAsShiftPreset('morning');
-                else if (val === 'reset-all') handleResetShiftPreset('all');
-                e.target.value = '';
-              }}
-              className="rounded-xl border border-indigo-200 bg-indigo-50/90 px-2.5 py-1.5 text-xs font-bold text-indigo-900 hover:bg-indigo-100 focus:outline-hidden cursor-pointer"
-              title="Save currently modified periods as a reusable shift preset"
-            >
-              <option value="" disabled>💾 ढाँचा सेभ गर्नुहोस् (Save to Preset)...</option>
-              <option value="save-day">☀️ हालको समयलाई 'दिवा सत्र' ढाँचामा सेभ गर्नुहोस्</option>
-              <option value="save-morning">🌅 हालको समयलाई 'बिहानी सत्र' ढाँचामा सेभ गर्नुहोस्</option>
-              <option value="reset-all">🔄 ढाँचा मानकमा रिसेट गर्नुहोस् (Reset Defaults)</option>
-            </select>
-
-            {/* Copy From Another Class */}
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  handleCopyTimingFromClass(e.target.value);
-                  e.target.value = '';
-                }
-              }}
-              className="rounded-xl border border-gray-200 bg-slate-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-white focus:outline-hidden cursor-pointer"
-            >
-              <option value="" disabled>🔄 अर्को कक्षाबाट समय लिनुहोस्...</option>
-              {classesData
-                ?.filter((c: any) => c.id.toString() !== selectedClassId)
-                ?.map((c: any) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.section ? `(${c.section})` : ''}
-                  </option>
-                ))}
-            </select>
-
-            {/* Apply to All Classes (Bulk Sync) */}
+          {/* Bulk Sync Action */}
+          <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={syncTimingsMutation.isPending}
               onClick={() => {
-                if (confirm('के तपाईं यो घण्टी समय तालिका विद्यालयका सम्पूर्ण कक्षाहरूमा लागू गर्न चाहनुहुन्छ? (Sync standard bell timings to ALL classes?)')) {
+                if (confirm('के तपाईं यो घण्टी समय तालिका विद्यालयका सम्पूर्ण कक्षाहरूमा लागू गर्न चाहनुहुन्छ? (Sync bell timings to ALL classes?)')) {
                   syncTimingsMutation.mutate();
                 }
               }}
