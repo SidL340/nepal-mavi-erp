@@ -36,10 +36,13 @@ import {
   ShieldCheck,
   BarChart3,
   CheckCircle,
+  UserCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/lib/auth-store';
 import ExamRoutineBuilder from '@/components/exams/ExamRoutineBuilder';
+import ExamAttendancePortal from '@/components/exams/ExamAttendancePortal';
 
 const PRESET_TEMPLATES = [
   {
@@ -114,7 +117,7 @@ export default function ExamsPage() {
   const tabParam = searchParams.get('tab');
 
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'exams' | 'schedules' | 'marks' | 'ledger'>('exams');
+  const [activeTab, setActiveTab] = useState<'exams' | 'schedules' | 'attendance' | 'marks' | 'ledger'>('exams');
 
   // Add Exam state
   interface ShiftFormItem {
@@ -171,7 +174,7 @@ export default function ExamsPage() {
 
   // Handle URL Query Params
   useEffect(() => {
-    if (tabParam === 'marks' || tabParam === 'exams' || tabParam === 'ledger' || tabParam === 'schedules' || tabParam === 'routine') {
+    if (tabParam === 'marks' || tabParam === 'exams' || tabParam === 'ledger' || tabParam === 'schedules' || tabParam === 'routine' || tabParam === 'attendance') {
       setActiveTab((tabParam === 'routine' ? 'schedules' : tabParam) as any);
     }
     if (examIdParam) {
@@ -1206,6 +1209,18 @@ export default function ExamsPage() {
             </button>
 
             <button
+              onClick={() => setActiveTab('attendance')}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 transition-all ${
+                activeTab === 'attendance'
+                  ? 'bg-white text-[#1e3a5f] shadow-md font-extrabold scale-[1.02]'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <ClipboardCheck size={15} className={activeTab === 'attendance' ? 'text-[#1e3a5f]' : 'text-white/70'} />
+              <span>Exam Attendance (परीक्षा हाजिरी)</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('marks')}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 transition-all ${
                 activeTab === 'marks'
@@ -1531,13 +1546,13 @@ export default function ExamsPage() {
 
                     {/* Card Action Footer */}
                     <div className="bg-slate-50/90 border-t border-gray-100 p-4 space-y-2.5">
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <div className="grid grid-cols-4 gap-1.5">
                         <button
                           onClick={() => {
                             setSelectedExamId(exam.id.toString());
                             setActiveTab('schedules');
                           }}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-700 hover:bg-blue-800 text-white py-2 px-2 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
+                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-700 hover:bg-blue-800 text-white py-2 px-1.5 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
                           title="View & Edit Multi-Shift Exam Routine"
                         >
                           <Calendar size={13} />
@@ -1547,9 +1562,21 @@ export default function ExamsPage() {
                         <button
                           onClick={() => {
                             setSelectedExamId(exam.id.toString());
+                            setActiveTab('attendance');
+                          }}
+                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-700 hover:bg-teal-800 text-white py-2 px-1.5 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
+                          title="Exam Room Attendance"
+                        >
+                          <ClipboardCheck size={13} />
+                          <span>हाजिरी</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSelectedExamId(exam.id.toString());
                             setActiveTab('marks');
                           }}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white py-2 px-2 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
+                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white py-2 px-1.5 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
                         >
                           <Edit2 size={13} />
                           <span>अङ्क</span>
@@ -1560,7 +1587,7 @@ export default function ExamsPage() {
                             setLedgerExamId(exam.id.toString());
                             setActiveTab('ledger');
                           }}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white py-2 px-2 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
+                          className="inline-flex items-center justify-center gap-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white py-2 px-1.5 text-xs font-bold shadow-xs hover:shadow-md transition active:scale-95"
                         >
                           <FileSpreadsheet size={13} />
                           <span>लेजर</span>
@@ -1754,6 +1781,13 @@ export default function ExamsPage() {
           exams={exams}
           classes={classesData || []}
           initialExamId={selectedExamId ? Number(selectedExamId) : undefined}
+        />
+      )}
+
+      {/* ─── TAB: EXAM ATTENDANCE PORTAL ─────────────────────────────────── */}
+      {activeTab === 'attendance' && (
+        <ExamAttendancePortal
+          initialExamId={selectedExamId ? Number(selectedExamId) : exams[0]?.id}
         />
       )}
 

@@ -317,6 +317,34 @@ router.post('/:examId/schedules', authenticate, authorize('SUPER_ADMIN', 'ADMIN'
   }
 });
 
+// PUT /api/exams/:examId/schedules/:scheduleId — update individual schedule
+router.put('/:examId/schedules/:scheduleId', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.scheduleId);
+    const { examDateBs, dayName, startTime, endTime, subjectId, shiftId, shiftName, roomNo, remarks } = req.body;
+
+    const updated = await prisma.examSchedule.update({
+      where: { id },
+      data: {
+        ...(examDateBs && { examDateBs: String(examDateBs) }),
+        ...(dayName !== undefined && { dayName }),
+        ...(startTime !== undefined && { startTime }),
+        ...(endTime !== undefined && { endTime }),
+        ...(subjectId && { subjectId: parseInt(subjectId) }),
+        ...(shiftId !== undefined && { shiftId: shiftId ? parseInt(shiftId) : null }),
+        ...(shiftName !== undefined && { shiftName }),
+        ...(roomNo !== undefined && { roomNo }),
+        ...(remarks !== undefined && { remarks }),
+      },
+      include: { class: true, subject: true, shift: true },
+    });
+
+    return res.json({ success: true, data: updated, message: 'Exam schedule updated successfully!' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // DELETE /api/exams/:examId/schedules/:scheduleId
 router.delete('/:examId/schedules/:scheduleId', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
@@ -334,6 +362,220 @@ router.delete('/:examId/schedules', authenticate, authorize('SUPER_ADMIN', 'ADMI
     const examId = parseInt(req.params.examId);
     await prisma.examSchedule.deleteMany({ where: { examId } });
     return res.json({ success: true, message: 'All exam schedules cleared.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── EXAM ATTENDANCE (ROOM-WISE & SHIFT-WISE INVIGILATION) ───────────────────
+
+// GET /api/exams/:examId/attendance
+router.get('/:examId/attendance', authenticate, async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    const { dateBs, shift, roomId } = req.query;
+
+    if (!dateBs || !roomId) {
+      return res.json({ success: true, data: { students: [], room: null } });
+    }
+
+    const rId = parseInt(roomId);
+    const shiftName = shift ? String(shift) : 'DAY';
+
+    // 1. Fetch Room details
+    const room = await prisma.examRoom.findUnique({
+      where: { id: rId },
+    });
+
+    // 2. Fetch seated students from ExamSeatPlan in this room and shift
+    const seatPlans = await prisma.examSeatPlan.findMany({
+      where: {
+        examId,
+        roomId: rId,
+        shift: shiftName,
+      },
+      include: {
+        student: {
+          include: {
+            classEnrollment: {
+              where: { isActive: true },
+              include: { class: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ benchNo: 'asc' }, { seatPosition: 'asc' }],
+    });
+
+    // 3. Fetch scheduled subject for each class on dateBs
+    const participatingClassIds = Array.from(new Set(seatPlans.map((s) => s.classId)));
+    const schedules = await prisma.examSchedule.findMany({
+      where: {
+        examId,
+        examDateBs: String(dateBs),
+        classId: { in: participatingClassIds },
+      },
+      include: {
+        subject: true,
+        class: true,
+      },
+    });
+
+    const classSubjectMap = {};
+    schedules.forEach((sc) => {
+      classSubjectMap[sc.classId] = sc.subject;
+    });
+
+    // 4. Fetch mark entries to check if already marked absent
+    const subjectIds = schedules.map((s) => s.subjectId);
+    const examSubjects = await prisma.examSubject.findMany({
+      where: { examId, subjectId: { in: subjectIds } },
+      include: { markTitles: true },
+    });
+
+    const examSubjectMap = {};
+    examSubjects.forEach((es) => {
+      examSubjectMap[es.subjectId] = es;
+    });
+
+    const allStudentIds = seatPlans.map((s) => s.studentId);
+    const markEntries = await prisma.markEntry.findMany({
+      where: {
+        examSubjectId: { in: examSubjects.map((es) => es.id) },
+        studentId: { in: allStudentIds },
+      },
+    });
+
+    const studentMarkMap = {};
+    markEntries.forEach((me) => {
+      if (!studentMarkMap[me.studentId]) studentMarkMap[me.studentId] = {};
+      studentMarkMap[me.studentId][me.examSubjectId] = me;
+    });
+
+    // Combine into attendance roster
+    const roster = seatPlans.map((sp) => {
+      const clsSubject = classSubjectMap[sp.classId] || null;
+      const exSub = clsSubject ? examSubjectMap[clsSubject.id] : null;
+      const me = exSub && studentMarkMap[sp.studentId] ? studentMarkMap[sp.studentId][exSub.id] : null;
+      const isMarkedAbsent = me?.isAbsent === true;
+
+      return {
+        studentId: sp.studentId,
+        fullName: sp.student?.fullName,
+        studentCode: sp.student?.studentId || sp.student?.emisId,
+        rollNo: sp.rollNo,
+        classId: sp.classId,
+        className: sp.student?.classEnrollment?.[0]?.class?.name || `Class ${sp.classId}`,
+        benchNo: sp.benchNo,
+        seatPosition: sp.seatPosition,
+        seatNo: sp.seatNo,
+        subjectId: clsSubject?.id || null,
+        subjectName: clsSubject?.name || 'Subject Not Scheduled',
+        subjectNameNepali: clsSubject?.nameNepali || '',
+        status: isMarkedAbsent ? 'ABSENT' : 'PRESENT',
+        bookletNo: me?.remark?.startsWith('Booklet:') ? me.remark.replace('Booklet:', '').trim() : '',
+        remarks: me?.remark || '',
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        room,
+        shift: shiftName,
+        dateBs: String(dateBs),
+        students: roster,
+        totalSeated: roster.length,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/exams/:examId/attendance — submit room attendance & auto-sync with mark entries
+router.post('/:examId/attendance', authenticate, async (req, res) => {
+  try {
+    const examId = parseInt(req.params.examId);
+    const { dateBs, shift, roomId, attendanceList } = req.body;
+
+    if (!attendanceList || !Array.isArray(attendanceList) || attendanceList.length === 0) {
+      return res.status(400).json({ success: false, message: 'Attendance list is required.' });
+    }
+
+    let absentCount = 0;
+    let presentCount = 0;
+
+    for (const item of attendanceList) {
+      const { studentId, subjectId, status, bookletNo, remarks } = item;
+      const isAbsent = status === 'ABSENT';
+      if (isAbsent) absentCount++;
+      else presentCount++;
+
+      if (!subjectId) continue;
+
+      // Find or create ExamSubject
+      let examSubject = await prisma.examSubject.findFirst({
+        where: { examId, subjectId: parseInt(subjectId) },
+        include: { markTitles: true },
+      });
+
+      if (!examSubject) {
+        examSubject = await prisma.examSubject.create({
+          data: { examId, subjectId: parseInt(subjectId) },
+          include: { markTitles: true },
+        });
+      }
+
+      // Ensure at least 1 MarkTitle exists (e.g. Theory)
+      let markTitles = examSubject.markTitles;
+      if (!markTitles || markTitles.length === 0) {
+        const newMt = await prisma.markTitle.create({
+          data: {
+            examSubjectId: examSubject.id,
+            title: 'Theory',
+            fullMark: 75,
+            passMarkPct: 40,
+            orderIndex: 0,
+          },
+        });
+        markTitles = [newMt];
+      }
+
+      const remarkText = bookletNo ? `Booklet: ${bookletNo}` : remarks || null;
+
+      // Upsert MarkEntry for each MarkTitle of this exam subject
+      for (const mt of markTitles) {
+        await prisma.markEntry.upsert({
+          where: {
+            examSubjectId_markTitleId_studentId: {
+              examSubjectId: examSubject.id,
+              markTitleId: mt.id,
+              studentId: parseInt(studentId),
+            },
+          },
+          update: {
+            isAbsent,
+            ...(isAbsent && { marksObtained: 0 }),
+            ...(remarkText && { remark: remarkText }),
+          },
+          create: {
+            examSubjectId: examSubject.id,
+            markTitleId: mt.id,
+            studentId: parseInt(studentId),
+            isAbsent,
+            marksObtained: isAbsent ? 0 : null,
+            remark: remarkText,
+          },
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Exam attendance saved! Present: ${presentCount}, Absent: ${absentCount}. Mark entries automatically synchronized.`,
+      data: { presentCount, absentCount },
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
