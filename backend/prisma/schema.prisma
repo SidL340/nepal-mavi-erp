@@ -117,6 +117,8 @@ model Teacher {
   dateOfJoiningAd     DateTime?
   dateOfRetirementBs  String?
   dateOfRetirementAd  DateTime?
+  statusReason        String?  // "सरुवा", "अनिवार्य अवकाश", "स्वैच्छिक अवकाश", "राजीनामा", "करार समाप्ति", "अन्य"
+  exitRemarks         String?  // Destination school or letter reference
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

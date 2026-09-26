@@ -157,11 +157,11 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
   }
 });
 
-// PATCH /api/teachers/:id/status - Update staff status (Active, Transferred, Retired, Left)
+// PATCH /api/teachers/:id/status - Update staff status (Active, Transferred, Retired, Resigned, Left)
 router.patch('/:id/status', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const teacherId = parseInt(req.params.id);
-    const { isActive, statusReason, dateOfRetirementBs, disableLogin } = req.body;
+    const { isActive, statusReason, dateOfRetirementBs, exitRemarks, disableLogin } = req.body;
 
     const teacher = await prisma.teacher.findUnique({
       where: { id: teacherId },
@@ -169,19 +169,33 @@ router.patch('/:id/status', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACC
     });
     if (!teacher) return res.status(404).json({ success: false, message: 'Teacher/Staff not found.' });
 
+    const isStaffActive = Boolean(isActive);
+
     const updatedTeacher = await prisma.$transaction(async (tx) => {
       const t = await tx.teacher.update({
         where: { id: teacherId },
         data: {
-          isActive: Boolean(isActive),
-          dateOfRetirementBs: dateOfRetirementBs || (isActive ? null : teacher.dateOfRetirementBs),
+          isActive: isStaffActive,
+          statusReason: statusReason !== undefined ? statusReason : (isStaffActive ? null : teacher.statusReason),
+          exitRemarks: exitRemarks !== undefined ? exitRemarks : (isStaffActive ? null : teacher.exitRemarks),
+          dateOfRetirementBs: dateOfRetirementBs !== undefined ? dateOfRetirementBs : (isStaffActive ? null : teacher.dateOfRetirementBs),
         },
       });
 
-      if (disableLogin !== undefined || !isActive) {
+      // If retiring/transferring out, safely unassign as active class teacher
+      if (!isStaffActive) {
+        await tx.class.updateMany({
+          where: { classTeacherId: teacherId },
+          data: { classTeacherId: null },
+        });
+      }
+
+      // Handle User Portal Login status
+      if (teacher.userId) {
+        const shouldUserBeActive = isStaffActive ? (disableLogin !== true) : (disableLogin === false);
         await tx.user.update({
           where: { id: teacher.userId },
-          data: { isActive: Boolean(isActive && !disableLogin) },
+          data: { isActive: shouldUserBeActive },
         });
       }
 
@@ -191,7 +205,9 @@ router.patch('/:id/status', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACC
     return res.json({
       success: true,
       data: updatedTeacher,
-      message: isActive ? 'शिक्षक पुनः कार्यरत (Active) स्थितिमा अद्यावधिक गरियो।' : `शिक्षक स्थिति अद्यावधिक गरियो (${statusReason || 'सरुवा/अवकाश'})।`,
+      message: isStaffActive
+        ? 'शिक्षक/कर्मचारी पुनः कार्यरत (Active) सेवामा अद्यावधिक गरियो।'
+        : `शिक्षक/कर्मचारीको स्थिति अद्यावधिक गरियो (${statusReason || 'सरुवा/अवकाश'})।`,
     });
   } catch (err) {
     console.error(err);

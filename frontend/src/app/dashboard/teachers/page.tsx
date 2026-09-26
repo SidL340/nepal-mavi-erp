@@ -41,6 +41,7 @@ import {
   Flame,
   List,
   LayoutGrid,
+  ArrowRightLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -188,6 +189,40 @@ export default function TeachersPage() {
     dueDateBs: todayBS(),
     remarks: '',
   });
+
+  // Transfer / Retirement / Exit Status Modal
+  const [statusModalStaff, setStatusModalStaff] = useState<any>(null);
+  const [statusForm, setStatusForm] = useState({
+    statusType: 'सरुवा (Transferred)',
+    dateBs: todayBS(),
+    destination: '',
+    remarks: '',
+    disableLogin: true,
+    isReactivating: false,
+  });
+
+  const openStatusModal = (staff: any) => {
+    setStatusModalStaff(staff);
+    if (staff.isActive !== false) {
+      setStatusForm({
+        statusType: 'सरुवा (Transferred)',
+        dateBs: staff.dateOfRetirementBs || todayBS(),
+        destination: staff.exitRemarks || '',
+        remarks: '',
+        disableLogin: true,
+        isReactivating: false,
+      });
+    } else {
+      setStatusForm({
+        statusType: staff.statusReason || 'सरुवा (Transferred)',
+        dateBs: staff.dateOfRetirementBs || todayBS(),
+        destination: staff.exitRemarks || '',
+        remarks: '',
+        disableLogin: false,
+        isReactivating: true,
+      });
+    }
+  };
 
   // Form Category state in Add/Edit modal
   const [modalCategory, setModalCategory] = useState<'TEACHING' | 'NON_TEACHING'>('TEACHING');
@@ -361,14 +396,35 @@ export default function TeachersPage() {
     },
   });
 
-  // Update Staff Status (Active vs Transferred/Retired)
+  // Update Staff Status (Active vs Transferred/Retired/Resigned)
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, isActive, statusReason, dateOfRetirementBs }: { id: number; isActive: boolean; statusReason?: string; dateOfRetirementBs?: string }) => {
-      const res = await api.patch(`/teachers/${id}/status`, { isActive, statusReason, dateOfRetirementBs });
+    mutationFn: async ({
+      id,
+      isActive,
+      statusReason,
+      dateOfRetirementBs,
+      exitRemarks,
+      disableLogin,
+    }: {
+      id: number;
+      isActive: boolean;
+      statusReason?: string;
+      dateOfRetirementBs?: string;
+      exitRemarks?: string;
+      disableLogin?: boolean;
+    }) => {
+      const res = await api.patch(`/teachers/${id}/status`, {
+        isActive,
+        statusReason,
+        dateOfRetirementBs,
+        exitRemarks,
+        disableLogin,
+      });
       return res.data;
     },
     onSuccess: (data) => {
       toast.success(data.message || 'शिक्षक/कर्मचारी स्थिति अद्यावधिक भयो');
+      setStatusModalStaff(null);
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       queryClient.invalidateQueries({ queryKey: ['teachers-all-payroll'] });
     },
@@ -1149,27 +1205,15 @@ export default function TeachersPage() {
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const nextState = !staff.isActive;
-                                    const promptMsg = nextState 
-                                      ? `"${staff.fullName}" लाई पुनः कार्यरत (Active) स्थितिमा ल्याउने हो?`
-                                      : `"${staff.fullName}" लाई सरुवा वा अवकाश (Transferred / Retired / Inactive) स्थितिमा राख्ने हो? (Login Portal खाता बन्द हुनेछ)`;
-                                    if (confirm(promptMsg)) {
-                                      updateStatusMutation.mutate({
-                                        id: staff.id,
-                                        isActive: nextState,
-                                        statusReason: nextState ? 'पुनः कार्यरत' : 'सरुवा / अवकाश',
-                                      });
-                                    }
-                                  }}
-                                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                  onClick={() => openStatusModal(staff)}
+                                  className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
                                     staff.isActive 
-                                      ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' 
-                                      : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                      ? 'text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60' 
+                                      : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60'
                                   }`}
-                                  title={staff.isActive ? 'सरुवा / अवकाश जनाउनुहोस् (Mark as Transferred / Retired)' : 'पुनः कार्यरत बनाउनुहोस् (Re-activate Staff)'}
+                                  title={staff.isActive ? 'सरुवा तथा अवकाश प्रविष्टि (Transfer / Retirement Management)' : 'अवस्था विवरण तथा पुनः बहाली (Status & Re-activate)'}
                                 >
-                                  <UserCheck size={15} />
+                                  <ArrowRightLeft size={14} />
                                 </button>
                                 <button
                                   type="button"
@@ -1294,27 +1338,15 @@ export default function TeachersPage() {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => {
-                              const nextState = !staff.isActive;
-                              const promptMsg = nextState 
-                                ? `"${staff.fullName}" लाई पुनः कार्यरत (Active) स्थितिमा ल्याउने हो?`
-                                : `"${staff.fullName}" लाई सरुवा वा अवकाश (Transferred / Retired / Inactive) स्थितिमा राख्ने हो? (Login Portal खाता बन्द हुनेछ)`;
-                              if (confirm(promptMsg)) {
-                                updateStatusMutation.mutate({
-                                  id: staff.id,
-                                  isActive: nextState,
-                                  statusReason: nextState ? 'पुनः कार्यरत' : 'सरुवा / अवकाश',
-                                });
-                              }
-                            }}
-                            className={`p-1.5 rounded-lg transition cursor-pointer ${
+                            onClick={() => openStatusModal(staff)}
+                            className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
                               staff.isActive 
-                                ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' 
-                                : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                ? 'text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60' 
+                                : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60'
                             }`}
-                            title={staff.isActive ? 'सरुवा / अवकाश जनाउनुहोस् (Mark as Transferred / Retired)' : 'पुनः कार्यरत बनाउनुहोस् (Re-activate Staff)'}
+                            title={staff.isActive ? 'सरुवा तथा अवकाश प्रविष्टि (Transfer / Retirement Management)' : 'अवस्था विवरण तथा पुनः बहाली (Status & Re-activate)'}
                           >
-                            <UserCheck size={15} />
+                            <ArrowRightLeft size={14} />
                           </button>
                           <button
                             onClick={() => openAssignRoleModal(staff)}
@@ -2926,6 +2958,216 @@ export default function TeachersPage() {
             >
               Done & Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TRANSFER & RETIREMENT STATUS MODAL ───────────────────────── */}
+      {statusModalStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-amber-100 text-amber-900">
+                  <ArrowRightLeft size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-[#1e3a5f]">
+                    शिक्षक/कर्मचारी सरुवा तथा अवकाश प्रविष्टि
+                  </h3>
+                  <p className="text-xs text-gray-500 font-nepali">
+                    Staff Transfer & Retirement Management
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setStatusModalStaff(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Staff Card */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
+              <div className="h-11 w-11 rounded-xl bg-[#1e3a5f] text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0">
+                {statusModalStaff.photoUrl ? (
+                  <img src={statusModalStaff.photoUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  statusModalStaff.fullName?.slice(0, 2).toUpperCase()
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-extrabold text-gray-900 text-sm truncate">{statusModalStaff.fullName}</h4>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                    statusModalStaff.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {statusModalStaff.isActive ? 'हाल कार्यरत (Active)' : 'विगत/निष्कृय (Past/Inactive)'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 font-nepali">{statusModalStaff.fullNameNepali || statusModalStaff.post || 'शिक्षक'}</p>
+                <div className="flex items-center gap-2 text-[11px] text-gray-500 font-mono mt-0.5 flex-wrap">
+                  {statusModalStaff.phone && <span>📞 {statusModalStaff.phone}</span>}
+                  {statusModalStaff.panNo && <span>• PAN: {statusModalStaff.panNo}</span>}
+                  {statusModalStaff.dateOfJoiningBs && <span>• हाजिर: {statusModalStaff.dateOfJoiningBs}</span>}
+                </div>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (statusForm.isReactivating) {
+                  updateStatusMutation.mutate({
+                    id: statusModalStaff.id,
+                    isActive: true,
+                    statusReason: 'पुनः कार्यरत',
+                    dateOfRetirementBs: '',
+                    exitRemarks: '',
+                    disableLogin: false,
+                  });
+                } else {
+                  updateStatusMutation.mutate({
+                    id: statusModalStaff.id,
+                    isActive: false,
+                    statusReason: statusForm.statusType,
+                    dateOfRetirementBs: statusForm.dateBs,
+                    exitRemarks: statusForm.destination || statusForm.remarks,
+                    disableLogin: statusForm.disableLogin,
+                  });
+                }
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              {/* Mode Toggle if already Inactive */}
+              {!statusModalStaff.isActive && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                  <label className="flex items-center gap-2 font-bold text-blue-900 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={statusForm.isReactivating}
+                      onChange={(e) => setStatusForm({ ...statusForm, isReactivating: e.target.checked })}
+                      className="rounded text-blue-600 w-4 h-4 cursor-pointer"
+                    />
+                    <span>🔄 यस शिक्षक/कर्मचारीलाई पुनः सक्रिय सेवामा बहाली (Re-activate to Active) गर्नुहोस्</span>
+                  </label>
+                  <p className="text-[11px] text-blue-800 font-nepali pl-6">
+                    बहाली गर्दा शिक्षक पुनः कार्यरत सूचीमा आउनेछन् र लगइन पोर्टल पहुँच खुला हुनेछ।
+                  </p>
+                </div>
+              )}
+
+              {!statusForm.isReactivating && (
+                <>
+                  {/* Status Type */}
+                  <div>
+                    <label className="block font-bold text-gray-800 mb-1">
+                      सरुवा / अवकाशको प्रकार (Transfer / Retirement Type): *
+                    </label>
+                    <select
+                      value={statusForm.statusType}
+                      onChange={(e) => setStatusForm({ ...statusForm, statusType: e.target.value })}
+                      className="erp-input font-bold text-[#1e3a5f]"
+                    >
+                      <option value="सरुवा (Transferred)">🚚 सरुवा (Transferred to another school / office)</option>
+                      <option value="अनिवार्य अवकाश (Compulsory Retirement)">🎖️ अनिवार्य अवकाश (Compulsory Age Retirement)</option>
+                      <option value="स्वैच्छिक अवकाश (Voluntary Retirement)">🕊️ स्वैच्छिक अवकाश (Voluntary Retirement / VR)</option>
+                      <option value="राजीनामा (Resigned)">📄 राजीनामा (Resigned)</option>
+                      <option value="करार समाप्ति (Contract Expired)">⌛ करार समाप्ति (Contract Expired / Terminated)</option>
+                      <option value="अन्य पूर्व कर्मचारी (Past Staff)">📦 अन्य पूर्व कर्मचारी (Other Past Record)</option>
+                    </select>
+                  </div>
+
+                  {/* Effective Date BS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-gray-800 mb-1">
+                        सरुवा / अवकाश मिति BS (Effective Date): *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={statusForm.dateBs}
+                        onChange={(e) => setStatusForm({ ...statusForm, dateBs: e.target.value })}
+                        placeholder="उदा: २०८२-०४-०१"
+                        className="erp-input font-mono font-bold"
+                      />
+                    </div>
+
+                    {statusForm.statusType.includes('सरुवा') && (
+                      <div>
+                        <label className="block font-bold text-gray-800 mb-1">
+                          सरुवा भएको नयाँ विद्यालय/निकाय (Destination):
+                        </label>
+                        <input
+                          type="text"
+                          value={statusForm.destination}
+                          onChange={(e) => setStatusForm({ ...statusForm, destination: e.target.value })}
+                          placeholder="उदा: श्री जनता मा.वि. गौर"
+                          className="erp-input"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Remarks / Reference Letter */}
+                  <div>
+                    <label className="block font-bold text-gray-800 mb-1">
+                      निर्णय / चलानी नं. / कैफियत (Letter No / Remarks):
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={statusForm.remarks}
+                      onChange={(e) => setStatusForm({ ...statusForm, remarks: e.target.value })}
+                      placeholder="उदा: शिक्षा विकास तथा समन्वय इकाईको च.नं. ३४२ को सरुवा पत्र अनुसार..."
+                      className="erp-input text-xs"
+                    />
+                  </div>
+
+                  {/* Login Security Toggle */}
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                    <label className="flex items-center gap-2 font-bold text-amber-950 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={statusForm.disableLogin}
+                        onChange={(e) => setStatusForm({ ...statusForm, disableLogin: e.target.checked })}
+                        className="rounded text-amber-600 w-4 h-4 cursor-pointer"
+                      />
+                      <span>🔒 शिक्षक लगइन पोर्टल खाता स्वतः निष्कृय (Disable Login Account) गर्नुहोस्</span>
+                    </label>
+                    <p className="text-[11px] text-amber-800 font-nepali pl-6">
+                      सिफारिस गरिएको: सरुवा वा अवकाश भएका व्यक्तिको लगइन पोर्टल खाता बन्द गरिन्छ। विगतका तलब भरपाई र अध्यापन अभिलेख सुरक्षित रहन्छ।
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalStaff(null)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  रद्द गर्नुहोस् (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateStatusMutation.isPending}
+                  className={`rounded-xl px-5 py-2 font-bold text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${
+                    statusForm.isReactivating
+                      ? 'bg-emerald-700 hover:bg-emerald-800'
+                      : 'bg-amber-700 hover:bg-amber-800'
+                  }`}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>
+                    {updateStatusMutation.isPending
+                      ? 'सुरक्षित हुँदैछ...'
+                      : statusForm.isReactivating
+                      ? 'पुनः सेवा बहाली गर्नुहोस् (Re-activate)'
+                      : 'सरुवा / अवकाश प्रविष्टि गर्नुहोस् (Save Status)'}
+                  </span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
