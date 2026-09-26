@@ -439,33 +439,50 @@ router.get('/balance-sheet', authenticate, async (req, res) => {
 router.get('/audit-statement', authenticate, async (req, res) => {
   try {
     const { financialYearId } = req.query;
+    const isAllYears = !financialYearId || financialYearId === 'ALL' || financialYearId === '';
+    
     let fy = null;
-    if (financialYearId) {
-      fy = await prisma.financialYear.findUnique({ where: { id: parseInt(financialYearId) } });
-    }
-    if (!fy) {
-      fy = await prisma.financialYear.findFirst({ where: { isActive: true } });
-    }
-    if (!fy) {
-      fy = await prisma.financialYear.findFirst({ orderBy: { startDateBs: 'desc' } });
-    }
+    let fyFilter = {};
 
-    const fyId = fy ? fy.id : null;
-    const fyFilter = fyId ? { financialYearId: fyId } : {};
+    if (!isAllYears) {
+      const fyIdNum = parseInt(financialYearId);
+      fy = await prisma.financialYear.findUnique({ where: { id: fyIdNum } });
+      if (fy) {
+        fyFilter = { financialYearId: fyIdNum };
+      }
+    } else {
+      // For all fiscal years, fetch active FY as reference metadata
+      fy = await prisma.financialYear.findFirst({ where: { isActive: true } }) ||
+           await prisma.financialYear.findFirst({ orderBy: { startDateBs: 'desc' } });
+      fyFilter = {};
+    }
 
     // 1. Opening Balances
-    const openingCash = fy?.openingCashBalance || 0;
-    const openingBank = fy?.openingBankBalance || 0;
-    const openingPayables = fy?.openingPayables || 0;
-    const openingReceivables = fy?.openingReceivables || 0;
-    const totalOpeningFunds = openingCash + openingBank;
+    let openingCash = 0;
+    let openingBank = 0;
+    let openingPayables = 0;
+    let openingReceivables = 0;
+    let parsedOpeningDetails = { bankBalances: {}, carryforwardPayablesList: [] };
 
-    let parsedOpeningDetails = { bankBalances: {}, vendorDues: {} };
-    if (fy?.openingDetails) {
-      try {
-        parsedOpeningDetails = typeof fy.openingDetails === 'string' ? JSON.parse(fy.openingDetails) : fy.openingDetails;
-      } catch (e) {}
+    if (!isAllYears && fy) {
+      openingCash = fy.openingCashBalance || 0;
+      openingBank = fy.openingBankBalance || 0;
+      openingPayables = fy.openingPayables || 0;
+      openingReceivables = fy.openingReceivables || 0;
+      if (fy.openingDetails) {
+        try {
+          parsedOpeningDetails = typeof fy.openingDetails === 'string' ? JSON.parse(fy.openingDetails) : fy.openingDetails;
+        } catch (e) {}
+      }
+    } else {
+      // Sum opening balances across all FYs or active FY
+      const allFys = await prisma.financialYear.findMany();
+      openingCash = allFys.reduce((s, f) => s + (f.openingCashBalance || 0), 0);
+      openingBank = allFys.reduce((s, f) => s + (f.openingBankBalance || 0), 0);
+      openingPayables = allFys.reduce((s, f) => s + (f.openingPayables || 0), 0);
+      openingReceivables = allFys.reduce((s, f) => s + (f.openingReceivables || 0), 0);
     }
+    const totalOpeningFunds = openingCash + openingBank;
 
     // 2. Incomes & Grants (Schedule 1)
     const incomeEntries = await prisma.incomeEntry.findMany({
@@ -492,7 +509,7 @@ router.get('/audit-statement', authenticate, async (req, res) => {
     });
     const payrollEntries = await prisma.payroll.findMany({
       where: {
-        ...(fyId ? { financialYearId: fyId } : {}),
+        ...fyFilter,
         status: 'PAID',
       },
       include: { teacher: true },
@@ -507,26 +524,39 @@ router.get('/audit-statement', authenticate, async (req, res) => {
 
     // 4. Accounts Payable & Vendor Dues (Schedule 4)
     const allBilledExpenses = await prisma.expenseEntry.findMany({
-      where: { billNo: { not: null } },
+      where: {
+        OR: [
+          { billNo: { not: null } },
+          { paymentMedium: 'UNPAID_BILL' },
+          { amount: 0 },
+        ],
+        ...fyFilter,
+      },
       include: { party: true, head: true, financialYear: true },
+      orderBy: { expenseDateBs: 'asc' },
     });
 
     const vendorDuesMap = new Map();
     for (const e of allBilledExpenses) {
-      if (!e.billNo || !e.billNo.trim()) continue;
-      const cleanBill = e.billNo.trim();
-      const pKey = `${e.partyId || 'direct'}_${cleanBill}`;
+      const cleanBill = (e.billNo && e.billNo.trim()) || `REF-${e.id}`;
+      const pKey = `${e.partyId || e.paidTo || 'direct'}_${cleanBill}`;
       if (!vendorDuesMap.has(pKey)) {
         let parsedTotal = e.amount || 0;
         const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
-        if (match) parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+        if (match) {
+          parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+        } else if (e.amount === 0 && e.description) {
+          const anyNumMatch = e.description.match(/(?:Rs\.?|रू\.?|रु\.?)\s*([\d,.]+)/i);
+          if (anyNumMatch) parsedTotal = parseFloat(anyNumMatch[1].replace(/,/g, '')) || 0;
+        }
 
         vendorDuesMap.set(pKey, {
-          billNo: cleanBill,
+          id: e.id,
+          billNo: e.billNo || `REF-${e.id}`,
           partyId: e.partyId,
-          partyName: e.party?.name || e.paidTo || 'Vendor',
+          partyName: e.party?.nameNepali ? `${e.party.nameNepali} (${e.party.name})` : (e.party?.name || e.paidTo || 'पार्टी/आपूर्तिकर्ता'),
           panNo: e.party?.panNo || '',
-          headName: e.head?.name || 'General Expense',
+          headName: e.head?.nameNepali || e.head?.name || 'General Expense',
           totalBillAmount: parsedTotal,
           totalPaidAmount: 0,
           remainingDue: 0,
