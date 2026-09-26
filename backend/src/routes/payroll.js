@@ -5,52 +5,110 @@ const { resolveFinancialYearByDate, resolveAcademicYearForFinance } = require('.
 
 const router = express.Router();
 
-// Payroll calculation engine — full Nepal GoN formula
+// Payroll calculation engine — exact Nepal GoN school formula
 function calculatePayroll(data) {
-  const {
-    moolTalab, gradeNo, gradeAmount,
-    mahangiGhata = 0, praABhata = 0, sahayakPraABhata = 0,
-    prabiInchargeBhata = 0, mabiInchargeBhata = 0, otherBhata = 0,
-    karmachariKoshSapati = 0, bimaKati = 0, peshkiKati = 0,
-    includeChaadparba = false, peshki = 0,
-  } = data;
+  const moolTalab = parseFloat(data.moolTalab || 0); // A
+  const gradeNo = parseInt(data.gradeNo || 0); // B
+  const gradeAmount = parseFloat(data.gradeAmount || 0); // C
+  const gradeRakam = +(gradeNo * gradeAmount).toFixed(2); // D = B * C
+  const gradeSahitTalab = +(moolTalab + gradeRakam).toFixed(2); // E = A + D
+  const karmachari10Pct = +(gradeSahitTalab * 0.10).toFixed(2); // F = 10% of E
+  const bimaThap = parseFloat(data.bimaThap !== undefined ? data.bimaThap : 400); // G (Insurance Gov addition)
+  const kulTalab = +(gradeSahitTalab + karmachari10Pct + bimaThap).toFixed(2); // H = E + F + G
 
-  const gradeRakam         = gradeNo * gradeAmount;
-  const gradeSahitTalab    = moolTalab + gradeRakam;
-  const karmachari10Pct    = +(gradeSahitTalab * 0.10).toFixed(2);
-  const ssk20Pct           = +(gradeSahitTalab * 0.20).toFixed(2);
-  const jammaBhata         = +(mahangiGhata + praABhata + sahayakPraABhata +
-                              prabiInchargeBhata + mabiInchargeBhata + otherBhata).toFixed(2);
-  const jammaTalabBhata    = +(gradeSahitTalab + jammaBhata).toFixed(2);
-  const traimasikTalan     = +(jammaTalabBhata * 3).toFixed(2);
-  const jammaKati          = +(karmachari10Pct + karmachariKoshSapati + bimaKati + peshkiKati).toFixed(2);
-  const bakiPaaunuParne    = +(traimasikTalan - jammaKati).toFixed(2);
-  const chaadparbaKharcha  = includeChaadparba ? gradeSahitTalab : 0;
-  const kulRakam           = +(bakiPaaunuParne + chaadparbaKharcha + peshki).toFixed(2);
-  const samajikSurakshaKar = +(kulRakam * 0.01).toFixed(2);
-  const khudPaaunuParne    = +(kulRakam - samajikSurakshaKar).toFixed(2);
+  // Allowances (Bhata)
+  const praABhata = parseFloat(data.praABhata || 0); // I
+  const mahangiGhata = parseFloat(data.mahangiGhata !== undefined ? data.mahangiGhata : 2000); // J
+  const durgamBhata = parseFloat(data.durgamBhata || 0); // K
+  const protsahanBhata = parseFloat(data.protsahanBhata || 0); // L
+  const otherBhata = parseFloat(data.otherBhata || 0); // M
+  const sahayakPraABhata = parseFloat(data.sahayakPraABhata || 0);
+  const prabiInchargeBhata = parseFloat(data.prabiInchargeBhata || 0);
+  const mabiInchargeBhata = parseFloat(data.mabiInchargeBhata || 0);
+
+  const jammaBhata = +(
+    praABhata +
+    mahangiGhata +
+    durgamBhata +
+    protsahanBhata +
+    otherBhata +
+    sahayakPraABhata +
+    prabiInchargeBhata +
+    mabiInchargeBhata
+  ).toFixed(2); // N = I + J + K + L + M
+
+  const jammaTalabBhata = +(kulTalab + jammaBhata).toFixed(2); // O = H + N
+
+  // Period / Month Multiplier (default 3 months for traimasik)
+  const monthCount = parseInt(data.monthCount || 3);
+  const traimasikTalan = +(jammaTalabBhata * monthCount).toFixed(2); // P = O * monthCount
+
+  // Deductions (Bibhinna Katti)
+  // Q = (20% of E) * monthCount
+  const ssk20Pct = +(gradeSahitTalab * 0.20 * monthCount).toFixed(2); // Q
+  const karmachariKoshSapati = parseFloat(data.karmachariKoshSapati || 0); // R
+  // S = (G * 2) * monthCount
+  const bimaKati = parseFloat(
+    data.bimaKati !== undefined ? data.bimaKati : +(bimaThap * 2 * monthCount).toFixed(2)
+  ); // S
+  const peshkiKati = parseFloat(data.peshkiKati || 0);
+
+  const jammaKati = +(ssk20Pct + karmachariKoshSapati + bimaKati + peshkiKati).toFixed(2); // T = Q + R + S
+  const bakiPaaunuParne = +(traimasikTalan - jammaKati).toFixed(2); // U = P - T
+
+  // Festival & Dress allowances
+  const includeChaadparba = Boolean(data.includeChaadparba);
+  const chaadparbaKharcha = includeChaadparba
+    ? parseFloat(data.chaadparbaKharcha !== undefined ? data.chaadparbaKharcha : gradeSahitTalab)
+    : 0; // V = E
+  const poshakBhata = parseFloat(data.poshakBhata || 0); // W
+  const peshki = parseFloat(data.peshki || 0);
+
+  const kulRakam = +(bakiPaaunuParne + chaadparbaKharcha + poshakBhata + peshki).toFixed(2); // X = U + V + W
+
+  const samajikSurakshaKar1Pct = +(kulRakam * 0.01).toFixed(2); // Y = 1% of X
+  const khudPaaunuParne = +(kulRakam - samajikSurakshaKar1Pct).toFixed(2); // Z = X - Y
 
   return {
-    gradeRakam, gradeSahitTalab, karmachari10Pct, ssk20Pct,
-    jammaBhata, jammaTalabBhata, traimasikTalan,
-    jammaKati, bakiPaaunuParne, chaadparbaKharcha, peshki,
-    kulRakam, samajikSurakshaKar1Pct: samajikSurakshaKar, khudPaaunuParne,
+    gradeRakam,
+    gradeSahitTalab,
+    karmachari10Pct,
+    ssk20Pct,
+    jammaBhata,
+    jammaTalabBhata,
+    traimasikTalan,
+    jammaKati,
+    bakiPaaunuParne,
+    chaadparbaKharcha,
+    peshki,
+    kulRakam,
+    samajikSurakshaKar1Pct,
+    khudPaaunuParne,
+    // Extra metadata
+    bimaThap,
+    durgamBhata,
+    protsahanBhata,
+    poshakBhata,
+    monthCount,
   };
 }
 
 // GET /api/payroll — list
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { teacherId, academicYearId, financialYearId, status, page = 1, limit = 50 } = req.query;
+    const { teacherId, academicYearId, financialYearId, monthFrom, monthTo, status, page = 1, limit = 100 } = req.query;
     const where = {};
     if (teacherId) where.teacherId = parseInt(teacherId);
     if (financialYearId) where.financialYearId = parseInt(financialYearId);
     else if (academicYearId) where.academicYearId = parseInt(academicYearId);
+    if (monthFrom) where.monthFrom = { contains: monthFrom };
+    if (monthTo) where.monthTo = { contains: monthTo };
     if (status) where.status = status;
+
     const [payrolls, total] = await Promise.all([
       prisma.payroll.findMany({
         where,
-        include: { teacher: { select: { fullName: true, type: true, taha: true } }, academicYear: true, financialYear: true },
+        include: { teacher: { select: { fullName: true, fullNameNepali: true, type: true, taha: true, shreni: true, post: true, phone: true } }, academicYear: true, financialYear: true },
         orderBy: { createdAt: 'desc' },
         skip: (parseInt(page) - 1) * parseInt(limit),
         take: parseInt(limit),
@@ -87,7 +145,99 @@ router.post('/calculate', authenticate, async (req, res) => {
   }
 });
 
-// POST /api/payroll — create
+// POST /api/payroll/bulk-save — Bulk create or update multiple payroll records for the period
+router.post('/bulk-save', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const { items, monthFrom, monthTo, academicYearId, financialYearId, monthCount = 3 } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'No staff payroll items provided.' });
+    }
+
+    let fyId = financialYearId ? parseInt(financialYearId) : null;
+    if (!fyId && monthFrom) {
+      const dateForResolution = monthFrom.length === 7 ? `${monthFrom}-01` : monthFrom;
+      const resolved = await resolveFinancialYearByDate(dateForResolution);
+      if (resolved) fyId = resolved.id;
+    }
+
+    let ayId = academicYearId ? parseInt(academicYearId) : null;
+    if (!ayId) {
+      const activeAy = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (activeAy) ayId = activeAy.id;
+    }
+
+    const createdRecords = [];
+
+    for (const item of items) {
+      if (!item.teacherId) continue;
+      const calc = calculatePayroll({ ...item, monthCount });
+
+      const remarksObj = {
+        bimaThap: calc.bimaThap,
+        durgamBhata: calc.durgamBhata,
+        protsahanBhata: calc.protsahanBhata,
+        poshakBhata: calc.poshakBhata,
+        monthCount: calc.monthCount,
+        note: item.remarks || '',
+      };
+
+      const record = await prisma.payroll.create({
+        data: {
+          teacherId: parseInt(item.teacherId),
+          academicYearId: ayId || 1,
+          financialYearId: fyId,
+          monthFrom: item.monthFrom || monthFrom,
+          monthTo: item.monthTo || monthTo,
+          taha: item.taha || 'मावि',
+          shreni: item.shreni || 'तृतीय',
+          moolTalab: parseFloat(item.moolTalab || 0),
+          gradeNo: parseInt(item.gradeNo || 0),
+          gradeAmount: parseFloat(item.gradeAmount || 0),
+          mahangiGhata: parseFloat(item.mahangiGhata !== undefined ? item.mahangiGhata : 2000),
+          praABhata: parseFloat(item.praABhata || 0),
+          sahayakPraABhata: parseFloat(item.sahayakPraABhata || 0),
+          prabiInchargeBhata: parseFloat(item.prabiInchargeBhata || 0),
+          mabiInchargeBhata: parseFloat(item.mabiInchargeBhata || 0),
+          otherBhata: parseFloat(item.otherBhata || 0),
+          otherBhataLabel: item.otherBhataLabel || 'विविध भत्ता',
+          karmachariKoshSapati: parseFloat(item.karmachariKoshSapati || 0),
+          bimaKati: parseFloat(item.bimaKati || 0),
+          peshkiKati: parseFloat(item.peshkiKati || 0),
+          peshki: parseFloat(item.poshakBhata || item.peshki || 0),
+          remarks: JSON.stringify(remarksObj),
+          gradeRakam: calc.gradeRakam,
+          gradeSahitTalab: calc.gradeSahitTalab,
+          karmachari10Pct: calc.karmachari10Pct,
+          ssk20Pct: calc.ssk20Pct,
+          jammaBhata: calc.jammaBhata,
+          jammaTalabBhata: calc.jammaTalabBhata,
+          traimasikTalan: calc.traimasikTalan,
+          jammaKati: calc.jammaKati,
+          bakiPaaunuParne: calc.bakiPaaunuParne,
+          chaadparbaKharcha: calc.chaadparbaKharcha,
+          kulRakam: calc.kulRakam,
+          samajikSurakshaKar1Pct: calc.samajikSurakshaKar1Pct,
+          khudPaaunuParne: calc.khudPaaunuParne,
+          status: 'DRAFT',
+        },
+        include: { teacher: true },
+      });
+
+      createdRecords.push(record);
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: createdRecords,
+      message: `सफलतापूर्वक ${createdRecords.length} जना शिक्षक/कर्मचारीको तलब विवरण दर्ता गरियो!`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Bulk save failed: ' + err.message });
+  }
+});
+
+// POST /api/payroll — create single
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const calc = calculatePayroll(req.body);
@@ -101,7 +251,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
     const payroll = await prisma.payroll.create({
       data: {
         teacherId: parseInt(req.body.teacherId),
-        academicYearId: parseInt(req.body.academicYearId),
+        academicYearId: parseInt(req.body.academicYearId || 1),
         financialYearId: fyId,
         monthFrom: req.body.monthFrom,
         monthTo: req.body.monthTo,
@@ -262,6 +412,47 @@ router.put('/salary-scales/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN')
       data,
     });
     return res.json({ success: true, data: scale });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/payroll/salary-scales/seed-default (Seed standard Nepal GoN school salary scales)
+router.post('/salary-scales/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const defaultScales = [
+      { taha: 'माध्यमिक तह', shreni: 'प्रथम श्रेणी', moolTalab: 54330, gradeAmount: 1811 },
+      { taha: 'माध्यमिक तह', shreni: 'द्वितीय श्रेणी', moolTalab: 48737, gradeAmount: 1625 },
+      { taha: 'माध्यमिक तह', shreni: 'तृतीय श्रेणी', moolTalab: 43689, gradeAmount: 1456 },
+      { taha: 'निम्न माध्यमिक तह', shreni: 'प्रथम श्रेणी', moolTalab: 48737, gradeAmount: 1625 },
+      { taha: 'निम्न माध्यमिक तह', shreni: 'द्वितीय श्रेणी', moolTalab: 43689, gradeAmount: 1456 },
+      { taha: 'निम्न माध्यमिक तह', shreni: 'तृतीय श्रेणी', moolTalab: 34730, gradeAmount: 1158 },
+      { taha: 'प्राथमिक तह', shreni: 'प्रथम श्रेणी', moolTalab: 43689, gradeAmount: 1456 },
+      { taha: 'प्राथमिक तह', shreni: 'द्वितीय श्रेणी', moolTalab: 34730, gradeAmount: 1158 },
+      { taha: 'प्राथमिक तह', shreni: 'तृतीय श्रेणी', moolTalab: 32902, gradeAmount: 1097 },
+      { taha: 'लेखापाल / प्रशासन', shreni: 'पाँचौं तह', moolTalab: 34730, gradeAmount: 1158 },
+      { taha: 'कार्यालय सहयोगी', shreni: 'श्रेणीविहीन', moolTalab: 26082, gradeAmount: 869 },
+    ];
+
+    let createdCount = 0;
+    for (const sc of defaultScales) {
+      const exists = await prisma.salaryScale.findFirst({
+        where: { taha: sc.taha, shreni: sc.shreni },
+      });
+      if (!exists) {
+        await prisma.salaryScale.create({
+          data: { ...sc, isActive: true },
+        });
+        createdCount++;
+      }
+    }
+
+    const allScales = await prisma.salaryScale.findMany({ where: { isActive: true }, orderBy: { id: 'asc' } });
+    return res.json({
+      success: true,
+      data: allScales,
+      message: `नेपाल सरकारको आधिकारिक शिक्षक तलब स्केल सुरक्षित गरियो! (${createdCount} नयाँ स्केल थपिए)`,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

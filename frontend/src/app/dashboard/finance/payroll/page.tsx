@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { todayBS, resolveFinancialYear, getFiscalYearFromBS } from '@/lib/nepali-date';
+import { todayBS, getFiscalYearFromBS } from '@/lib/nepali-date';
 import {
   Wallet,
   Plus,
@@ -18,72 +18,111 @@ import {
   Trash2,
   UserCheck,
   Search,
+  Download,
+  CreditCard,
+  Layers,
+  Sparkles,
+  Sliders,
+  Check,
+  AlertCircle,
+  HelpCircle,
+  RotateCcw,
+  BookOpen,
+  Send,
+  Users,
+  Settings,
+  ShieldCheck,
+  Briefcase,
+  GraduationCap,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// Standard BS Months list
+const NEPALI_MONTHS = [
+  { id: '01', name: 'बैशाख (Baisakh)', nepali: 'बैशाख' },
+  { id: '02', name: 'जेठ (Jestha)', nepali: 'जेठ' },
+  { id: '03', name: 'असार (Ashadh)', nepali: 'असार' },
+  { id: '04', name: 'साउन (Shrawan)', nepali: 'साउन' },
+  { id: '05', name: 'भदौ (Bhadra)', nepali: 'भदौ' },
+  { id: '06', name: 'असोज (Ashwin)', nepali: 'असोज' },
+  { id: '07', name: 'कार्तिक (Kartik)', nepali: 'कार्तिक' },
+  { id: '08', name: 'मंसिर (Mangsir)', nepali: 'मंसिर' },
+  { id: '09', name: 'पुस (Poush)', nepali: 'पुस' },
+  { id: '10', name: 'माघ (Magh)', nepali: 'माघ' },
+  { id: '11', name: 'फागुन (Falgun)', nepali: 'फागुन' },
+  { id: '12', name: 'चैत (Chaitra)', nepali: 'चैत' },
+];
+
 export default function PayrollPage() {
   const queryClient = useQueryClient();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingPayroll, setEditingPayroll] = useState<any>(null);
-  const [selectedTeacherId, setSelectedTeacherId] = useState('');
-  const [teacherSearchTerm, setTeacherSearchTerm] = useState('');
-  const [monthFrom, setMonthFrom] = useState('2081-04');
-  const [monthTo, setMonthTo] = useState('2081-06');
+  const [activeTab, setActiveTab] = useState<'bulk' | 'history' | 'scales'>('bulk');
+
+  // Period / Year & Month Range State
+  const currentBS = todayBS();
+  const currentYear = currentBS.slice(0, 4) || '2083';
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear);
+  const [fromMonth, setFromMonth] = useState<string>('04'); // साउन
+  const [toMonth, setToMonth] = useState<string>('06'); // असोज
+  const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'TEACHING' | 'NON_TEACHING'>('ALL');
+  const [filterType, setFilterType] = useState<string>(''); // RASTRIYA, NIJI_SROTH
+
+  // Global Multipliers & Allowances Toggles
+  const [globalFestivalAllowed, setGlobalFestivalAllowed] = useState<boolean>(false);
+  const [globalDressAllowance, setGlobalDressAllowance] = useState<number>(0);
+  const [globalDearnessAmount, setGlobalDearnessAmount] = useState<number>(2000);
+  const [globalInsuranceGovContribution, setGlobalInsuranceGovContribution] = useState<number>(400);
+
+  // Bulk Grid Items State: mapped by teacherId
+  const [bulkRows, setBulkRows] = useState<Record<number, any>>({});
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
+  const [searchStaff, setSearchStaff] = useState<string>('');
+
+  // Modals & Single Slips
   const [selectedSlip, setSelectedSlip] = useState<any>(null);
+  const [isDisburseModalOpen, setIsDisburseModalOpen] = useState(false);
+  const [disburseForm, setDisburseForm] = useState({
+    bankAccountId: '',
+    paymentDateBs: todayBS(),
+    chequeNo: '',
+    chequePayeeName: 'Teacher & Staff Salary Disbursement',
+    voucherNo: '',
+    paymentMedium: 'CHEQUE',
+    remarks: '',
+  });
 
-  // Live calculation form state
-  const [taha, setTaha] = useState('रा.प. द्वितीय श्रेणी');
-  const [shreni, setShreni] = useState('द्वितीय');
-  const [moolTalab, setMoolTalab] = useState<number>(38000);
-  const [gradeNo, setGradeNo] = useState<number>(4);
-  const [gradeAmount, setGradeAmount] = useState<number>(950);
+  // Scale Modal
+  const [isScaleModalOpen, setIsScaleModalOpen] = useState(false);
+  const [editingScale, setEditingScale] = useState<any>(null);
+  const [scaleForm, setScaleForm] = useState({
+    taha: 'माध्यमिक तह',
+    shreni: 'तृतीय श्रेणी',
+    moolTalab: 43689,
+    gradeAmount: 1456,
+  });
 
-  // Allowances
-  const [mahangiGhata, setMahangiGhata] = useState<number>(2000);
-  const [praABhata, setPraABhata] = useState<number>(0);
-  const [sahayakPraABhata, setSahayakPraABhata] = useState<number>(0);
-  const [prabiInchargeBhata, setPrabiInchargeBhata] = useState<number>(0);
-  const [mabiInchargeBhata, setMabiInchargeBhata] = useState<number>(0);
-  const [otherBhata, setOtherBhata] = useState<number>(0);
+  // Single Edit Modal
+  const [isSingleEditModalOpen, setIsSingleEditModalOpen] = useState(false);
+  const [singleEditData, setSingleEditData] = useState<any>(null);
 
-  // Deductions
-  const [karmachariKoshSapati, setKarmachariKoshSapati] = useState<number>(0);
-  const [bimaKati, setBimaKati] = useState<number>(400);
-  const [peshkiKati, setPeshkiKati] = useState<number>(0);
-
-  // Special additions
-  const [includeChaadparba, setIncludeChaadparba] = useState<boolean>(false);
-  const [peshki, setPeshki] = useState<number>(0);
-  const [remarks, setRemarks] = useState('');
-
-  // Fetch Teachers (Directly synced with Teacher Module)
-  const { data: teachersData } = useQuery({
-    queryKey: ['teachers'],
+  // ── 1. Fetch Teachers (Faculty & Staff) ──────────────────────────────────
+  const { data: teachersData, isLoading: isTeachersLoading } = useQuery({
+    queryKey: ['teachers-all-payroll'],
     queryFn: async () => {
       const res = await api.get('/teachers');
       return res.data?.data || [];
     },
   });
 
-  // Fetch Salary Scales
-  const { data: scalesData } = useQuery({
-    queryKey: ['salary-scales-list'],
+  // ── 2. Fetch Salary Scales (Government Pay Scales) ──────────────────────
+  const { data: scalesData, isLoading: isScalesLoading } = useQuery({
+    queryKey: ['salary-scales-all'],
     queryFn: async () => {
-      const res = await api.get('/payroll/salary-scales/list');
+      const res = await api.get('/payroll/salary-scales/all');
       return res.data?.data || [];
     },
   });
 
-  // Fetch Active Academic Year
-  const { data: schoolProfile } = useQuery({
-    queryKey: ['school-profile'],
-    queryFn: async () => {
-      const res = await api.get('/school/profile');
-      return res.data?.data;
-    },
-  });
-
-  // Fetch Financial Years (आर्थिक वर्षहरू)
+  // ── 3. Fetch Financial Years ──────────────────────────────────────────
   const { data: financialYearsData } = useQuery({
     queryKey: ['financial-years-all'],
     queryFn: async () => {
@@ -93,285 +132,585 @@ export default function PayrollPage() {
   });
   const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
 
-  // Fetch Payroll History
-  const { data: payrollsData, isLoading } = useQuery({
-    queryKey: ['payrolls'],
+  // ── 4. Fetch Bank Accounts for Bulk Payment ───────────────────────────
+  const { data: bankAccountsData } = useQuery({
+    queryKey: ['bank-accounts-all'],
     queryFn: async () => {
-      const res = await api.get('/payroll');
+      const res = await api.get('/bank-accounts');
       return res.data?.data || [];
     },
   });
 
-  const activeYear = schoolProfile?.academicYears?.find((y: any) => y.isActive);
-  const autoResolvedFY = resolveFinancialYear(monthFrom.length === 7 ? `${monthFrom}-01` : monthFrom, financialYearsData || []);
-
-  // ── LIVE FORM FORMULA CALCULATIONS ──────────────────────────────────────
-  const gradeRakam = gradeNo * gradeAmount;
-  const gradeSahitTalab = moolTalab + gradeRakam;
-  const karmachari10Pct = +(gradeSahitTalab * 0.10).toFixed(2);
-  const ssk20Pct = +(gradeSahitTalab * 0.20).toFixed(2);
-
-  const jammaBhata = +(
-    mahangiGhata +
-    praABhata +
-    sahayakPraABhata +
-    prabiInchargeBhata +
-    mabiInchargeBhata +
-    otherBhata
-  ).toFixed(2);
-
-  const jammaTalabBhata = +(gradeSahitTalab + jammaBhata).toFixed(2);
-  const traimasikTalan = +(jammaTalabBhata * 3).toFixed(2); // 3 months salary
-
-  const jammaKati = +(karmachari10Pct + karmachariKoshSapati + bimaKati + peshkiKati).toFixed(2);
-  const bakiPaaunuParne = +(traimasikTalan - jammaKati).toFixed(2);
-
-  const chaadparbaKharcha = includeChaadparba ? gradeSahitTalab : 0;
-  const kulRakam = +(bakiPaaunuParne + chaadparbaKharcha + peshki).toFixed(2);
-
-  const samajikSurakshaKar1Pct = +(kulRakam * 0.01).toFixed(2);
-  const khudPaaunuParne = +(kulRakam - samajikSurakshaKar1Pct).toFixed(2);
-
-  // Auto-detect teacher scale on teacher selection
-  const handleTeacherChange = (teacherId: string) => {
-    setSelectedTeacherId(teacherId);
-    if (!teacherId) return;
-    const teacher = teachersData?.find((t: any) => t.id.toString() === teacherId);
-    if (teacher?.taha) {
-      setTaha(teacher.taha);
-      const matchedScale = scalesData?.find((s: any) =>
-        s.taha.toLowerCase().includes(teacher.taha.toLowerCase()) ||
-        teacher.taha.toLowerCase().includes(s.taha.toLowerCase())
-      );
-      if (matchedScale) {
-        setMoolTalab(matchedScale.moolTalab);
-        setGradeAmount(matchedScale.gradeAmount);
-        setShreni(matchedScale.shreni || '');
-      }
-    }
-  };
-
-  const handleScaleSelect = (scaleId: string) => {
-    const scale = scalesData?.find((s: any) => s.id.toString() === scaleId);
-    if (scale) {
-      setTaha(scale.taha);
-      setShreni(scale.shreni || '');
-      setMoolTalab(scale.moolTalab);
-      setGradeAmount(scale.gradeAmount);
-    }
-  };
-
-  // Handle Quick Generate from Teacher Card
-  const handleQuickGenerateForTeacher = (teacher: any) => {
-    setEditingPayroll(null);
-    setSelectedTeacherId(teacher.id.toString());
-    if (teacher.taha) {
-      setTaha(teacher.taha);
-      const matchedScale = scalesData?.find((s: any) =>
-        s.taha.toLowerCase().includes(teacher.taha.toLowerCase()) ||
-        teacher.taha.toLowerCase().includes(s.taha.toLowerCase())
-      );
-      if (matchedScale) {
-        setMoolTalab(matchedScale.moolTalab);
-        setGradeAmount(matchedScale.gradeAmount);
-        setShreni(matchedScale.shreni || '');
-      }
-    }
-    setIsModalOpen(true);
-  };
-
-  // Open Edit Modal & Populate State
-  const handleOpenEditModal = (p: any) => {
-    setEditingPayroll(p);
-    setSelectedTeacherId(p.teacherId?.toString() || '');
-    setMonthFrom(p.monthFrom || '2081-04');
-    setMonthTo(p.monthTo || '2081-06');
-    setTaha(p.taha || 'रा.प. द्वितीय श्रेणी');
-    setShreni(p.shreni || 'द्वितीय');
-    setMoolTalab(p.moolTalab || 0);
-    setGradeNo(p.gradeNo || 0);
-    setGradeAmount(p.gradeAmount || 0);
-    setMahangiGhata(p.mahangiGhata || 0);
-    setPraABhata(p.praABhata || 0);
-    setSahayakPraABhata(p.sahayakPraABhata || 0);
-    setPrabiInchargeBhata(p.prabiInchargeBhata || 0);
-    setMabiInchargeBhata(p.mabiInchargeBhata || 0);
-    setOtherBhata(p.otherBhata || 0);
-    setKarmachariKoshSapati(p.karmachariKoshSapati || 0);
-    setBimaKati(p.bimaKati || 0);
-    setPeshkiKati(p.peshkiKati || 0);
-    setIncludeChaadparba(Boolean(p.chaadparbaKharcha));
-    setPeshki(p.peshki || 0);
-    setRemarks(p.remarks || '');
-    setIsModalOpen(true);
-  };
-
-  // Create Payroll Mutation
-  const createPayrollMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedTeacherId) throw new Error('Please select a teacher');
-      const payload = {
-        teacherId: parseInt(selectedTeacherId),
-        academicYearId: activeYear?.id || 1,
-        financialYearId: autoResolvedFY?.id || activeFinancialYear?.id,
-        monthFrom,
-        monthTo,
-        taha,
-        shreni,
-        moolTalab,
-        gradeNo,
-        gradeAmount,
-        mahangiGhata,
-        praABhata,
-        sahayakPraABhata,
-        prabiInchargeBhata,
-        mabiInchargeBhata,
-        otherBhata,
-        karmachariKoshSapati,
-        bimaKati,
-        peshkiKati,
-        includeChaadparba,
-        peshki,
-        remarks,
-      };
-      if (editingPayroll) {
-        const res = await api.put(`/payroll/${editingPayroll.id}`, payload);
-        return res.data;
-      } else {
-        const res = await api.post('/payroll', payload);
-        return res.data;
-      }
-    },
-    onSuccess: (data) => {
-      toast.success(editingPayroll ? 'Payroll record updated successfully!' : 'Teacher Payroll generated & saved successfully!');
-      setIsModalOpen(false);
-      setEditingPayroll(null);
-      setSelectedSlip(data.data);
-      queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.message || err.response?.data?.message || 'Failed to save payroll');
+  // ── 5. Fetch School Profile for Header & Prints ────────────────────────
+  const { data: schoolProfile } = useQuery({
+    queryKey: ['school-profile'],
+    queryFn: async () => {
+      const res = await api.get('/school/profile');
+      return res.data?.data || {};
     },
   });
 
-  // Delete Payroll Mutation (Proxy-Proof)
-  const deletePayrollMutation = useMutation({
+  // ── 6. Fetch Payroll History ──────────────────────────────────────────
+  const { data: payrollsData, isLoading: isPayrollsLoading } = useQuery({
+    queryKey: ['payrolls-list'],
+    queryFn: async () => {
+      const res = await api.get('/payroll?limit=200');
+      return res.data?.data || [];
+    },
+  });
+
+  // Calculate Month Count
+  const monthCount = useMemo(() => {
+    const fromIdx = parseInt(fromMonth, 10);
+    const toIdx = parseInt(toMonth, 10);
+    if (toIdx >= fromIdx) return toIdx - fromIdx + 1;
+    return 12 - fromIdx + toIdx + 1;
+  }, [fromMonth, toMonth]);
+
+  const monthFromStr = `${selectedYear}-${fromMonth}`;
+  const monthToStr = `${selectedYear}-${toMonth}`;
+
+  // ── 7. Initialize and prefill bulk spreadsheet rows when teachers/scales change ──
+  useEffect(() => {
+    if (!teachersData || teachersData.length === 0) return;
+
+    const initialRows: Record<number, any> = {};
+    const allIds: number[] = [];
+
+    teachersData.forEach((teacher: any) => {
+      allIds.push(teacher.id);
+
+      // Match salary scale if available
+      let matchedScale = scalesData?.find(
+        (s: any) =>
+          s.taha === teacher.taha &&
+          (!teacher.shreni || s.shreni === teacher.shreni)
+      );
+
+      // Default fallback scales
+      const baseSalary = matchedScale ? matchedScale.moolTalab : (teacher.shreni === 'NON_TEACHING' ? 26082 : 38000);
+      const gradeRate = matchedScale ? matchedScale.gradeAmount : (teacher.shreni === 'NON_TEACHING' ? 869 : 1200);
+
+      const isPrincipal = teacher.inchargeRole?.includes('PRINCIPAL') || teacher.post?.includes('प्रधानाध्यापक') || teacher.post?.includes('Principal');
+      const isVicePrincipal = teacher.inchargeRole?.includes('VICE_PRINCIPAL') || teacher.post?.includes('सहायक');
+
+      initialRows[teacher.id] = {
+        teacherId: teacher.id,
+        fullName: teacher.fullName,
+        fullNameNepali: teacher.fullNameNepali || teacher.fullName,
+        taha: teacher.taha || (teacher.shreni === 'NON_TEACHING' ? 'कार्यालय सहयोगी' : 'माध्यमिक तह'),
+        shreni: teacher.shreni || (teacher.shreni === 'NON_TEACHING' ? 'श्रेणीविहीन' : 'तृतीय श्रेणी'),
+        post: teacher.post || (teacher.shreni === 'NON_TEACHING' ? 'कर्मचारी' : 'शिक्षक'),
+        type: teacher.type || 'RASTRIYA',
+        bankAccountNo: teacher.bankAccountNo || '',
+        panNo: teacher.panNo || '',
+        // Form inputs
+        moolTalab: baseSalary, // A
+        gradeNo: 3, // B (Default 3 grades, easily editable)
+        gradeAmount: gradeRate, // C
+        bimaThap: globalInsuranceGovContribution, // G (Default 400)
+        praABhata: isPrincipal ? 1000 : (isVicePrincipal ? 500 : 0), // I
+        mahangiGhata: globalDearnessAmount, // J (Default 2000)
+        durgamBhata: 0, // K
+        protsahanBhata: 0, // L
+        otherBhata: 0, // M
+        karmachariKoshSapati: 0, // R (Loan)
+        includeChaadparba: globalFestivalAllowed, // V
+        poshakBhata: globalDressAllowance, // W
+        remarks: '',
+      };
+    });
+
+    setBulkRows(initialRows);
+    setSelectedTeacherIds(allIds);
+  }, [teachersData, scalesData]);
+
+  // Update rows if global festival or dress allowance toggle changes
+  const applyGlobalSettingsToRows = (festival: boolean, dress: number, dearness: number, insurance: number) => {
+    setBulkRows((prev) => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach((idStr) => {
+        const id = parseInt(idStr, 10);
+        updated[id] = {
+          ...updated[id],
+          includeChaadparba: festival,
+          poshakBhata: dress,
+          mahangiGhata: dearness,
+          bimaThap: insurance,
+        };
+      });
+      return updated;
+    });
+  };
+
+  // ── Calculation Helper (Columns A through Z) ──────────────────────────
+  const calculateRow = (row: any) => {
+    if (!row) return {};
+    const A = parseFloat(row.moolTalab || 0); // मूल तलब
+    const B = parseInt(row.gradeNo || 0, 10); // ग्रेड संख्या
+    const C = parseFloat(row.gradeAmount || 0); // ग्रेड दर
+    const D = +(B * C).toFixed(2); // जम्मा ग्रेड रकम (B * C)
+    const E = +(A + D).toFixed(2); // जम्मा तलब (ग्रेड सहित) (A + D)
+    const F = +(E * 0.10).toFixed(2); // क.सं. कोष थप १०% (10% of E)
+    const G = parseFloat(row.bimaThap !== undefined ? row.bimaThap : 400); // बीमा थप
+    const H = +(E + F + G).toFixed(2); // कुल तलब (E + F + G)
+
+    const I = parseFloat(row.praABhata || 0); // प्र.अ. भत्ता
+    const J = parseFloat(row.mahangiGhata !== undefined ? row.mahangiGhata : 2000); // महङ्गी भत्ता
+    const K = parseFloat(row.durgamBhata || 0); // दुर्गम भत्ता
+    const L = parseFloat(row.protsahanBhata || 0); // प्रोत्साहन भत्ता
+    const M = parseFloat(row.otherBhata || 0); // अन्य भत्ता
+    const N = +(I + J + K + L + M).toFixed(2); // जम्मा भत्ता
+
+    const O = +(H + N).toFixed(2); // जम्मा तलब भत्ता (H + N)
+    const P = +(O * monthCount).toFixed(2); // त्रैमासिक तलब भत्ता (O * monthCount)
+
+    // विभिन्न कट्टी (Deductions)
+    const Q = +(E * 0.20 * monthCount).toFixed(2); // क.सं. कोष २०% कट्टी ((20% of E) * monthCount)
+    const R = parseFloat(row.karmachariKoshSapati || 0); // कोष सापट कट्टी
+    const S = +(G * 2 * monthCount).toFixed(2); // बीमा कट्टी ((G * 2) * monthCount)
+    const T = +(Q + R + S).toFixed(2); // जम्मा कट्टी (Q + R + S)
+
+    const U = +(P - T).toFixed(2); // बाँकी पाउनु पर्ने (P - T)
+
+    const V = row.includeChaadparba ? E : 0; // चाडपर्व खर्च (E)
+    const W = parseFloat(row.poshakBhata || 0); // पोसाक भत्ता
+    const X = +(U + V + W).toFixed(2); // जम्मा पाउनु पर्ने (U + V + W)
+
+    const Y = +(X * 0.01).toFixed(2); // सा.सु. कर १% कट्टी (1% of X)
+    const Z = +(X - Y).toFixed(2); // खुद भुक्तानी पाउनु पर्ने (X - Y)
+
+    return {
+      A, B, C, D, E, F, G, H,
+      I, J, K, L, M, N,
+      O, P,
+      Q, R, S, T,
+      U, V, W, X, Y, Z,
+    };
+  };
+
+  // Update specific field in row
+  const handleFieldChange = (teacherId: number, field: string, value: any) => {
+    setBulkRows((prev) => ({
+      ...prev,
+      [teacherId]: {
+        ...prev[teacherId],
+        [field]: value,
+      },
+    }));
+  };
+
+  // Handle Scale Change for Teacher
+  const handleScaleSelection = (teacherId: number, scaleId: string) => {
+    const scale = scalesData?.find((s: any) => s.id.toString() === scaleId);
+    if (!scale) return;
+    setBulkRows((prev) => ({
+      ...prev,
+      [teacherId]: {
+        ...prev[teacherId],
+        taha: scale.taha,
+        shreni: scale.shreni,
+        moolTalab: scale.moolTalab,
+        gradeAmount: scale.gradeAmount,
+      },
+    }));
+  };
+
+  // Filtered displayed staff
+  const displayedStaff = useMemo(() => {
+    return (teachersData || []).filter((t: any) => {
+      if (selectedCategory === 'TEACHING' && t.shreni === 'NON_TEACHING') return false;
+      if (selectedCategory === 'NON_TEACHING' && t.shreni !== 'NON_TEACHING') return false;
+      if (filterType && t.type !== filterType) return false;
+      if (searchStaff) {
+        const q = searchStaff.toLowerCase();
+        return (
+          t.fullName?.toLowerCase().includes(q) ||
+          t.fullNameNepali?.toLowerCase().includes(q) ||
+          t.taha?.toLowerCase().includes(q) ||
+          t.post?.toLowerCase().includes(q) ||
+          t.panNo?.includes(q)
+        );
+      }
+      return true;
+    });
+  }, [teachersData, selectedCategory, filterType, searchStaff]);
+
+  // Grand Totals of selected staff
+  const grandTotals = useMemo(() => {
+    let totalGrossP = 0;
+    let totalDeductionT = 0;
+    let totalFestivalV = 0;
+    let totalDressW = 0;
+    let totalTaxY = 0;
+    let totalNetZ = 0;
+    let count = 0;
+
+    selectedTeacherIds.forEach((id) => {
+      const row = bulkRows[id];
+      if (!row) return;
+      const calc = calculateRow(row);
+      totalGrossP += calc.P || 0;
+      totalDeductionT += calc.T || 0;
+      totalFestivalV += calc.V || 0;
+      totalDressW += calc.W || 0;
+      totalTaxY += calc.Y || 0;
+      totalNetZ += calc.Z || 0;
+      count++;
+    });
+
+    return {
+      count,
+      totalGrossP: Math.round(totalGrossP * 100) / 100,
+      totalDeductionT: Math.round(totalDeductionT * 100) / 100,
+      totalFestivalV: Math.round(totalFestivalV * 100) / 100,
+      totalDressW: Math.round(totalDressW * 100) / 100,
+      totalTaxY: Math.round(totalTaxY * 100) / 100,
+      totalNetZ: Math.round(totalNetZ * 100) / 100,
+    };
+  }, [selectedTeacherIds, bulkRows, monthCount]);
+
+  // ── 8. Bulk Save Mutation ─────────────────────────────────────────────
+  const bulkSaveMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedTeacherIds.length === 0) {
+        throw new Error('कृपया कम्तीमा १ जना शिक्षक/कर्मचारी छनौट गर्नुहोस्!');
+      }
+
+      const items = selectedTeacherIds.map((id) => {
+        const row = bulkRows[id];
+        return {
+          teacherId: id,
+          monthFrom: monthFromStr,
+          monthTo: monthToStr,
+          taha: row.taha,
+          shreni: row.shreni,
+          moolTalab: row.moolTalab,
+          gradeNo: row.gradeNo,
+          gradeAmount: row.gradeAmount,
+          mahangiGhata: row.mahangiGhata,
+          praABhata: row.praABhata,
+          durgamBhata: row.durgamBhata,
+          protsahanBhata: row.protsahanBhata,
+          otherBhata: row.otherBhata,
+          karmachariKoshSapati: row.karmachariKoshSapati,
+          bimaThap: row.bimaThap,
+          includeChaadparba: row.includeChaadparba,
+          poshakBhata: row.poshakBhata,
+          remarks: row.remarks,
+        };
+      });
+
+      const res = await api.post('/payroll/bulk-save', {
+        items,
+        monthFrom: monthFromStr,
+        monthTo: monthToStr,
+        monthCount,
+        financialYearId: activeFinancialYear?.id,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'सफलतापूर्वक तलब भरपाई दर्ता गरियो!');
+      queryClient.invalidateQueries({ queryKey: ['payrolls-list'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || err.response?.data?.message || 'भरपाई दर्ता गर्न सकिएन');
+    },
+  });
+
+  // ── 9. Issue Bulk Payment & Expense Posting ────────────────────────────
+  const issueBulkPaymentMutation = useMutation({
+    mutationFn: async () => {
+      if (!disburseForm.bankAccountId) {
+        throw new Error('कृपया विद्यालयको बैंक खाता छनौट गर्नुहोस्!');
+      }
+
+      // First ensure the latest records are saved
+      const items = selectedTeacherIds.map((id) => {
+        const row = bulkRows[id];
+        return {
+          teacherId: id,
+          monthFrom: monthFromStr,
+          monthTo: monthToStr,
+          taha: row.taha,
+          shreni: row.shreni,
+          moolTalab: row.moolTalab,
+          gradeNo: row.gradeNo,
+          gradeAmount: row.gradeAmount,
+          mahangiGhata: row.mahangiGhata,
+          praABhata: row.praABhata,
+          durgamBhata: row.durgamBhata,
+          protsahanBhata: row.protsahanBhata,
+          otherBhata: row.otherBhata,
+          karmachariKoshSapati: row.karmachariKoshSapati,
+          bimaThap: row.bimaThap,
+          includeChaadparba: row.includeChaadparba,
+          poshakBhata: row.poshakBhata,
+          remarks: row.remarks,
+        };
+      });
+
+      const saveRes = await api.post('/payroll/bulk-save', {
+        items,
+        monthFrom: monthFromStr,
+        monthTo: monthToStr,
+        monthCount,
+        financialYearId: activeFinancialYear?.id,
+      });
+
+      const savedPayrolls = saveRes.data?.data || [];
+      const payrollIds = savedPayrolls.map((p: any) => p.id);
+
+      // Now disburse via bank and post expense
+      const disburseRes = await api.post('/payroll/disburse-bank-bulk', {
+        payrollIds,
+        bankAccountId: disburseForm.bankAccountId,
+        paymentDateBs: disburseForm.paymentDateBs || todayBS(),
+        chequeNo: disburseForm.chequeNo,
+        chequePayeeName: disburseForm.chequePayeeName,
+        voucherNo: disburseForm.voucherNo,
+        remarks: disburseForm.remarks,
+      });
+
+      return disburseRes.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'एकमुष्ट बैंक तलब भुक्तानी निकासा र खर्च प्रविष्टि सम्पन्न भयो!');
+      setIsDisburseModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['payrolls-list'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses-list'] });
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts-all'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || err.response?.data?.message || 'बैंक भुक्तानी निकासा गर्न सकिएन');
+    },
+  });
+
+  // ── 10. Seed Default Salary Scales ─────────────────────────────────────
+  const seedScalesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/payroll/salary-scales/seed-default');
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'नेपाल सरकार शिक्षक तलब स्केल सुरक्षित गरियो!');
+      queryClient.invalidateQueries({ queryKey: ['salary-scales-all'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to seed scales');
+    },
+  });
+
+  // ── 11. Delete Scale Mutation ──────────────────────────────────────────
+  const deleteScaleMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.post(`/payroll/${id}/delete`);
+      const res = await api.delete(`/payroll/salary-scales/${id}`);
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Payroll record deleted successfully.');
-      queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-    },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to delete payroll record.');
+      toast.success('Salary scale deleted');
+      queryClient.invalidateQueries({ queryKey: ['salary-scales-all'] });
     },
   });
 
-  const payrolls = payrollsData || [];
+  // ── 12. Save Scale Mutation ────────────────────────────────────────────
+  const saveScaleMutation = useMutation({
+    mutationFn: async () => {
+      if (editingScale) {
+        const res = await api.put(`/payroll/salary-scales/${editingScale.id}`, scaleForm);
+        return res.data;
+      } else {
+        const res = await api.post('/payroll/salary-scales', scaleForm);
+        return res.data;
+      }
+    },
+    onSuccess: () => {
+      toast.success(editingScale ? 'Scale updated' : 'New scale created');
+      setIsScaleModalOpen(false);
+      setEditingScale(null);
+      queryClient.invalidateQueries({ queryKey: ['salary-scales-all'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to save scale');
+    },
+  });
 
-  // Filtered teachers list for quick selection
-  const filteredTeachers = (teachersData || []).filter((t: any) =>
-    t.fullName?.toLowerCase().includes(teacherSearchTerm.toLowerCase()) ||
-    t.panNo?.includes(teacherSearchTerm)
-  );
-
-  const triggerPayrollSlipPrint = () => {
-    if (!selectedSlip) return;
-
+  // ── 13. Official Nepal Government Bharpai Sheet Print ──────────────────
+  const triggerOfficialGoNBharpaiPrint = () => {
     const printWin = window.open('', '_blank');
     if (!printWin) {
       window.print();
       return;
     }
 
-    const p = selectedSlip;
-    const teacherName = p.teacher?.fullName || p.teacherName || '—';
+    const schoolNe = schoolProfile?.nameNepali || 'श्री नेपाल माध्यमिक विद्यालय';
+    const subNe = schoolProfile?.address || 'वृन्दावन न.पा.-२, विश्रामपुर, रौतहट';
+    const estdNe = schoolProfile?.estYear ? `(स्था: ${schoolProfile.estYear})` : '(स्था: २००७)';
+    const fyYear = activeFinancialYear?.year || getFiscalYearFromBS(todayBS());
+
+    const selectedList = selectedTeacherIds
+      .map((id) => {
+        const row = bulkRows[id];
+        if (!row) return null;
+        const calc = calculateRow(row);
+        return { ...row, calc };
+      })
+      .filter(Boolean);
 
     printWin.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Salary Slip - ${teacherName}</title>
+          <title>नेपाल सरकार तलब तथा भत्ता भरपाई - ${schoolNe}</title>
           <style>
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: A4 landscape; margin: 8mm 10mm; }
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; font-size: 11px; }
-            .card { border: 2px solid #1e3a5f; padding: 20px; border-radius: 8px; }
-            .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
-            .school-name { font-size: 17px; font-weight: 900; color: #1e3a5f; margin: 2px 0; }
-            .badge { font-size: 11px; font-weight: 900; background: #eff6ff; color: #1e3a5f; display: inline-block; padding: 3px 12px; border-radius: 4px; uppercase; border: 1px solid #bfdbfe; margin-top: 4px; }
-            .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10.5px; margin-bottom: 12px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
-            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
-            th { background: #1e3a5f; color: #fff; padding: 6px 4px; text-align: left; font-size: 9.5px; border: 1px solid #1e3a5f; }
-            td { padding: 5px 4px; border-bottom: 1px solid #e2e8f0; }
-            .footer-sig { margin-top: 40px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; }
-            .sig-box { width: 150px; text-align: center; border-top: 1px solid #333; padding-top: 3px; }
+            body { 
+              font-family: "Noto Sans Devanagari", "Kalimati", Arial, sans-serif; 
+              margin: 0; 
+              padding: 0; 
+              background: #fff; 
+              color: #000; 
+              font-size: 10px; 
+              line-height: 1.25;
+            }
+            .header-box { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+            .school-title { font-size: 18px; font-weight: 900; margin: 0; color: #0b1f3a; }
+            .school-sub { font-size: 11px; font-weight: bold; margin: 2px 0; }
+            .doc-title { font-size: 13px; font-weight: 900; margin: 4px 0 2px 0; text-decoration: underline; }
+            .meta-row { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: bold; margin-top: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 8.8px; }
+            th, td { border: 1px solid #333; padding: 3px 2px; text-align: center; }
+            th { background: #f1f5f9; font-weight: 900; }
+            .text-left { text-align: left; padding-left: 4px; }
+            .text-right { text-align: right; padding-right: 4px; font-family: monospace; }
+            .bold { font-weight: 900; }
+            .grand-total-row { background: #e2e8f0; font-weight: 900; }
+            .footer-signatures { margin-top: 30px; display: flex; justify-content: space-between; font-size: 10.5px; font-weight: bold; }
+            .sig-block { width: 220px; text-align: center; border-top: 1px dashed #000; padding-top: 5px; }
           </style>
         </head>
         <body>
-          <div class="card">
-            <div class="header">
-              <div class="school-name">${schoolProfile?.name || 'SHREE NEPAL SECONDARY SCHOOL'}</div>
-              <div style="font-size: 10px; color: #64748b;">${schoolProfile?.address || 'Nepal'} | Teacher & Staff Official Pay Slip</div>
-              <div class="badge">आर्थिक वर्ष: ${p.financialYear?.year || getFiscalYearFromBS(p.monthFrom || todayBS())} | PERIOD: ${p.monthFrom || ''} TO ${p.monthTo || ''}</div>
+          <div class="header-box">
+            <h1 class="school-title">${schoolNe}</h1>
+            <div class="school-sub">${subNe} ${estdNe}</div>
+            <div class="doc-title">शिक्षक तथा कर्मचारीहरूको तलब तथा भत्ता भरपाई (GOVERNMENT PAYROLL REGISTER)</div>
+            <div class="meta-row">
+              <div>आर्थिक वर्ष: <strong>${fyYear}</strong></div>
+              <div>अवधि (Period): <strong>${monthFromStr} देखि ${monthToStr} सम्म (${monthCount} महिना)</strong></div>
+              <div>कुल संख्या: <strong>${selectedList.length} जना</strong></div>
             </div>
+          </div>
 
-            <div class="meta-grid">
-              <div><strong>TEACHER NAME:</strong> ${teacherName}</div>
-              <div><strong>TYPE / TAHA:</strong> ${p.taha || '—'}</div>
-              <div><strong>PAN NO:</strong> ${p.teacher?.panNo || 'N/A'}</div>
-              <div><strong>ACCOUNT NO:</strong> ${p.teacher?.bankAccountNo || 'Bank Deposit'}</div>
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2">क्र.सं.</th>
+                <th rowspan="2" style="min-width: 100px;">कर्मचारीको नाम</th>
+                <th rowspan="2">तह/दर्जा</th>
+                <th rowspan="2">मूल तलब<br/>[A]</th>
+                <th colspan="3">ग्रेड (Grade)</th>
+                <th rowspan="2">जम्मा तलब<br/>(ग्रेड सहित)<br/>[E=A+D]</th>
+                <th rowspan="2">क.सं. कोष<br/>थप १०%<br/>[F]</th>
+                <th rowspan="2">बीमा<br/>थप<br/>[G]</th>
+                <th rowspan="2">कुल तलब<br/>[H=E+F+G]</th>
+                <th colspan="5">भत्ताहरू (Allowances)</th>
+                <th rowspan="2">जम्मा<br/>भत्ता<br/>[N]</th>
+                <th rowspan="2">जम्मा तलब<br/>भत्ता<br/>[O=H+N]</th>
+                <th rowspan="2">त्रैमासिक<br/>तलब भत्ता<br/>[P=O×${monthCount}]</th>
+                <th colspan="3">विभिन्न कट्टी (Deductions)</th>
+                <th rowspan="2">जम्मा<br/>कट्टी<br/>[T=Q+R+S]</th>
+                <th rowspan="2">बाँकी पाउनु<br/>पर्ने<br/>[U=P-T]</th>
+                <th rowspan="2">चाडपर्व<br/>खर्च<br/>[V=E]</th>
+                <th rowspan="2">पोसाक<br/>भत्ता<br/>[W]</th>
+                <th rowspan="2">जम्मा<br/>[X=U+V+W]</th>
+                <th rowspan="2">सा.सु. कर<br/>१% कट्टी<br/>[Y=1%]</th>
+                <th rowspan="2">खुद भुक्तानी<br/>[Z=X-Y]</th>
+                <th rowspan="2" style="min-width: 65px;">दस्तखत<br/>(Signature)</th>
+              </tr>
+              <tr>
+                <th>संख्या<br/>[B]</th>
+                <th>दर<br/>[C]</th>
+                <th>रकम<br/>[D=B×C]</th>
+                <th>प्र.अ.<br/>[I]</th>
+                <th>महङ्गी<br/>[J]</th>
+                <th>दुर्गम<br/>[K]</th>
+                <th>प्रोत्साहन<br/>[L]</th>
+                <th>अन्य<br/>[M]</th>
+                <th>क.सं. कोष २०%<br/>[Q]</th>
+                <th>सापट<br/>[R]</th>
+                <th>बीमा<br/>[S]</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${selectedList.map((item: any, idx: number) => {
+                const c = item.calc;
+                return `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td class="text-left bold">${item.fullNameNepali || item.fullName}</td>
+                    <td>${item.taha || item.post}</td>
+                    <td class="text-right">${c.A?.toLocaleString()}</td>
+                    <td>${c.B}</td>
+                    <td class="text-right">${c.C?.toLocaleString()}</td>
+                    <td class="text-right">${c.D?.toLocaleString()}</td>
+                    <td class="text-right bold">${c.E?.toLocaleString()}</td>
+                    <td class="text-right">${c.F?.toLocaleString()}</td>
+                    <td class="text-right">${c.G?.toLocaleString()}</td>
+                    <td class="text-right bold">${c.H?.toLocaleString()}</td>
+                    <td class="text-right">${c.I ? c.I.toLocaleString() : '-'}</td>
+                    <td class="text-right">${c.J ? c.J.toLocaleString() : '-'}</td>
+                    <td class="text-right">${c.K ? c.K.toLocaleString() : '-'}</td>
+                    <td class="text-right">${c.L ? c.L.toLocaleString() : '-'}</td>
+                    <td class="text-right">${c.M ? c.M.toLocaleString() : '-'}</td>
+                    <td class="text-right bold">${c.N?.toLocaleString()}</td>
+                    <td class="text-right bold">${c.O?.toLocaleString()}</td>
+                    <td class="text-right bold" style="color: #0b1f3a;">${c.P?.toLocaleString()}</td>
+                    <td class="text-right">${c.Q?.toLocaleString()}</td>
+                    <td class="text-right">${c.R ? c.R.toLocaleString() : '-'}</td>
+                    <td class="text-right">${c.S?.toLocaleString()}</td>
+                    <td class="text-right bold" style="color: #991b1b;">${c.T?.toLocaleString()}</td>
+                    <td class="text-right bold">${c.U?.toLocaleString()}</td>
+                    <td class="text-right">${c.V ? c.V.toLocaleString() : '-'}</td>
+                    <td class="text-right">${c.W ? c.W.toLocaleString() : '-'}</td>
+                    <td class="text-right bold">${c.X?.toLocaleString()}</td>
+                    <td class="text-right">${c.Y?.toLocaleString()}</td>
+                    <td class="text-right bold" style="color: #065f46; font-size: 9.5px;">${c.Z?.toLocaleString()}</td>
+                    <td></td>
+                  </tr>
+                `;
+              }).join('')}
+
+              <tr class="grand-total-row">
+                <td colspan="3" class="text-left bold">कुल जम्मा (GRAND TOTAL):</td>
+                <td colspan="15"></td>
+                <td class="text-right bold">रू ${grandTotals.totalGrossP.toLocaleString()}</td>
+                <td colspan="3"></td>
+                <td class="text-right bold">रू ${grandTotals.totalDeductionT.toLocaleString()}</td>
+                <td></td>
+                <td class="text-right bold">रू ${grandTotals.totalFestivalV.toLocaleString()}</td>
+                <td class="text-right bold">रू ${grandTotals.totalDressW.toLocaleString()}</td>
+                <td></td>
+                <td class="text-right bold">रू ${grandTotals.totalTaxY.toLocaleString()}</td>
+                <td class="text-right bold" style="font-size: 10px; color: #065f46;">रू ${grandTotals.totalNetZ.toLocaleString()}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer-signatures">
+            <div class="sig-block">
+              तयार गर्ने (लेखापाल / कर्मचारी)<br/>
+              मिति: ${todayBS()}
             </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>EARNING HEADS (निकासा शिर्षक)</th>
-                  <th style="text-align: right; width: 120px;">AMOUNT (रू)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Mool Talab / Basic Salary (मूल तलब)</td><td style="text-align: right; font-family: monospace;">${(p.moolTalab || 0).toLocaleString()}</td></tr>
-                <tr><td>Grade Rakam (${p.gradeNo || 0} Grades) (ग्रेड रकम)</td><td style="text-align: right; font-family: monospace;">${(p.gradeRakam || 0).toLocaleString()}</td></tr>
-                <tr style="background: #f1f5f9; font-weight: bold;"><td>Grade Sahit Salary (ग्रेड सहित तलब)</td><td style="text-align: right; font-family: monospace;">${(p.gradeSahitTalab || 0).toLocaleString()}</td></tr>
-                <tr><td>Mahangi Bhata (महँगी भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.mahangiGhata || 0).toLocaleString()}</td></tr>
-                <tr><td>Pra-A / Incharge Bhata (प्र.अ. / इन्चार्ज भत्ता)</td><td style="text-align: right; font-family: monospace;">${(p.praABhata || 0).toLocaleString()}</td></tr>
-                <tr style="background: #f8fafc; font-weight: bold;"><td>Traimasik Total Gross Salary (त्रिमासिक जम्मा तलब भत्ता)</td><td style="text-align: right; font-family: monospace; font-size: 11px; color: #1e3a5f;">${(p.traimasikTalan || 0).toLocaleString()}</td></tr>
-              </tbody>
-            </table>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>DEDUCTION HEADS (कट्टी विवरण)</th>
-                  <th style="text-align: right; width: 120px;">AMOUNT (रू)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Karmachari Sanchaya Kosh 10% (कर्मचारी सञ्चय कोष)</td><td style="text-align: right; font-family: monospace;">${(p.karmachari10Pct || 0).toLocaleString()}</td></tr>
-                <tr><td>Kosh Sapati / Loan (कोष सापती कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.karmachariKoshSapati || 0).toLocaleString()}</td></tr>
-                <tr><td>Bima Katti (बीमा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.bimaKatti || 0).toLocaleString()}</td></tr>
-                <tr><td>Social Security Tax 1% (सामाजिक सुरक्षा कर)</td><td style="text-align: right; font-family: monospace;">${(p.samajikSurakshaKar1Pct || 0).toLocaleString()}</td></tr>
-                <tr style="background: #fff1f2; font-weight: bold; color: #9f1239;"><td>Total Deductions (जम्मा कट्टी)</td><td style="text-align: right; font-family: monospace;">${(p.jammaKati || 0).toLocaleString()}</td></tr>
-              </tbody>
-            </table>
-
-            <div style="background: #ecfdf5; border: 1.5px solid #059669; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <span style="font-size: 10px; font-weight: bold; color: #065f46; text-transform: uppercase;">KHUD PAAUNU PARNE (खुद पाउने रकम NET PAYABLE):</span>
-                <div style="font-size: 8.5px; color: #047857;">Directly Deposited to Bank Account</div>
-              </div>
-              <strong style="font-size: 20px; color: #047857; font-family: monospace; font-weight: 900;">रू ${(p.khudPaaunuParne || 0).toLocaleString()}</strong>
+            <div class="sig-block">
+              जाँच गर्ने (प्रशासन / विद्यालय व्यवस्थापन समिति)<br/>
+              मिति: ${todayBS()}
             </div>
-
-            <div class="footer-sig">
-              <div class="sig-box">Employee Signature</div>
-              <div class="sig-box">Accountant (लेखापाल)</div>
-              <div class="sig-box">Headmaster / Stamp</div>
+            <div class="sig-block">
+              स्वीकृत गर्ने (प्रधानाध्यापक)<br/>
+              नाम: ${schoolProfile?.principalName || 'प्रेमलाल प्रसाद राउत'}
             </div>
           </div>
 
@@ -384,484 +723,1144 @@ export default function PayrollPage() {
     printWin.document.close();
   };
 
+  // Export to CSV helper
+  const exportToCsv = () => {
+    const headers = [
+      'S.N.', 'Teacher Name', 'Taha/Post', 'Basic Salary (A)', 'Grade No (B)', 'Grade Rate (C)',
+      'Grade Amount (D)', 'Gross Basic (E)', 'SSK 10% (F)', 'Insurance (G)', 'Gross Total (H)',
+      'Total Allowances (N)', 'Monthly Total (O)', `Period Gross (P ${monthCount}M)`, 'SSK 20% (Q)',
+      'Loan (R)', 'Insurance Ded (S)', 'Total Ded (T)', 'Net Salary (U)', 'Festival (V)', 'Dress (W)',
+      'Total Gross (X)', 'Social Tax 1% (Y)', 'Net Payable (Z)', 'Bank Account',
+    ];
+
+    const rows = selectedTeacherIds.map((id, idx) => {
+      const row = bulkRows[id];
+      const c = calculateRow(row);
+      return [
+        idx + 1,
+        `"${row.fullName}"`,
+        `"${row.taha || row.post}"`,
+        c.A, c.B, c.C, c.D, c.E, c.F, c.G, c.H,
+        c.N, c.O, c.P, c.Q, c.R, c.S, c.T, c.U, c.V, c.W, c.X, c.Y, c.Z,
+        `"${row.bankAccountNo || 'N/A'}"`,
+      ].join(',');
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Teacher_Payroll_${selectedYear}_${fromMonth}_to_${toMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header */}
+    <div className="space-y-6 pb-16">
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f]">
-            Teacher & Staff Payroll (शिक्षक तलब तथा भत्ता निकासा)
+          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f] flex items-center gap-2">
+            <Wallet className="text-[#1e3a5f]" />
+            <span>Government Teacher & Staff Payroll (शिक्षक तथा कर्मचारी तलब निकासा)</span>
           </h1>
           <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            नेपाल सरकारको नियमानुसार: ग्रेड, भत्ता, संचय कोष (१०%), पेश्की कट्टी, १% सामाजिक सुरक्षा कर र खुद भुक्तानी
+            नेपाल सरकारको आधिकारिक नियमानुसार: ग्रेड, भत्ता, १०% क.सं. कोष थप, बीमा, २०% कट्टी, १% सा.सु. कर र खुद बैंक भुक्तानी
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingPayroll(null);
-            setSelectedTeacherId('');
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-xs font-bold text-white hover:bg-[#2a5280] shadow-2xs transition"
-        >
-          <Plus size={14} />
-          <span>Generate Teacher Payroll (तलब तयार गर्नुहोस्)</span>
-        </button>
+        {/* Top 3 Navigation Tabs */}
+        <div className="flex rounded-xl bg-slate-200/80 p-1 text-xs font-bold gap-1 shadow-inner">
+          <button
+            onClick={() => setActiveTab('bulk')}
+            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'bulk' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-700 hover:text-gray-900'
+            }`}
+          >
+            <Calculator size={14} />
+            <span>Bulk Payroll Sheet (एकमुष्ट भरपाई)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'history' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-700 hover:text-gray-900'
+            }`}
+          >
+            <BookOpen size={14} />
+            <span>Payroll History (निकासा इतिहास)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('scales')}
+            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'scales' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-700 hover:text-gray-900'
+            }`}
+          >
+            <Settings size={14} />
+            <span>Salary Scales & Grades (तलब स्केल)</span>
+          </button>
+        </div>
       </div>
 
-      {/* ── REGISTERED TEACHERS DIRECT QUICK SELECTION ────────────────────────── */}
-      <div className="rounded-2xl border border-blue-100 bg-linear-to-r from-blue-50/70 to-indigo-50/50 p-4 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <UserCheck className="text-blue-700" size={18} />
-            <h2 className="text-sm font-bold text-[#1e3a5f]">
-              Registered Teachers List (शिक्षक सूची) — Direct Payroll Generation
-            </h2>
-            <span className="rounded-full bg-blue-200 text-blue-900 px-2 py-0.5 text-[10px] font-black">
-              {teachersData?.length || 0} Teachers
-            </span>
-          </div>
-
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2 text-gray-400" size={14} />
-            <input
-              type="text"
-              placeholder="Search teacher by name/PAN..."
-              value={teacherSearchTerm}
-              onChange={(e) => setTeacherSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {!teachersData || teachersData.length === 0 ? (
-          <p className="text-xs text-gray-500 italic p-2">
-            No active teachers registered yet. Add teachers in <strong className="text-blue-700">Teachers Page</strong> to manage payroll.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
-            {filteredTeachers.map((t: any) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-gray-100 shadow-2xs hover:border-blue-300 transition"
-              >
-                <div className="overflow-hidden pr-2">
-                  <p className="text-xs font-bold text-gray-900 truncate">{t.fullName}</p>
-                  <p className="text-[10px] text-gray-500 truncate">{t.taha || t.post || 'Teacher'}</p>
+      {/* ════════════════════ TAB 1: BULK DATA ENTRY & BHARPAI ════════════════════ */}
+      {activeTab === 'bulk' && (
+        <div className="space-y-4">
+          {/* Step 1: Period & Global Controls Strip */}
+          <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+              {/* Year & Month Selectors */}
+              <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-gray-800">
+                <div className="flex items-center gap-1.5 bg-blue-50/80 px-3 py-1.5 rounded-xl border border-blue-200">
+                  <Calendar size={15} className="text-[#1e3a5f]" />
+                  <span>आर्थिक वर्ष:</span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="bg-transparent font-bold text-[#1e3a5f] focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="2083">२०८३/०८४ (2083/84)</option>
+                    <option value="2082">२०८२/०८३ (2082/83)</option>
+                    <option value="2081">२०८१/०८२ (2081/82)</option>
+                  </select>
                 </div>
+
+                <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                  <span>कुन महिना देखि:</span>
+                  <select
+                    value={fromMonth}
+                    onChange={(e) => setFromMonth(e.target.value)}
+                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus:outline-hidden"
+                  >
+                    {NEPALI_MONTHS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <span>सम्म:</span>
+                  <select
+                    value={toMonth}
+                    onChange={(e) => setToMonth(e.target.value)}
+                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus:outline-hidden"
+                  >
+                    {NEPALI_MONTHS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <span className="bg-[#1e3a5f] text-white px-2 py-0.5 rounded-md font-mono text-[11px]">
+                    {monthCount} महिना ({monthCount === 3 ? 'त्रैमासिक निकासा' : monthCount === 1 ? 'मासिक निकासा' : `${monthCount} Months`})
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons Header */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => handleQuickGenerateForTeacher(t)}
-                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 text-[10px] font-bold shrink-0 transition"
+                  type="button"
+                  onClick={triggerOfficialGoNBharpaiPrint}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                 >
-                  <Plus size={11} />
-                  <span>Payroll</span>
+                  <Printer size={14} />
+                  <span>प्रिन्ट भरपाई पाना (Print Sheet)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={exportToCsv}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-800 font-bold text-xs flex items-center gap-1.5 border border-gray-300 transition cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Excel/CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={bulkSaveMutation.isPending}
+                  onClick={() => bulkSaveMutation.mutate()}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition disabled:opacity-60 cursor-pointer"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>{bulkSaveMutation.isPending ? 'Saving...' : 'Save Payroll Draft (सुरक्षित गर्नुहोस्)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsDisburseModalOpen(true)}
+                  className="px-4 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                >
+                  <CreditCard size={14} />
+                  <span>एकमुष्ट बैंक भुक्तानी (Disburse via Bank)</span>
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Payroll Records Table */}
-      <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-slate-50 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[#1e3a5f]">Generated Payroll History (निकासा विवरण)</h2>
-          <span className="text-xs font-semibold text-gray-500">{payrolls.length} Total Payroll Slips</span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-gray-700">
-            <thead className="bg-[#1e3a5f] text-white">
-              <tr>
-                <th className="px-4 py-3.5 font-bold uppercase">Teacher Name</th>
-                <th className="px-4 py-3.5 font-bold uppercase">Type & Taha</th>
-                <th className="px-4 py-3.5 font-bold uppercase">Period (महिना)</th>
-                <th className="px-4 py-3.5 font-bold uppercase text-right">Grade सहित तलब</th>
-                <th className="px-4 py-3.5 font-bold uppercase text-right">त्रैमासिक निकासा</th>
-                <th className="px-4 py-3.5 font-bold uppercase text-right">जम्मा कट्टी</th>
-                <th className="px-4 py-3.5 font-bold uppercase text-right">खुद पाउने रकम</th>
-                <th className="px-4 py-3.5 font-bold uppercase text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isLoading ? (
-                <tr><td colSpan={8} className="p-8 text-center text-gray-400">Loading payroll history...</td></tr>
-              ) : payrolls.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-400">
-                    <Wallet size={28} className="mx-auto text-gray-300 mb-1" />
-                    <p className="text-sm font-semibold text-gray-600">No payroll records generated yet</p>
-                  </td>
-                </tr>
-              ) : (
-                payrolls.map((p: any) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3.5 font-bold text-gray-900">{p.teacher?.fullName || '—'}</td>
-                    <td className="px-4 py-3.5">
-                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                        {p.teacher?.type === 'RASTRIYA' ? 'स्थाई (Govt)' : 'निजी स्रोत'}
-                      </span>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{p.taha}</p>
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-gray-600">{p.monthFrom} to {p.monthTo}</td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-gray-800">
-                      रू {p.gradeSahitTalab?.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-blue-800">
-                      रू {p.traimasikTalan?.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-rose-700">
-                      - रू {p.jammaKati?.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-extrabold text-emerald-700 text-sm">
-                      रू {p.khudPaaunuParne?.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => setSelectedSlip(p)}
-                          className="inline-flex items-center gap-1 rounded bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-1 text-[10px] font-extrabold shadow-2xs transition"
-                          title="Print Pay Slip"
-                        >
-                          <Printer size={12} />
-                          <span>Slip</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleOpenEditModal(p)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-1 text-[10px] font-bold shadow-2xs transition"
-                          title="Edit Payroll Record"
-                        >
-                          <Edit2 size={12} />
-                          <span>Edit</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete payroll record for "${p.teacher?.fullName || 'Teacher'}"?`)) {
-                              deletePayrollMutation.mutate(p.id);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 text-[10px] font-bold shadow-2xs transition"
-                          title="Delete Payroll Record"
-                        >
-                          <Trash2 size={12} />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── GENERATE / EDIT PAYROLL MODAL ────────────────────────────────────── */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto border border-gray-100">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-[#1e3a5f]">
-                  {editingPayroll ? 'Edit Teacher Payroll Record (तलब संशोधन)' : 'Nepal Government Teacher Payroll Engine (नेपाल सरकार शिक्षक निकासा)'}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {editingPayroll ? `Editing record #${editingPayroll.id}` : 'Select registered teacher or scale to auto-compute salary & deductions'}
-                </p>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Form Input Columns */}
-              <div className="md:col-span-2 space-y-4">
-                {/* 1. Teacher & Scale Selector */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Select Teacher (शिक्षक)</label>
-                    <select
-                      value={selectedTeacherId}
-                      onChange={(e) => handleTeacherChange(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 p-2 text-xs bg-white font-medium"
-                    >
-                      <option value="">-- Choose Registered Teacher --</option>
-                      {teachersData?.map((t: any) => (
-                        <option key={t.id} value={t.id}>
-                          {t.fullName} ({t.type === 'RASTRIYA' ? 'Govt' : 'Private'} - {t.taha || 'General'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Scale Preset (तह/श्रेणी)</label>
-                    <select
-                      onChange={(e) => handleScaleSelect(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 p-2 text-xs bg-white"
-                    >
-                      <option value="">-- Select Scale Preset --</option>
-                      {scalesData?.map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {s.taha} ({s.shreni}) — Rs. {s.moolTalab}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Period & Scale Info */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Month From (BS)</label>
-                    <input
-                      type="text"
-                      value={monthFrom}
-                      onChange={(e) => setMonthFrom(e.target.value)}
-                      placeholder="2081-04"
-                      className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Month To (BS)</label>
-                    <input
-                      type="text"
-                      value={monthTo}
-                      onChange={(e) => setMonthTo(e.target.value)}
-                      placeholder="2081-06"
-                      className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Mool Talab (मूल तलब)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={moolTalab}
-                      onChange={(e) => setMoolTalab(Number(e.target.value))}
-                      className="w-full rounded-lg border border-gray-300 p-2 text-xs font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Grade No & Amount</label>
-                    <div className="flex gap-1">
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="No"
-                        value={gradeNo}
-                        onChange={(e) => setGradeNo(Number(e.target.value))}
-                        className="w-1/2 rounded-lg border border-gray-300 p-2 text-xs font-mono"
-                      />
-                      <input
-                        type="number"
-                        step="any"
-                        placeholder="Amt"
-                        value={gradeAmount}
-                        onChange={(e) => setGradeAmount(Number(e.target.value))}
-                        className="w-1/2 rounded-lg border border-gray-300 p-2 text-xs font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Allowances Section */}
-                <div className="bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100 space-y-2">
-                  <span className="text-xs font-extrabold text-emerald-800 uppercase tracking-wide">
-                    Allowances & Perks (भत्ता तथा सुविधाहरू)
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <label className="text-[11px] text-gray-600">Mahangi Bhata (महँगी)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={mahangiGhata}
-                        onChange={(e) => setMahangiGhata(Number(e.target.value))}
-                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-600">Pra-A Bhata (प्र.अ.)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={praABhata}
-                        onChange={(e) => setPraABhata(Number(e.target.value))}
-                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-600">Incharge Bhata</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={prabiInchargeBhata}
-                        onChange={(e) => setPrabiInchargeBhata(Number(e.target.value))}
-                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Deductions Section */}
-                <div className="bg-rose-50/50 p-3.5 rounded-xl border border-rose-100 space-y-2">
-                  <span className="text-xs font-extrabold text-rose-800 uppercase tracking-wide">
-                    Deductions (कट्टी विवरणहरू)
-                  </span>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <label className="text-[11px] text-gray-600">Kosh Sapati (सापती)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={karmachariKoshSapati}
-                        onChange={(e) => setKarmachariKoshSapati(Number(e.target.value))}
-                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-600">Bima Katti (बीमा)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={bimaKati}
-                        onChange={(e) => setBimaKati(Number(e.target.value))}
-                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-600">Peshki Katti (पेश्की)</label>
-                      <input
-                        type="number"
-                        step="any"
-                        value={peshkiKati}
-                        onChange={(e) => setPeshkiKati(Number(e.target.value))}
-                        className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Remarks */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Remarks / Note</label>
+            {/* Global Allowance Toggles Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-gray-700">
+              <div className="flex items-center gap-4 flex-wrap">
+                <label className="flex items-center gap-1.5 font-bold text-purple-900 cursor-pointer">
                   <input
-                    type="text"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    placeholder="Optional voucher remarks..."
-                    className="w-full rounded-lg border border-gray-300 p-2 text-xs"
+                    type="checkbox"
+                    checked={globalFestivalAllowed}
+                    onChange={(e) => {
+                      const val = e.target.checked;
+                      setGlobalFestivalAllowed(val);
+                      applyGlobalSettingsToRows(val, globalDressAllowance, globalDearnessAmount, globalInsuranceGovContribution);
+                    }}
+                    className="rounded text-purple-600 w-4 h-4 cursor-pointer"
+                  />
+                  <span>🎁 चाडपर्व खर्च समावेश (Dashain Allowance = 1 Month E)</span>
+                </label>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-gray-600">👔 पोसाक भत्ता (Dress):</span>
+                  <input
+                    type="number"
+                    value={globalDressAllowance}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setGlobalDressAllowance(val);
+                      applyGlobalSettingsToRows(globalFestivalAllowed, val, globalDearnessAmount, globalInsuranceGovContribution);
+                    }}
+                    className="w-20 px-2 py-0.5 border border-gray-300 rounded font-mono text-xs bg-white"
+                    placeholder="रू ०"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-gray-600">महङ्गी भत्ता दर (Dearness):</span>
+                  <input
+                    type="number"
+                    value={globalDearnessAmount}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setGlobalDearnessAmount(val);
+                      applyGlobalSettingsToRows(globalFestivalAllowed, globalDressAllowance, val, globalInsuranceGovContribution);
+                    }}
+                    className="w-20 px-2 py-0.5 border border-gray-300 rounded font-mono text-xs bg-white"
                   />
                 </div>
               </div>
 
-              {/* Live Preview Column */}
-              <div className="bg-[#1e3a5f] text-white p-5 rounded-2xl flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex items-center gap-1.5 border-b border-blue-800 pb-2 mb-3">
-                    <Calculator size={16} className="text-amber-400" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                      Live Payroll Computation
-                    </h4>
-                  </div>
+              <span className="text-[11px] text-gray-500 font-medium">
+                * १०% संचय कोष थप [F], २०% संचय कोष कट्टी [Q], बीमा [G & S] र १% कर [Y] स्वतः हिसाब हुन्छ।
+              </span>
+            </div>
+          </div>
 
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between border-b border-blue-900/60 pb-1">
-                      <span className="text-gray-300">Basic + Grade ({gradeNo} Grades):</span>
-                      <span className="font-mono font-bold">Rs. {gradeSahitTalab.toLocaleString()}</span>
-                    </div>
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-2xs">
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200">
+              <button
+                onClick={() => setSelectedCategory('ALL')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  selectedCategory === 'ALL' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                All Staff ({teachersData?.length || 0})
+              </button>
+              <button
+                onClick={() => setSelectedCategory('TEACHING')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  selectedCategory === 'TEACHING' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Teaching Faculty (शिक्षक)
+              </button>
+              <button
+                onClick={() => setSelectedCategory('NON_TEACHING')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  selectedCategory === 'NON_TEACHING' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Non-Teaching Staff (कर्मचारी)
+              </button>
+            </div>
 
-                    <div className="flex justify-between border-b border-blue-900/60 pb-1">
-                      <span className="text-gray-300">10% SSK (सञ्चय कोष):</span>
-                      <span className="font-mono font-semibold text-rose-300">- Rs. {karmachari10Pct.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between border-b border-blue-900/60 pb-1">
-                      <span className="text-gray-300">Total Allowances (भत्ता):</span>
-                      <span className="font-mono font-semibold text-emerald-300">+ Rs. {jammaBhata.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between border-b border-blue-900/60 pb-1 pt-1 font-bold text-amber-300">
-                      <span>3-Month Gross (त्रिमासिक):</span>
-                      <span className="font-mono">Rs. {traimasikTalan.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between border-b border-blue-900/60 pb-1 text-rose-300">
-                      <span>Total Deductions (कट्टी):</span>
-                      <span className="font-mono">- Rs. {jammaKati.toLocaleString()}</span>
-                    </div>
-
-                    <div className="flex justify-between border-b border-blue-900/60 pb-1 text-gray-300">
-                      <span>1% Social Security Tax:</span>
-                      <span className="font-mono">- Rs. {samajikSurakshaKar1Pct.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-emerald-950/80 border border-emerald-500/40 p-3.5 rounded-xl">
-                  <span className="text-[10px] text-emerald-300 uppercase font-bold tracking-wider">
-                    NET PAYABLE TO TEACHER (खुद पाउने रकम):
-                  </span>
-                  <div className="text-2xl font-black font-mono text-emerald-400 mt-1">
-                    Rs. {khudPaaunuParne.toLocaleString()}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => createPayrollMutation.mutate()}
-                  disabled={createPayrollMutation.isPending}
-                  className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white py-3 text-xs font-extrabold shadow-lg transition"
-                >
-                  {createPayrollMutation.isPending
-                    ? 'Saving Payroll...'
-                    : editingPayroll
-                    ? 'Update Payroll Record (निकासा अपडेट)'
-                    : 'Save & Issue Payroll (निकासा सेभ गर्नुहोस्)'}
-                </button>
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search staff by name, post, taha, PAN..."
+                  value={searchStaff}
+                  onChange={(e) => setSearchStaff(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs focus:bg-white focus:outline-hidden"
+                />
               </div>
+
+              <div className="flex items-center gap-1.5 font-bold text-xs text-gray-700">
+                <input
+                  type="checkbox"
+                  id="selectAllStaff"
+                  checked={selectedTeacherIds.length === (teachersData?.length || 0) && teachersData?.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedTeacherIds(teachersData?.map((t: any) => t.id) || []);
+                    } else {
+                      setSelectedTeacherIds([]);
+                    }
+                  }}
+                  className="rounded text-[#1e3a5f] w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="selectAllStaff" className="cursor-pointer">सबै छनौट ({selectedTeacherIds.length})</label>
+              </div>
+            </div>
+          </div>
+
+          {/* ════════════ SPREADSHEET TABLE GRID (A to Z) ════════════ */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto max-h-[620px]">
+              <table className="w-full text-left text-xs text-gray-700 divide-y divide-gray-200 relative border-collapse">
+                <thead className="bg-[#1e3a5f] text-white text-[10.5px] font-extrabold uppercase tracking-tight sticky top-0 z-20 shadow-md">
+                  <tr>
+                    <th className="py-2.5 px-2 text-center w-8">
+                      <Check size={12} className="mx-auto" />
+                    </th>
+                    <th className="py-2.5 px-2 text-center w-8">क्र.सं.</th>
+                    <th className="py-2.5 px-3 min-w-[170px]">कर्मचारीको नाम</th>
+                    <th className="py-2.5 px-2 min-w-[130px]">तह / स्केल</th>
+                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-blue-900/60">मूल तलब<br/>[A]</th>
+                    <th className="py-2.5 px-2 min-w-[65px] text-center">ग्रेड संख्या<br/>[B]</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right">ग्रेड दर<br/>[C]</th>
+                    <th className="py-2.5 px-2 min-w-[80px] text-right bg-blue-950/70">जम्मा ग्रेड<br/>[D=B×C]</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-900">जम्मा तलब<br/>[E=A+D]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right">क.सं. कोष १०%<br/>[F]</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right">बीमा थप<br/>[G]</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-indigo-950">कुल तलब<br/>[H=E+F+G]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-900">जम्मा भत्ता<br/>[N]</th>
+                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-purple-950">मासिक जम्मा<br/>[O=H+N]</th>
+                    <th className="py-2.5 px-2 min-w-[110px] text-right bg-slate-900 text-amber-300">
+                      {monthCount}M तलब भत्ता<br/>[P=O×{monthCount}]
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-950">कोष २०% कट्टी<br/>[Q]</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right bg-rose-950/70">सापट कट्टी<br/>[R]</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right bg-rose-950/70">बीमा कट्टी<br/>[S]</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-rose-900 text-white">जम्मा कट्टी<br/>[T=Q+R+S]</th>
+                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-blue-950">बाँकी पाउनु<br/>[U=P-T]</th>
+                    <th className="py-2.5 px-2 min-w-[80px] text-right">चाडपर्व<br/>[V=E]</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right">पोसाक<br/>[W]</th>
+                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-emerald-950">जम्मा रकम<br/>[X=U+V+W]</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right">सा.सु. कर १%<br/>[Y]</th>
+                    <th className="py-2.5 px-3 min-w-[115px] text-right bg-emerald-700 text-white font-black">
+                      खुद भुक्तानी<br/>[Z=X-Y]
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {isTeachersLoading ? (
+                    <tr>
+                      <td colSpan={25} className="p-12 text-center text-gray-400">
+                        <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
+                        <p className="mt-2 text-xs">Loading payroll sheet data...</p>
+                      </td>
+                    </tr>
+                  ) : displayedStaff.length === 0 ? (
+                    <tr>
+                      <td colSpan={25} className="p-12 text-center text-gray-400">
+                        No teachers or staff found.
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedStaff.map((teacher: any, idx: number) => {
+                      const row = bulkRows[teacher.id] || {};
+                      const isSelected = selectedTeacherIds.includes(teacher.id);
+                      const calc = calculateRow(row);
+
+                      return (
+                        <tr
+                          key={teacher.id}
+                          className={`transition ${isSelected ? 'bg-white hover:bg-blue-50/50' : 'bg-slate-50/70 opacity-60'}`}
+                        >
+                          {/* Checkbox */}
+                          <td className="py-2 px-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedTeacherIds((prev) => [...prev, teacher.id]);
+                                } else {
+                                  setSelectedTeacherIds((prev) => prev.filter((id) => id !== teacher.id));
+                                }
+                              }}
+                              className="rounded text-[#1e3a5f] w-3.5 h-3.5 cursor-pointer"
+                            />
+                          </td>
+
+                          {/* S.N. */}
+                          <td className="py-2 px-2 text-center font-mono text-gray-500 font-bold text-[11px]">
+                            {idx + 1}
+                          </td>
+
+                          {/* Name & Title */}
+                          <td className="py-2 px-3">
+                            <div className="font-extrabold text-gray-900 text-xs truncate max-w-[160px]">
+                              {teacher.fullName}
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-nepali truncate max-w-[160px]">
+                              {teacher.fullNameNepali || teacher.post || 'शिक्षक'}
+                            </div>
+                          </td>
+
+                          {/* Taha / Scale Preset Dropdown */}
+                          <td className="py-2 px-2">
+                            <select
+                              value={scalesData?.find((s: any) => s.taha === row.taha && s.shreni === row.shreni)?.id || ''}
+                              onChange={(e) => handleScaleSelection(teacher.id, e.target.value)}
+                              className="w-full text-[10px] font-semibold bg-slate-50 border border-gray-200 rounded p-1 focus:bg-white truncate"
+                            >
+                              <option value="">{row.taha || 'स्केल छनौट'}</option>
+                              {scalesData?.map((sc: any) => (
+                                <option key={sc.id} value={sc.id}>
+                                  {sc.taha} - {sc.shreni} (रु {sc.moolTalab?.toLocaleString()})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+
+                          {/* [A] मूल तलब */}
+                          <td className="py-2 px-2 text-right font-mono bg-blue-50/40">
+                            <input
+                              type="number"
+                              value={row.moolTalab || 0}
+                              onChange={(e) => handleFieldChange(teacher.id, 'moolTalab', parseFloat(e.target.value) || 0)}
+                              className="w-20 text-right font-mono font-bold text-xs bg-transparent border-b border-gray-300 focus:border-blue-600 focus:outline-hidden"
+                            />
+                          </td>
+
+                          {/* [B] ग्रेड संख्या */}
+                          <td className="py-2 px-2 text-center font-mono">
+                            <input
+                              type="number"
+                              min="0"
+                              max="12"
+                              value={row.gradeNo || 0}
+                              onChange={(e) => handleFieldChange(teacher.id, 'gradeNo', parseInt(e.target.value, 10) || 0)}
+                              className="w-12 text-center font-mono font-bold text-xs bg-slate-50 border border-gray-300 rounded p-0.5 focus:bg-white"
+                            />
+                          </td>
+
+                          {/* [C] ग्रेड दर */}
+                          <td className="py-2 px-2 text-right font-mono">
+                            <input
+                              type="number"
+                              value={row.gradeAmount || 0}
+                              onChange={(e) => handleFieldChange(teacher.id, 'gradeAmount', parseFloat(e.target.value) || 0)}
+                              className="w-16 text-right font-mono text-xs bg-transparent border-b border-gray-300 focus:outline-hidden"
+                            />
+                          </td>
+
+                          {/* [D] जम्मा ग्रेड रकम */}
+                          <td className="py-2 px-2 text-right font-mono font-semibold text-gray-700 bg-slate-50">
+                            {calc.D?.toLocaleString()}
+                          </td>
+
+                          {/* [E] जम्मा तलब (A + D) */}
+                          <td className="py-2 px-2 text-right font-mono font-extrabold text-blue-950 bg-blue-50/70">
+                            {calc.E?.toLocaleString()}
+                          </td>
+
+                          {/* [F] क.सं. कोष थप १०% */}
+                          <td className="py-2 px-2 text-right font-mono text-gray-600">
+                            {calc.F?.toLocaleString()}
+                          </td>
+
+                          {/* [G] बीमा थप */}
+                          <td className="py-2 px-2 text-right font-mono">
+                            <input
+                              type="number"
+                              value={row.bimaThap || 0}
+                              onChange={(e) => handleFieldChange(teacher.id, 'bimaThap', parseFloat(e.target.value) || 0)}
+                              className="w-14 text-right font-mono text-xs bg-transparent border-b border-gray-300 focus:outline-hidden"
+                            />
+                          </td>
+
+                          {/* [H] कुल तलब (E + F + G) */}
+                          <td className="py-2 px-2 text-right font-mono font-bold text-indigo-900 bg-indigo-50/50">
+                            {calc.H?.toLocaleString()}
+                          </td>
+
+                          {/* [N] जम्मा भत्ता */}
+                          <td className="py-2 px-2 text-right font-mono font-semibold text-purple-900 bg-purple-50/50">
+                            <div className="flex items-center justify-end gap-1">
+                              <span>{calc.N?.toLocaleString()}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSingleEditData({ ...row, ...calc });
+                                  setIsSingleEditModalOpen(true);
+                                }}
+                                className="text-[9px] text-purple-700 hover:text-purple-950 underline cursor-pointer"
+                                title="Edit detailed allowances (प्र.अ., महङ्गी, दुर्गम भत्ता)"
+                              >
+                                ⚙️
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* [O] मासिक जम्मा (H + N) */}
+                          <td className="py-2 px-2 text-right font-mono font-bold text-purple-950 bg-purple-50">
+                            {calc.O?.toLocaleString()}
+                          </td>
+
+                          {/* [P] त्रैमासिक / कुल तलब भत्ता (O * MonthCount) */}
+                          <td className="py-2 px-2 text-right font-mono font-extrabold text-[#1e3a5f] bg-blue-100/60 text-xs">
+                            {calc.P?.toLocaleString()}
+                          </td>
+
+                          {/* [Q] कोष २०% कट्टी */}
+                          <td className="py-2 px-2 text-right font-mono text-rose-800 bg-rose-50/40">
+                            {calc.Q?.toLocaleString()}
+                          </td>
+
+                          {/* [R] सापट कट्टी */}
+                          <td className="py-2 px-2 text-right font-mono">
+                            <input
+                              type="number"
+                              value={row.karmachariKoshSapati || 0}
+                              onChange={(e) => handleFieldChange(teacher.id, 'karmachariKoshSapati', parseFloat(e.target.value) || 0)}
+                              className="w-16 text-right font-mono text-xs bg-transparent border-b border-rose-300 focus:outline-hidden text-rose-800"
+                              placeholder="0"
+                            />
+                          </td>
+
+                          {/* [S] बीमा कट्टी */}
+                          <td className="py-2 px-2 text-right font-mono text-rose-800">
+                            {calc.S?.toLocaleString()}
+                          </td>
+
+                          {/* [T] जम्मा कट्टी (Q + R + S) */}
+                          <td className="py-2 px-2 text-right font-mono font-extrabold text-rose-900 bg-rose-100/70">
+                            {calc.T?.toLocaleString()}
+                          </td>
+
+                          {/* [U] बाँकी पाउनु पर्ने (P - T) */}
+                          <td className="py-2 px-2 text-right font-mono font-bold text-gray-900 bg-slate-50">
+                            {calc.U?.toLocaleString()}
+                          </td>
+
+                          {/* [V] चाडपर्व खर्च */}
+                          <td className="py-2 px-2 text-right font-mono text-purple-900">
+                            <input
+                              type="checkbox"
+                              checked={row.includeChaadparba || false}
+                              onChange={(e) => handleFieldChange(teacher.id, 'includeChaadparba', e.target.checked)}
+                              className="rounded text-purple-600 mr-1 cursor-pointer"
+                              title="Include 1 Month Dashain Allowance"
+                            />
+                            {calc.V ? calc.V.toLocaleString() : '-'}
+                          </td>
+
+                          {/* [W] पोसाक भत्ता */}
+                          <td className="py-2 px-2 text-right font-mono">
+                            <input
+                              type="number"
+                              value={row.poshakBhata || 0}
+                              onChange={(e) => handleFieldChange(teacher.id, 'poshakBhata', parseFloat(e.target.value) || 0)}
+                              className="w-14 text-right font-mono text-xs bg-transparent border-b border-gray-300 focus:outline-hidden"
+                            />
+                          </td>
+
+                          {/* [X] जम्मा रकम (U + V + W) */}
+                          <td className="py-2 px-2 text-right font-mono font-bold text-gray-950 bg-emerald-50/50">
+                            {calc.X?.toLocaleString()}
+                          </td>
+
+                          {/* [Y] सा.सु. कर १% */}
+                          <td className="py-2 px-2 text-right font-mono text-amber-900">
+                            {calc.Y?.toLocaleString()}
+                          </td>
+
+                          {/* [Z] खुद भुक्तानी पाउनु पर्ने */}
+                          <td className="py-2 px-3 text-right font-mono font-black text-emerald-800 bg-emerald-100/80 text-xs">
+                            रू {calc.Z?.toLocaleString()}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+
+                {/* ═════════ STICKY GRAND TOTAL FOOTER ═════════ */}
+                <tfoot className="bg-slate-900 text-white font-bold text-xs sticky bottom-0 z-20 shadow-2xl">
+                  <tr>
+                    <td colSpan={4} className="py-3 px-3 text-left font-black tracking-wide text-amber-300">
+                      कुल जम्मा (GRAND TOTAL: {grandTotals.count} जना शिक्षक/कर्मचारी):
+                    </td>
+                    <td colSpan={10}></td>
+                    <td className="py-3 px-2 text-right font-mono font-extrabold text-amber-300 text-sm">
+                      रू {grandTotals.totalGrossP.toLocaleString()}
+                    </td>
+                    <td colSpan={3}></td>
+                    <td className="py-3 px-2 text-right font-mono font-extrabold text-rose-300 text-sm">
+                      - रू {grandTotals.totalDeductionT.toLocaleString()}
+                    </td>
+                    <td></td>
+                    <td className="py-3 px-2 text-right font-mono text-purple-200">
+                      रू {grandTotals.totalFestivalV.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-2 text-right font-mono text-blue-200">
+                      रू {grandTotals.totalDressW.toLocaleString()}
+                    </td>
+                    <td></td>
+                    <td className="py-3 px-2 text-right font-mono text-amber-300">
+                      - रू {grandTotals.totalTaxY.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-black text-emerald-300 text-base bg-emerald-950/80 border-l-2 border-emerald-400">
+                      रू {grandTotals.totalNetZ.toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── PRINT PAY SLIP MODAL ────────────────────────────────────────────── */}
-      {selectedSlip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-gray-100">
+      {/* ════════════════════ TAB 2: PAYROLL HISTORY & SLIPS ════════════════════ */}
+      {activeTab === 'history' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+            <div>
+              <h2 className="text-sm font-bold text-[#1e3a5f]">Generated Payroll History (निकासा विवरण तथा भरपाई अभिलेख)</h2>
+              <p className="text-xs text-gray-500 font-nepali">पहिले तयार वा भुक्तानी गरिएका शिक्षक/कर्मचारी तलब भरपाईको सूची</p>
+            </div>
+            <span className="text-xs font-bold text-gray-600 bg-slate-100 px-3 py-1 rounded-xl">
+              कुल भरपाई: {payrollsData?.length || 0}
+            </span>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-gray-700">
+                <thead className="bg-[#1e3a5f] text-white">
+                  <tr>
+                    <th className="px-4 py-3.5 font-bold uppercase">Teacher Name</th>
+                    <th className="px-4 py-3.5 font-bold uppercase">Type & Taha</th>
+                    <th className="px-4 py-3.5 font-bold uppercase">Period (महिना)</th>
+                    <th className="px-4 py-3.5 font-bold uppercase text-right">Grade सहित तलब</th>
+                    <th className="px-4 py-3.5 font-bold uppercase text-right">कुल तलब भत्ता</th>
+                    <th className="px-4 py-3.5 font-bold uppercase text-right">जम्मा कट्टी</th>
+                    <th className="px-4 py-3.5 font-bold uppercase text-right">खुद पाउने रकम</th>
+                    <th className="px-4 py-3.5 font-bold uppercase text-center">Status</th>
+                    <th className="px-4 py-3.5 font-bold uppercase text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {isPayrollsLoading ? (
+                    <tr><td colSpan={9} className="p-8 text-center text-gray-400">Loading payroll records...</td></tr>
+                  ) : (payrollsData || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-8 text-center text-gray-400">
+                        <Wallet size={28} className="mx-auto text-gray-300 mb-1" />
+                        <p className="text-sm font-semibold text-gray-600">No payroll records generated yet</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    payrollsData.map((p: any) => (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3.5 font-bold text-gray-900">
+                          {p.teacher?.fullName || '—'}
+                          {p.teacher?.fullNameNepali && (
+                            <p className="text-[10px] text-gray-500 font-nepali">{p.teacher.fullNameNepali}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                            {p.teacher?.type === 'RASTRIYA' ? 'स्थाई (Govt)' : 'निजी स्रोत'}
+                          </span>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{p.taha} - {p.shreni}</p>
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-gray-600">{p.monthFrom} to {p.monthTo}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-semibold text-gray-800">
+                          रू {p.gradeSahitTalab?.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-semibold text-blue-800">
+                          रू {p.traimasikTalan?.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-semibold text-rose-700">
+                          - रू {p.jammaKati?.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-extrabold text-emerald-700 text-sm">
+                          रू {p.khudPaaunuParne?.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            p.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {p.status === 'PAID' ? '✓ PAID' : 'DRAFT'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setSelectedSlip(p)}
+                              className="inline-flex items-center gap-1 rounded bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-2 py-1 text-[10px] font-extrabold shadow-2xs transition cursor-pointer"
+                              title="Print Individual Pay Slip"
+                            >
+                              <Printer size={12} />
+                              <span>Slip</span>
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (window.confirm(`Delete payroll record for "${p.teacher?.fullName || 'Staff'}"?`)) {
+                                  await api.delete(`/payroll/${p.id}`);
+                                  toast.success('Record deleted');
+                                  queryClient.invalidateQueries({ queryKey: ['payrolls-list'] });
+                                }
+                              }}
+                              className="p-1 rounded text-rose-500 hover:bg-rose-50 cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════ TAB 3: SALARY SCALES & GRADES ════════════════════ */}
+      {activeTab === 'scales' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+            <div>
+              <h2 className="text-sm font-bold text-[#1e3a5f] flex items-center gap-2">
+                <Settings size={16} />
+                <span>Nepal Government Teacher Salary Scales & Grade Rates (नेपाल सरकार तलब स्केल तथा ग्रेड दर)</span>
+              </h2>
+              <p className="text-xs text-gray-500 font-nepali">
+                तह तथा श्रेणी अनुसारको आधारभूत मूल तलब [A] र प्रति ग्रेड दर [C] सम्पादन तथा व्यवस्थापन
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => seedScalesMutation.mutate()}
+                disabled={seedScalesMutation.isPending}
+                className="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1 transition cursor-pointer"
+              >
+                <RotateCcw size={13} />
+                <span>Reset to Official Nepal GoN Scales</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingScale(null);
+                  setScaleForm({ taha: 'माध्यमिक तह', shreni: 'तृतीय श्रेणी', moolTalab: 43689, gradeAmount: 1456 });
+                  setIsScaleModalOpen(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] text-white font-bold text-xs flex items-center gap-1 transition cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>+ Add Salary Scale</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+            <table className="w-full text-left text-xs text-gray-700">
+              <thead className="bg-[#1e3a5f] text-white">
+                <tr>
+                  <th className="px-4 py-3.5 font-bold uppercase">क्र.सं.</th>
+                  <th className="px-4 py-3.5 font-bold uppercase">तह / श्रेणी (Taha & Shreni)</th>
+                  <th className="px-4 py-3.5 font-bold uppercase text-right">सुरु मूल तलब (Basic Salary A)</th>
+                  <th className="px-4 py-3.5 font-bold uppercase text-right">प्रति ग्रेड दर (Grade Rate C)</th>
+                  <th className="px-4 py-3.5 font-bold uppercase text-center">Status</th>
+                  <th className="px-4 py-3.5 font-bold uppercase text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isScalesLoading ? (
+                  <tr><td colSpan={6} className="p-8 text-center text-gray-400">Loading salary scales...</td></tr>
+                ) : (scalesData || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                      No salary scales registered. Click &quot;Reset to Official Nepal GoN Scales&quot; above to initialize.
+                    </td>
+                  </tr>
+                ) : (
+                  scalesData.map((sc: any, idx: number) => (
+                    <tr key={sc.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono font-bold text-gray-500">{idx + 1}</td>
+                      <td className="px-4 py-3 font-bold text-gray-900">
+                        {sc.taha} <span className="text-gray-500 font-normal">({sc.shreni})</span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-blue-900">
+                        रू {sc.moolTalab?.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-purple-900">
+                        रू {sc.gradeAmount?.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Active
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setEditingScale(sc);
+                              setScaleForm({
+                                taha: sc.taha,
+                                shreni: sc.shreni || '',
+                                moolTalab: sc.moolTalab,
+                                gradeAmount: sc.gradeAmount,
+                              });
+                              setIsScaleModalOpen(true);
+                            }}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete scale "${sc.taha} - ${sc.shreni}"?`)) {
+                                deleteScaleMutation.mutate(sc.id);
+                              }
+                            }}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════ MODAL 1: DISBURSE VIA BANK (एकमुष्ट बैंक भुक्तानी) ════════════ */}
+      {isDisburseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-gray-100">
             <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold text-[#1e3a5f]">Pay Slip Options</h3>
-              <button onClick={() => setSelectedSlip(null)} className="text-gray-400 hover:text-gray-600">
+              <div>
+                <h3 className="text-base font-bold text-[#1e3a5f] flex items-center gap-2">
+                  <CreditCard className="text-emerald-600" size={18} />
+                  <span>एकमुष्ट बैंक तलब निकासा (Bulk Bank Salary Allotment)</span>
+                </h3>
+                <p className="text-[11px] text-gray-500 font-nepali">
+                  {selectedTeacherIds.length} जना शिक्षक/कर्मचारीको कुल खुद तलब रकम निकासा गरी लेखा प्रणालीमा खर्च प्रविष्टि हुनेछ।
+                </p>
+              </div>
+              <button onClick={() => setIsDisburseModalOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
-              <CheckCircle2 size={32} className="mx-auto text-emerald-600 mb-2" />
-              <p className="text-sm font-bold text-emerald-900">
-                Payroll Slip Ready for {selectedSlip.teacher?.fullName || 'Teacher'}
-              </p>
-              <p className="text-xs text-emerald-700 mt-1 font-mono">
-                Net Pay: Rs. {(selectedSlip.khudPaaunuParne || 0).toLocaleString()}
-              </p>
+            <div className="bg-emerald-50/80 p-3 rounded-xl border border-emerald-200 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase text-emerald-900 block">कुल निकासा रकम (Net Disbursable):</span>
+                <span className="text-xs font-semibold text-emerald-800">{selectedTeacherIds.length} Teachers / Staff</span>
+              </div>
+              <span className="text-xl font-black font-mono text-emerald-900">
+                रू {grandTotals.totalNetZ.toLocaleString()}
+              </span>
             </div>
 
-            <div className="flex gap-2 justify-end">
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">भुक्तानी गरिने विद्यालयको बैंक खाता (School Bank Account):</label>
+                <select
+                  value={disburseForm.bankAccountId}
+                  onChange={(e) => setDisburseForm({ ...disburseForm, bankAccountId: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 p-2 font-semibold bg-white"
+                >
+                  <option value="">-- Choose Bank Account --</option>
+                  {(bankAccountsData || []).map((b: any) => (
+                    <option key={b.id} value={b.id}>
+                      {b.bankName} - {b.accountName} (A/C: {b.accountNumber || b.accountNo})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">निकासा मिति BS (Date):</label>
+                  <input
+                    type="text"
+                    value={disburseForm.paymentDateBs}
+                    onChange={(e) => setDisburseForm({ ...disburseForm, paymentDateBs: e.target.value })}
+                    className="w-full rounded-xl border border-gray-300 p-2 font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">चेक नं. / भौचर नं. (Cheque/Voucher):</label>
+                  <input
+                    type="text"
+                    placeholder="CHQ-10492 / VCH-01"
+                    value={disburseForm.chequeNo}
+                    onChange={(e) => setDisburseForm({ ...disburseForm, chequeNo: e.target.value })}
+                    className="w-full rounded-xl border border-gray-300 p-2 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">कैफियत / टिप्पणी (Remarks / Narration):</label>
+                <textarea
+                  rows={2}
+                  placeholder="आर्थिक वर्ष २०८३/०८४ त्रैमासिक तलब भत्ता निकासा..."
+                  value={disburseForm.remarks}
+                  onChange={(e) => setDisburseForm({ ...disburseForm, remarks: e.target.value })}
+                  className="w-full rounded-xl border border-gray-300 p-2 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t">
               <button
+                type="button"
+                onClick={() => setIsDisburseModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                रद्द गर्नुहोस्
+              </button>
+              <button
+                type="button"
+                disabled={issueBulkPaymentMutation.isPending}
+                onClick={() => issueBulkPaymentMutation.mutate()}
+                className="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition disabled:opacity-60 cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={15} />
+                <span>{issueBulkPaymentMutation.isPending ? 'Processing...' : 'निकासा तथा खर्च प्रविष्टि गर्नुहोस्'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════ MODAL 2: DETAILED ALLOWANCES EDIT MODAL ════════════ */}
+      {isSingleEditModalOpen && singleEditData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#1e3a5f]">
+                  भत्ता विवरण सम्पादन: {singleEditData.fullName}
+                </h3>
+                <p className="text-[10.5px] text-gray-500">प्र.अ. भत्ता, महङ्गी, दुर्गम तथा प्रोत्साहन भत्ता समायोजन</p>
+              </div>
+              <button onClick={() => setIsSingleEditModalOpen(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-0.5">प्र.अ. / इन्चार्ज भत्ता [I]:</label>
+                <input
+                  type="number"
+                  value={bulkRows[singleEditData.teacherId]?.praABhata || 0}
+                  onChange={(e) => handleFieldChange(singleEditData.teacherId, 'praABhata', parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-0.5">महङ्गी भत्ता [J]:</label>
+                <input
+                  type="number"
+                  value={bulkRows[singleEditData.teacherId]?.mahangiGhata || 0}
+                  onChange={(e) => handleFieldChange(singleEditData.teacherId, 'mahangiGhata', parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-0.5">दुर्गम भत्ता [K]:</label>
+                <input
+                  type="number"
+                  value={bulkRows[singleEditData.teacherId]?.durgamBhata || 0}
+                  onChange={(e) => handleFieldChange(singleEditData.teacherId, 'durgamBhata', parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-0.5">प्रोत्साहन भत्ता [L]:</label>
+                <input
+                  type="number"
+                  value={bulkRows[singleEditData.teacherId]?.protsahanBhata || 0}
+                  onChange={(e) => handleFieldChange(singleEditData.teacherId, 'protsahanBhata', parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-0.5">अन्य भत्ता [M]:</label>
+                <input
+                  type="number"
+                  value={bulkRows[singleEditData.teacherId]?.otherBhata || 0}
+                  onChange={(e) => handleFieldChange(singleEditData.teacherId, 'otherBhata', parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setIsSingleEditModalOpen(false)}
+                className="px-4 py-2 bg-[#1e3a5f] text-white rounded-xl font-bold text-xs cursor-pointer"
+              >
+                सम्झनुहोस् (Done)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════ MODAL 3: SALARY SCALE CREATE/EDIT ════════════ */}
+      {isScaleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-gray-100">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-bold text-[#1e3a5f]">
+                {editingScale ? 'Edit Salary Scale' : 'Add New Salary Scale'}
+              </h3>
+              <button onClick={() => setIsScaleModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">तह (Taha / Level):</label>
+                <input
+                  type="text"
+                  placeholder="माध्यमिक तह / निम्न माध्यमिक तह / प्राथमिक तह"
+                  value={scaleForm.taha}
+                  onChange={(e) => setScaleForm({ ...scaleForm, taha: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-semibold"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">श्रेणी (Shreni):</label>
+                <input
+                  type="text"
+                  placeholder="प्रथम श्रेणी / द्वितीय श्रेणी / तृतीय श्रेणी"
+                  value={scaleForm.shreni}
+                  onChange={(e) => setScaleForm({ ...scaleForm, shreni: e.target.value })}
+                  className="w-full rounded-lg border border-gray-300 p-2"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">सुरु मूल तलब (Basic Salary A):</label>
+                <input
+                  type="number"
+                  value={scaleForm.moolTalab}
+                  onChange={(e) => setScaleForm({ ...scaleForm, moolTalab: parseFloat(e.target.value) || 0 })}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">प्रति ग्रेड दर (Grade Rate C):</label>
+                <input
+                  type="number"
+                  value={scaleForm.gradeAmount}
+                  onChange={(e) => setScaleForm({ ...scaleForm, gradeAmount: parseFloat(e.target.value) || 0 })}
+                  className="w-full rounded-lg border border-gray-300 p-2 font-mono font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setIsScaleModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saveScaleMutation.isPending}
+                onClick={() => saveScaleMutation.mutate()}
+                className="px-5 py-2 text-xs font-bold text-white bg-[#1e3a5f] hover:bg-[#2a5280] rounded-xl shadow-xs transition cursor-pointer"
+              >
+                Save Scale
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════ INDIVIDUAL PAY SLIP MODAL & PRINT ════════════ */}
+      {selectedSlip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="text-sm font-bold text-[#1e3a5f]">
+                आधिकारिक तलब स्लिप (Official Salary Slip): {selectedSlip.teacher?.fullName}
+              </h3>
+              <button onClick={() => setSelectedSlip(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-200 bg-slate-50 space-y-3 text-xs">
+              <div className="text-center border-b pb-2">
+                <h4 className="font-extrabold text-[#1e3a5f] text-base">{schoolProfile?.nameNepali || 'श्री नेपाल माध्यमिक विद्यालय'}</h4>
+                <p className="text-[10.5px] text-gray-500">{schoolProfile?.address || 'रौतहट'} | {selectedSlip.monthFrom} देखि {selectedSlip.monthTo} सम्म</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div><strong>शिक्षकको नाम:</strong> {selectedSlip.teacher?.fullName}</div>
+                <div><strong>पद / तह:</strong> {selectedSlip.taha} - {selectedSlip.shreni}</div>
+                <div><strong>PAN No:</strong> {selectedSlip.teacher?.panNo || 'N/A'}</div>
+                <div><strong>Bank A/C:</strong> {selectedSlip.teacher?.bankAccountNo || 'Bank Deposit'}</div>
+              </div>
+
+              <div className="space-y-1 border-t pt-2 font-mono">
+                <div className="flex justify-between"><span>मूल तलब (A):</span><span>रू {selectedSlip.moolTalab?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>जम्मा ग्रेड ({selectedSlip.gradeNo} Grades D):</span><span>रू {selectedSlip.gradeRakam?.toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-[#1e3a5f]"><span>जम्मा तलब (E):</span><span>रू {selectedSlip.gradeSahitTalab?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>जम्मा भत्ता (N):</span><span>रू {selectedSlip.jammaBhata?.toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-blue-900"><span>त्रैमासिक निकासा (P):</span><span>रू {selectedSlip.traimasikTalan?.toLocaleString()}</span></div>
+                <div className="flex justify-between text-rose-700"><span>जम्मा कट्टी (T):</span><span>- रू {selectedSlip.jammaKati?.toLocaleString()}</span></div>
+                {selectedSlip.chaadparbaKharcha > 0 && (
+                  <div className="flex justify-between text-purple-700"><span>चाडपर्व खर्च (V):</span><span>+ रू {selectedSlip.chaadparbaKharcha?.toLocaleString()}</span></div>
+                )}
+                <div className="flex justify-between text-amber-800"><span>सा.सु. कर १% (Y):</span><span>- रू {selectedSlip.samajikSurakshaKar1Pct?.toLocaleString()}</span></div>
+                <div className="flex justify-between font-extrabold text-sm text-emerald-800 bg-emerald-100 p-2 rounded-lg mt-2">
+                  <span>खुद भुक्तानी रकम (Z):</span>
+                  <span>रू {selectedSlip.khudPaaunuParne?.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
                 onClick={() => setSelectedSlip(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold border border-gray-300 text-gray-600"
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl"
               >
                 Close
               </button>
               <button
-                onClick={triggerPayrollSlipPrint}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1e3a5f] text-white hover:bg-[#2a5280]"
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-[#1e3a5f] rounded-xl flex items-center gap-1.5"
               >
-                Print Official Slip
+                <Printer size={14} />
+                <span>Print Slip</span>
               </button>
             </div>
           </div>
