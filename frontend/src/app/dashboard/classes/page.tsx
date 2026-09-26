@@ -22,6 +22,10 @@ import {
   UserCheck,
   Settings2,
   Clock,
+  List,
+  LayoutGrid,
+  ArrowRight,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ClassRoutineView from '@/components/classes/ClassRoutineView';
@@ -50,6 +54,10 @@ export default function ClassesPage() {
     else if (tabParam === 'subjects') setActiveTab('subjects');
   }, [tabParam]);
   
+  // Classes View Mode & Search State (default to 'list' view as requested)
+  const [classViewMode, setClassViewMode] = useState<'list' | 'grid'>('list');
+  const [classSearch, setClassSearch] = useState('');
+
   // Modals
   const [isAddClassModalOpen, setIsAddClassModalOpen] = useState(false);
   const [isEditClassModalOpen, setIsEditClassModalOpen] = useState(false);
@@ -363,6 +371,19 @@ export default function ClassesPage() {
     return (a.section || '').localeCompare(b.section || '');
   });
 
+  const totalEnrolledStudents = classes.reduce((sum: number, cls: any) => sum + (cls._count?.enrollments || 0), 0);
+
+  // Filter classes in Tab 1
+  const filteredClasses = classes.filter((cls: any) => {
+    if (!classSearch.trim()) return true;
+    const q = classSearch.toLowerCase().trim();
+    const nameMatch = (cls.name || '').toLowerCase().includes(q);
+    const secMatch = (cls.section || '').toLowerCase().includes(q);
+    const teacherMatch = (cls.classTeacher?.fullName || '').toLowerCase().includes(q);
+    const yearMatch = (cls.academicYear?.year || '').toLowerCase().includes(q);
+    return nameMatch || secMatch || teacherMatch || yearMatch;
+  });
+
   const subjects = subjectsData || [];
   const presets = presetsData || {};
 
@@ -452,95 +473,297 @@ export default function ClassesPage() {
         </button>
       </div>
 
-      {/* ─── TAB 1: CLASSES GRID ───────────────────────────────────────────── */}
+      {/* ─── TAB 1: CLASSES VIEW (LIST / GRID TOGGLE) ───────────────────────── */}
       {activeTab === 'classes' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {isClassesLoading ? (
-              <div className="col-span-full py-12 text-center text-gray-400">Loading classes...</div>
-            ) : classes.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
-                <School size={32} className="mx-auto text-gray-300 mb-1" />
-                <p className="text-sm font-semibold text-gray-600">No classes created yet</p>
-                <p className="text-xs text-gray-400">Click &apos;Create Class&apos; to set up classes for this year.</p>
-              </div>
-            ) : (
-              classes.map((cls: any) => (
-                <div
-                  key={cls.id}
-                  onClick={() => setSelectedClassDetail(cls)}
-                  className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs hover:shadow-md transition space-y-3 cursor-pointer group relative"
+          {/* Controls Bar: Search & List/Grid View Switcher */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 shadow-2xs">
+            <div className="relative flex-1 w-full max-w-md">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="कक्षा, सेक्सन वा कक्षा शिक्षक खोज्नुहोस्..."
+                value={classSearch}
+                onChange={(e) => setClassSearch(e.target.value)}
+                className="erp-input pl-10 text-xs"
+              />
+              {classSearch && (
+                <button
+                  type="button"
+                  onClick={() => setClassSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-800 group-hover:scale-105 transition">
-                        <School size={20} />
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-sm text-gray-900">{cls.name}</h3>
-                        {cls.section && (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
-                            Section {cls.section}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-extrabold text-[#1e3a5f]">
-                        {cls._count?.enrollments || 0} Students
-                      </span>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+              {/* Summary Stats */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 font-bold">
+                  कुल कक्षा: <strong>{filteredClasses.length}</strong>
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-900 border border-purple-200 font-bold">
+                  कुल विद्यार्थी: <strong>{totalEnrolledStudents} जना</strong>
+                </span>
+              </div>
 
-                      {/* Quick Edit & Delete Class */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingClass(cls);
-                          setIsEditClassModalOpen(true);
-                        }}
-                        className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
-                        title="Edit Class Details"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm(`Are you sure you want to delete "${cls.name}"? All student enrollments and subject links for this class will be removed.`)) {
-                            deleteClassMutation.mutate(cls.id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
-                        title="Delete Class"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-50 pt-2 text-xs space-y-1 text-gray-600">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-500 font-semibold">मुख्य कक्षा शिक्षक:</span>
-                      <span className="font-bold text-[#1e3a5f]">
-                        {cls.classTeacher?.fullName ? `👨‍🏫 ${cls.classTeacher.fullName}` : 'तोकिएको छैन'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Academic Year:</span>
-                      <span className="font-mono">{cls.academicYear?.year || '2081-82'}</span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-50 pt-2 flex items-center justify-between text-[11px] font-bold text-blue-600">
-                    <span>Manage Subjects & Teacher Assignment</span>
-                    <span>→</span>
-                  </div>
-                </div>
-              ))
-            )}
+              {/* View Toggle */}
+              <div className="flex items-center rounded-xl bg-slate-100 p-1 border border-slate-200 gap-1 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setClassViewMode('list')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    classViewMode === 'list'
+                      ? 'bg-white text-[#1e3a5f] shadow-xs font-black'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                  title="List / Table View"
+                >
+                  <List size={14} />
+                  <span>List (सूची)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClassViewMode('grid')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    classViewMode === 'grid'
+                      ? 'bg-white text-[#1e3a5f] shadow-xs font-black'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                  title="Grid Cards View"
+                >
+                  <LayoutGrid size={14} />
+                  <span>Grid (ग्रिड)</span>
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* LIST VIEW (सूची / तालिका ढाँचा) */}
+          {classViewMode === 'list' ? (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-700">
+                  <thead className="bg-[#1e3a5f] text-white">
+                    <tr>
+                      <th className="p-3.5 font-bold uppercase w-12 text-center">#</th>
+                      <th className="p-3.5 font-bold uppercase">कक्षा तथा सेक्सन (Class & Section)</th>
+                      <th className="p-3.5 font-bold uppercase text-center">विद्यार्थी संख्या (Students)</th>
+                      <th className="p-3.5 font-bold uppercase">मुख्य कक्षा शिक्षक (Class Teacher)</th>
+                      <th className="p-3.5 font-bold uppercase text-center">शैक्षिक सत्र (Academic Year)</th>
+                      <th className="p-3.5 font-bold uppercase">विषय तथा शिक्षक व्यवस्थापन (Subjects & Routine)</th>
+                      <th className="p-3.5 font-bold uppercase text-right">कार्यहरू (Actions)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {isClassesLoading ? (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-gray-400">Loading classes...</td>
+                      </tr>
+                    ) : filteredClasses.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-gray-400">
+                          {classSearch ? 'खोजिएको नाम अनुसार कुनै कक्षा भेटिएन।' : 'कुनै कक्षा सिर्जना गरिएको छैन।'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredClasses.map((cls: any, idx: number) => (
+                        <tr
+                          key={cls.id}
+                          className="hover:bg-blue-50/40 transition group"
+                        >
+                          <td className="p-3.5 font-mono text-gray-400 text-center font-bold">
+                            {idx + 1}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-800 font-extrabold shadow-2xs group-hover:scale-105 transition">
+                                <School size={16} />
+                              </div>
+                              <div>
+                                <div
+                                  onClick={() => setSelectedClassDetail(cls)}
+                                  className="font-extrabold text-sm text-gray-900 hover:text-blue-700 cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <span>{cls.name}</span>
+                                </div>
+                                {cls.section ? (
+                                  <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-bold text-slate-700 border border-slate-200">
+                                    Section {cls.section}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400">All Sections</span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-black text-[#1e3a5f] shadow-2xs">
+                              <Users size={12} className="text-blue-600" />
+                              <span>{cls._count?.enrollments || 0} Students</span>
+                            </span>
+                          </td>
+                          <td className="p-3.5">
+                            {cls.classTeacher?.fullName ? (
+                              <div className="flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                                  👨‍🏫
+                                </div>
+                                <div>
+                                  <div className="font-bold text-gray-900">{cls.classTeacher.fullName}</div>
+                                  <div className="text-[10px] text-gray-400 font-mono">{cls.classTeacher.phone || 'Class Teacher'}</div>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px] bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                                तोकिएको छैन (Not Assigned)
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <span className="font-mono font-bold bg-slate-100 px-2.5 py-1 rounded-lg text-slate-700 text-xs border border-slate-200">
+                              {cls.academicYear?.year || activeYear?.year || '2083-84'}
+                            </span>
+                          </td>
+                          <td className="p-3.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClassDetail(cls)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 text-xs font-bold text-blue-900 transition shadow-2xs active:scale-95 cursor-pointer"
+                              title="विषयहरू, शिक्षक तथा रुटिन व्यवस्थापन गर्नुहोस्"
+                            >
+                              <BookOpen size={13} className="text-blue-700" />
+                              <span>Manage Subjects & Teacher Assignment</span>
+                              <ArrowRight size={12} className="text-blue-600" />
+                            </button>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingClass(cls);
+                                  setIsEditClassModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                                title="Edit Class Details"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Are you sure you want to delete "${cls.name}"? All student enrollments and subject links for this class will be removed.`)) {
+                                    deleteClassMutation.mutate(cls.id);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                                title="Delete Class"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* GRID CARDS VIEW (ग्रिड कार्ड ढाँचा) */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {isClassesLoading ? (
+                <div className="col-span-full py-12 text-center text-gray-400">Loading classes...</div>
+              ) : filteredClasses.length === 0 ? (
+                <div className="col-span-full py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                  <School size={32} className="mx-auto text-gray-300 mb-1" />
+                  <p className="text-sm font-semibold text-gray-600">No classes created yet</p>
+                  <p className="text-xs text-gray-400">Click &apos;Create Class&apos; to set up classes for this year.</p>
+                </div>
+              ) : (
+                filteredClasses.map((cls: any) => (
+                  <div
+                    key={cls.id}
+                    onClick={() => setSelectedClassDetail(cls)}
+                    className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs hover:shadow-md transition space-y-3 cursor-pointer group relative"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-800 group-hover:scale-105 transition">
+                          <School size={20} />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-sm text-gray-900">{cls.name}</h3>
+                          {cls.section && (
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                              Section {cls.section}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-extrabold text-[#1e3a5f]">
+                          {cls._count?.enrollments || 0} Students
+                        </span>
+
+                        {/* Quick Edit & Delete Class */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingClass(cls);
+                            setIsEditClassModalOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50"
+                          title="Edit Class Details"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Are you sure you want to delete "${cls.name}"? All student enrollments and subject links for this class will be removed.`)) {
+                              deleteClassMutation.mutate(cls.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
+                          title="Delete Class"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-50 pt-2 text-xs space-y-1 text-gray-600">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 font-semibold">मुख्य कक्षा शिक्षक:</span>
+                        <span className="font-bold text-[#1e3a5f]">
+                          {cls.classTeacher?.fullName ? `👨‍🏫 ${cls.classTeacher.fullName}` : 'तोकिएको छैन'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Academic Year:</span>
+                        <span className="font-mono">{cls.academicYear?.year || activeYear?.year || '2083-84'}</span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-50 pt-2 flex items-center justify-between text-[11px] font-bold text-blue-600">
+                      <span>Manage Subjects & Teacher Assignment</span>
+                      <span>→</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       )}
 
