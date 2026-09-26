@@ -519,6 +519,14 @@ export default function UserManagementPage() {
           label: 'Accountant (लेखापाल)',
           icon: Receipt,
         };
+      case 'SMC_CHAIR':
+      case 'CHAIRPERSON':
+      case 'MANAGEMENT':
+        return {
+          bg: 'bg-amber-100 text-amber-900 border-amber-300 font-black',
+          label: 'अध्यक्ष (SMC Chair)',
+          icon: ShieldCheck,
+        };
       default:
         return {
           bg: 'bg-gray-100 text-gray-800 border-gray-200',
@@ -683,6 +691,7 @@ export default function UserManagementPage() {
                 <option value="STUDENT">Students (विद्यार्थी)</option>
                 <option value="LIBRARIAN">Librarians (पुस्तकालय)</option>
                 <option value="ACCOUNTANT">Accountants (लेखापाल)</option>
+                <option value="SMC_CHAIR">वि.व्य.स. अध्यक्ष (SMC Chair)</option>
                 <option value="ADMIN">Admins (प्रशासक)</option>
               </select>
             </div>
@@ -1167,6 +1176,7 @@ export default function UserManagementPage() {
                   <option value="TEACHER">🎓 Teacher (शिक्षक)</option>
                   <option value="STUDENT">🎒 Student (विद्यार्थी)</option>
                   <option value="ACCOUNTANT">💰 Accountant (लेखापाल)</option>
+                  <option value="SMC_CHAIR">🏛️ SMC Chairperson (वि.व्य.स. अध्यक्ष)</option>
                   <option value="ADMIN">🛡️ Admin (प्रशासक)</option>
                 </select>
               </div>
@@ -1392,6 +1402,7 @@ export default function UserManagementPage() {
                   <option value="TEACHER">🎓 Teacher (शिक्षक / कर्मचारी)</option>
                   <option value="LIBRARIAN">📚 Librarian (पुस्तकालय)</option>
                   <option value="ACCOUNTANT">💰 Accountant (लेखापाल)</option>
+                  <option value="SMC_CHAIR">🏛️ SMC Chairperson (वि.व्य.स. अध्यक्ष)</option>
                   <option value="ADMIN">🛡️ Admin (प्रशासक)</option>
                   <option value="STUDENT">🎒 Student (विद्यार्थी)</option>
                 </select>

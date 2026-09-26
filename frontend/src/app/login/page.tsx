@@ -28,6 +28,7 @@ export default function LoginPage() {
     router.prefetch('/teacher');
     router.prefetch('/student');
     router.prefetch('/dashboard/finance/fees');
+    router.prefetch('/adhyaksha');
   }, [router]);
 
   // Forgot password modal state
@@ -60,6 +61,9 @@ export default function LoginPage() {
         TEACHER: '/teacher',
         LIBRARIAN: '/dashboard/library',
         STUDENT: '/student',
+        SMC_CHAIR: '/adhyaksha',
+        CHAIRPERSON: '/adhyaksha',
+        MANAGEMENT: '/adhyaksha',
       };
       router.push(roleRoutes[user.role] || '/dashboard');
     } catch (err: any) {

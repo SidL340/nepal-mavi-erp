@@ -59,7 +59,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // ── POST /api/notices ─────────────────────────────────────────────────────────
-router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), async (req, res) => {
+router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'SMC_CHAIR', 'CHAIRPERSON', 'MANAGEMENT'), async (req, res) => {
   try {
     const { title, body, type, targetRole, targetClassId, targetStudentId, postedDateBs, sendSms } = req.body;
     const notice = await prisma.notice.create({
@@ -92,7 +92,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), asy
 });
 
 // ── PUT /api/notices/:id — Edit Notice ────────────────────────────────────────
-router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER'), async (req, res) => {
+router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'TEACHER', 'SMC_CHAIR', 'CHAIRPERSON', 'MANAGEMENT'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (!id || isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID.' });

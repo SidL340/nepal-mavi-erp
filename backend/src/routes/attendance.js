@@ -420,4 +420,57 @@ router.get('/yearly-report/:classId', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/attendance/weekly-absents?startDateBs=2083-05-15&endDateBs=2083-05-21&classId=
+// Returns privacy-safe absent records (class, rollNo, student fullName, dateBs, status) with NO personal contact/demographics.
+router.get('/weekly-absents', authenticate, async (req, res) => {
+  try {
+    const { startDateBs, endDateBs, classId } = req.query;
+    const where = {
+      status: { in: ['ABSENT', 'BUNKED'] },
+    };
+    if (startDateBs && endDateBs) {
+      where.dateBs = { gte: startDateBs, lte: endDateBs };
+    } else if (startDateBs) {
+      where.dateBs = { gte: startDateBs };
+    }
+    if (classId && classId !== 'ALL') {
+      where.classId = parseInt(classId);
+    }
+
+    const records = await prisma.attendance.findMany({
+      where,
+      include: {
+        student: { select: { id: true, fullName: true, fullNameNepali: true } },
+        class: { select: { id: true, name: true, section: true } },
+      },
+      orderBy: [{ dateBs: 'desc' }, { classId: 'asc' }],
+      take: 500,
+    });
+
+    const studentIds = Array.from(new Set(records.map(r => r.studentId)));
+    const enrollments = await prisma.classEnrollment.findMany({
+      where: { studentId: { in: studentIds }, isActive: true },
+      select: { studentId: true, rollNo: true },
+    });
+    const rollMap = {};
+    enrollments.forEach(e => { rollMap[e.studentId] = e.rollNo; });
+
+    const privacySafeData = records.map(r => ({
+      id: r.id,
+      dateBs: r.dateBs,
+      className: `${r.class?.name || 'Class'}${r.class?.section ? ` (${r.class.section})` : ''}`,
+      classId: r.classId,
+      rollNo: rollMap[r.studentId] || '—',
+      studentName: r.student?.fullName || 'Student',
+      studentNameNepali: r.student?.fullNameNepali || '',
+      status: r.status,
+      remark: r.remark || '',
+    }));
+
+    return res.json({ success: true, data: privacySafeData, count: privacySafeData.length });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

@@ -426,10 +426,110 @@ router.get('/backup/status', authenticate, async (req, res) => {
       prisma.subject.count(),
     ]);
 
-    return res.json({
-      success: true,
-      data: { students, teachers, users, markEntries, feeCollections, attendance, classes, subjects },
+// ── MANAGEMENT COMMITTEE (विद्यालय व्यवस्थापन समिति - SMC) ────────────────
+let SMC_COMMITTEE_MEMBERS = [
+  {
+    id: 1,
+    name: 'प्रमोद यादव',
+    nameNepali: 'प्रमोद यादव',
+    post: 'अध्यक्ष (SMC Chairperson)',
+    representation: 'अभिभावक प्रतिनिधि / स्थानीय विशिष्ट व्यक्ति',
+    phone: '9845012345',
+    tenure: '2081-2084 BS',
+    isChair: true,
+  },
+  {
+    id: 2,
+    name: 'शान्ति देवी राउत',
+    nameNepali: 'शान्ति देवी राउत',
+    post: 'सदस्य (Member)',
+    representation: 'महिला अभिभावक प्रतिनिधि',
+    phone: '9812345678',
+    tenure: '2081-2084 BS',
+    isChair: false,
+  },
+  {
+    id: 3,
+    name: 'रामपुकार पटेल',
+    nameNepali: 'रामपुकार पटेल',
+    post: 'सदस्य (Member)',
+    representation: 'अभिभावक प्रतिनिधि',
+    phone: '9807654321',
+    tenure: '2081-2084 BS',
+    isChair: false,
+  },
+  {
+    id: 4,
+    name: 'सञ्जय कुमार साह',
+    nameNepali: 'सञ्जय कुमार साह',
+    post: 'सदस्य (Member)',
+    representation: 'स्थानीय बुद्धिजीवी / वडा प्रतिनिधि',
+    phone: '9825519506',
+    tenure: '2081-2084 BS',
+    isChair: false,
+  },
+  {
+    id: 5,
+    name: 'दिनेश पटेल',
+    nameNepali: 'दिनेश पटेल',
+    post: 'सदस्य (Teacher Rep)',
+    representation: 'शिक्षक प्रतिनिधि',
+    phone: '9865001122',
+    tenure: '2081-2084 BS',
+    isChair: false,
+  },
+  {
+    id: 6,
+    name: 'प्रेमलाल प्रसाद राउत',
+    nameNepali: 'प्रेमलाल प्रसाद राउत',
+    post: 'सदस्य सचिव (Member Secretary)',
+    representation: 'प्रधानाध्यापक (Headmaster)',
+    phone: '9855012345',
+    tenure: 'पदेन (Ex-Officio)',
+    isChair: false,
+  },
+];
+
+// GET /api/school/management-committee
+router.get('/management-committee', authenticate, async (req, res) => {
+  try {
+    return res.json({ success: true, data: SMC_COMMITTEE_MEMBERS });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/school/management-committee - Add/Update members
+router.post('/management-committee', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'SMC_CHAIR', 'CHAIRPERSON', 'MANAGEMENT'), async (req, res) => {
+  try {
+    const { members } = req.body;
+    if (Array.isArray(members)) {
+      SMC_COMMITTEE_MEMBERS = members;
+    }
+    return res.json({ success: true, message: 'Committee members updated successfully!', data: SMC_COMMITTEE_MEMBERS });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/school/meeting-call - Call meeting for staff/teachers
+router.post('/meeting-call', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'SMC_CHAIR', 'CHAIRPERSON', 'MANAGEMENT'), async (req, res) => {
+  try {
+    const { meetingTitle, meetingDateBs, meetingTime, venue, agenda, targetAudience = 'ALL_STAFF' } = req.body;
+    const bodyContent = `मिति: ${meetingDateBs || 'यथाशीघ्र'}\nसमय: ${meetingTime || 'अपराह्न १:०० बजे'}\nस्थान: ${venue || 'विद्यालय सभाहल'}\n\nछलफलका एजेन्डाहरू:\n${agenda || 'विद्यालय व्यवस्थापन तथा शैक्षिक गुणस्तर अभिवृद्धि सम्बन्धी छलफल'}\n\nउपस्थितिका लागि अनुरोध:\nविद्यालय व्यवस्थापन समिति अध्यक्ष`;
+
+    const notice = await prisma.notice.create({
+      data: {
+        title: `[बैठक आह्वान / Meeting Call] ${meetingTitle || 'विद्यालय व्यवस्थापन तथा शिक्षक कर्मचारी बैठक'}`,
+        body: bodyContent,
+        type: 'MEETING_CALL',
+        targetRole: targetAudience === 'ADMIN_ONLY' ? 'ADMIN' : 'TEACHER',
+        postedDateBs: meetingDateBs || new Date().toISOString().slice(0, 10),
+        createdBy: req.user.id,
+      },
     });
+
+    return res.status(201).json({ success: true, message: 'बैठकको सूचना सम्पूर्ण शिक्षक तथा कर्मचारीहरूलाई सम्प्रेषण गरियो!', data: notice });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
