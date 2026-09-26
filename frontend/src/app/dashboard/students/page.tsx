@@ -372,6 +372,145 @@ export default function StudentsPage() {
     },
   });
 
+  const [showFormatGuide, setShowFormatGuide] = useState(false);
+
+  // Download Sample IEMIS Excel / CSV Template (Exact 21-Column IEMIS Standard)
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'S.N',
+      'IEMIS Code',
+      'School',
+      'Student IEMIS Id',
+      'Student Name',
+      'Student Name in Nepali',
+      'Gender',
+      'Father Name',
+      'Mother Name',
+      'Class',
+      'Section',
+      'Year',
+      'Permanent Address',
+      'Temporary Address',
+      'DOB',
+      'Is Transferred',
+      'Mother Tongue',
+      'Disability Type',
+      'Age',
+      'Guardian Name',
+      'Guardian Contact Number',
+    ];
+
+    const sampleRows = [
+      [
+        '1',
+        '320160005',
+        'Nepal Secondary School',
+        '3201600058003308',
+        'Aachal Kumari',
+        '',
+        'Female',
+        'Rajesh Raut Kurmi',
+        'Gujeshwori Devi',
+        '8',
+        '',
+        '2082',
+        'Brindaban-1, Rautahat',
+        'Brindaban-1, Rautahat',
+        '2068-06-17',
+        'No',
+        'Bajjika',
+        'No Disability',
+        '14',
+        'Rajesh Raut Kurmi',
+        '9825519506',
+      ],
+      [
+        '2',
+        '320160005',
+        'Nepal Secondary School',
+        '3201600057601760',
+        'Aachal Patel',
+        '',
+        'Female',
+        'Rambishwas Patel',
+        'Sima Devi',
+        '6',
+        '',
+        '2082',
+        'Brindaban-1, Rautahat',
+        'Brindaban-1, Rautahat',
+        '2072-10-11',
+        'No',
+        'Bajjika',
+        'No Disability',
+        '10',
+        'Rambishwas Patel',
+        '9812345678',
+      ],
+      [
+        '3',
+        '320160005',
+        'Nepal Secondary School',
+        '3201600058003388',
+        'Aadesh Paswan',
+        '',
+        'Male',
+        'Ram Adhar Paswan',
+        'Anita Paswan',
+        '2',
+        '',
+        '2082',
+        'Brindaban-1, Rautahat',
+        'Brindaban-1, Rautahat',
+        '2075-07-27',
+        'No',
+        'Bhojpuri',
+        'No Disability',
+        '7',
+        'Ram Adhar Paswan',
+        '9803456789',
+      ],
+      [
+        '4',
+        '320160005',
+        'Nepal Secondary School',
+        '3201600057701806',
+        'Aadhity Patel',
+        '',
+        'Male',
+        'Bachan Raut Kurmi',
+        'Sharmila Devi',
+        '6',
+        '',
+        '2082',
+        'Brindaban-1, Rautahat',
+        'Brindaban-1, Rautahat',
+        '2069-06-30',
+        'No',
+        'Nepali',
+        'No Disability',
+        '13',
+        'Bachan Raut Kurmi',
+        '',
+      ],
+    ];
+
+    const csvContent =
+      '\uFEFF' +
+      [headers.join(','), ...sampleRows.map((r) => r.map((cell) => `"${cell}"`).join(','))].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'iemis_student_import_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('नेपाल सरकार IEMIS मानक एक्सेल/CSV ढाँचा डाउनलोड भयो!');
+  };
+
   const handleBulkImportSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!importFile) {
@@ -2561,10 +2700,10 @@ export default function StudentsPage() {
               <div>
                 <h2 className="text-base font-bold text-[#1e3a5f] flex items-center gap-2">
                   <FileSpreadsheet className="text-emerald-600" size={20} />
-                  <span>IEMIS Excel Bulk Import / विगत सत्र विद्यार्थी आयात</span>
+                  <span>IEMIS Excel Bulk Import / विद्यार्थी आयात</span>
                 </h2>
                 <p className="text-[11px] text-gray-500">
-                  नेपाल सरकारको आधिकारिक IEMIS Excel (.xlsx / .xls) बाट चालू वा विगतका शैक्षिक सत्रका विद्यार्थी आयात गर्नुहोस्
+                  नेपाल सरकारको आधिकारिक IEMIS Excel (.xlsx / .xls / .csv) बाट चालू वा विगतका शैक्षिक सत्रका विद्यार्थी आयात गर्नुहोस्
                 </p>
               </div>
               <button onClick={() => setIsImportModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -2572,7 +2711,139 @@ export default function StudentsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleBulkImportSubmit} className="space-y-4 text-xs">
+            {/* Template Download & Format Guide Action Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-emerald-50/80 border border-emerald-200">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-emerald-600 text-white">
+                  <FileSpreadsheet size={16} />
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-emerald-950">आधिकारिक एक्सेल ढाँचा (Standard Excel Template)</p>
+                  <p className="text-[10px] text-emerald-700">IEMIS तथा नेपाल मावि ERP अनुकूल एक्सेल ढाँचा</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFormatGuide(!showFormatGuide)}
+                  className="px-2.5 py-1.5 rounded-lg bg-white border border-emerald-300 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
+                >
+                  {showFormatGuide ? 'स्तम्भ ढाँचा लुकाउनुहोस्' : 'स्तम्भ विवरण (Columns Format)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-[11px] font-bold text-white transition shadow-xs"
+                >
+                  <Download size={13} />
+                  <span>ढाँचा डाउनलोड (Download Template)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Format Guide Table */}
+            {showFormatGuide && (
+              <div className="rounded-xl border border-gray-200 bg-slate-50 p-3.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <span className="font-extrabold text-[#1e3a5f]">Excel स्तम्भहरूको विवरण (Supported Columns):</span>
+                  <span className="text-[10px] text-gray-500 font-mono">*.xlsx / *.xls / *.csv</span>
+                </div>
+                <div className="overflow-x-auto max-h-56 overflow-y-auto">
+                  <table className="w-full text-left text-[11px]">
+                    <thead className="bg-slate-200/80 text-gray-700 font-bold sticky top-0">
+                      <tr>
+                        <th className="p-1.5">Column Header (IEMIS स्तम्भ)</th>
+                        <th className="p-1.5">Required?</th>
+                        <th className="p-1.5">Sample Value (उदाहरण)</th>
+                        <th className="p-1.5">विवरण</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white font-sans">
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Student IEMIS Id / Student Id</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1 rounded">वैकल्पिक</span></td>
+                        <td className="p-1.5 font-mono text-gray-600">3201600058003308</td>
+                        <td className="p-1.5 text-gray-600">विद्यार्थीको विशिष्ट पहिचान (दोहोरो भर्ना रोक्न र विगत सत्र लिङ्क गर्न)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-emerald-800">Student Name / FullName</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-red-700 bg-red-50 px-1 rounded">अनिवार्य *</span></td>
+                        <td className="p-1.5 text-gray-600">Aachal Kumari</td>
+                        <td className="p-1.5 text-gray-600">विद्यार्थीको पूरा नाम (अङ्ग्रेजीमा)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Student Name in Nepali</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">आँचल कुमारी</td>
+                        <td className="p-1.5 text-gray-600">नेपालीमा पूरा नाम</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Class</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1 rounded">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">8 / 6 / 3 / 2 / Nursery</td>
+                        <td className="p-1.5 text-gray-600">कक्षा स्वतः पहिचान तथा भर्ना हुन्छ</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Section</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">A / B / C</td>
+                        <td className="p-1.5 text-gray-600">कक्षा सेक्सनल समूह</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Gender</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Female / Male / छात्रा / छात्र</td>
+                        <td className="p-1.5 text-gray-600">विद्यार्थीको लिंग</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">DOB</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 font-mono text-gray-600">2068-06-17 / 2075-7-27</td>
+                        <td className="p-1.5 text-gray-600">जन्म मिति (वि.सं.)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Father Name / Mother Name</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Rajesh Raut / Gujeshwori Devi</td>
+                        <td className="p-1.5 text-gray-600">बुवा तथा आमाको नाम</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Guardian Name & Contact</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 font-mono text-gray-600">9825519506</td>
+                        <td className="p-1.5 text-gray-600">अभिभावकको नाम तथा फोन नम्बर</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Permanent Address</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Brindaban-1, Rautahat</td>
+                        <td className="p-1.5 text-gray-600">स्थायी ठेगाना</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Mother Tongue</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Bajjika / Bhojpuri / Nepali / Tharu</td>
+                        <td className="p-1.5 text-gray-600">मातृभाषा जनसांख्यिकी</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Disability Type</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">No Disability / None / अपाङ्गता</td>
+                        <td className="p-1.5 text-gray-600">समावेशी शिक्षा स्थिति</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Is Transferred</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">No / Yes</td>
+                        <td className="p-1.5 text-gray-600">सरुवा भइसकेका विद्यार्थीहरूलाई सिधै सरुवा अभिलेखमा राख्छ</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleBulkImportSubmit} className="space-y-4 text-xs mt-3">
               {/* Rules & Intelligence Banner */}
               <div className="rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-3.5 text-blue-900 space-y-2 text-[11px]">
                 <div className="font-bold flex items-center gap-1.5 text-blue-800">

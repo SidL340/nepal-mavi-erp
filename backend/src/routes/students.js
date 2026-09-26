@@ -362,7 +362,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
 
     // Extract all candidate IDs
     const candidateIds = rows
-      .map(r => String(r['Student Id'] || r['Student ID'] || r['IEMIS Code'] || r['studentId'] || '').trim())
+      .map(r => String(r['Student IEMIS Id'] || r['Student IEMIS ID'] || r['Student Id'] || r['Student ID'] || r['IEMIS Code'] || r['studentId'] || '').trim())
       .filter(Boolean);
 
     // Batch query existing students by studentId OR emisId
@@ -388,27 +388,55 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
     // Process rows
     for (const row of rows) {
       try {
-        const rawEmisId = String(row['Student Id'] || row['Student ID'] || row['IEMIS Code'] || row['studentId'] || '').trim();
-        const fullName  = String(row['FullName'] || row['Full Name'] || row['Name'] || '').trim();
+        const rawEmisId = String(row['Student IEMIS Id'] || row['Student IEMIS ID'] || row['Student Id'] || row['Student ID'] || row['IEMIS Code'] || row['studentId'] || '').trim();
+        const fullName  = String(row['Student Name'] || row['FullName'] || row['Full Name'] || row['Name'] || '').trim();
         if (!fullName) { results.skipped++; continue; }
 
+        const fullNameNepali = String(row['Student Name in Nepali'] || row['FullNameNepali'] || row['NameNepali'] || '').trim() || null;
         const hasEmisId = Boolean(rawEmisId);
         const targetClassId = await resolveClassId(row);
-        const rollNo = row['S.N'] || row['Roll No'] || row['rollNo'] || null;
+        const rollNo = row['S.N'] || row['S.N.'] || row['SN'] || row['Roll No'] || row['rollNo'] || null;
 
         const fatherName      = String(row['Father Name'] || '').trim() || null;
         const motherName      = String(row['Mother Name'] || '').trim() || null;
-        const guardianName    = String(row['Guardian Name'] || '').trim() || null;
-        const guardianContact = String(row['Guardian Contact Number'] || row['Guardian Contact'] || '').trim() || null;
-        const gender          = String(row['Gender'] || '').trim() || null;
-        const permAddress     = String(row['Permanent Address'] || '').trim() || null;
-        const dob             = String(row['DOB'] || '').trim() || null;
-        const motherTongue    = String(row['Mother Tongue'] || '').trim() || null;
-        const disabilityType  = String(row['Disability Type'] || '').trim() || null;
+        const guardianName    = String(row['Guardian Name'] || fatherName || '').trim() || null;
+        
+        let guardianContact = String(row['Guardian Contact Number'] || row['Guardian Contact'] || row['Contact'] || '').trim() || null;
+        if (guardianContact === '00' || guardianContact === '0' || guardianContact === 'null' || guardianContact === 'undefined') {
+          guardianContact = null;
+        }
 
-        // CASE 1: Student has NO EMIS ID and treatNoEmisAsTransferred is true -> Mark as TRANSFERRED / Past Student
-        if (!hasEmisId && treatNoEmisAsTransferred) {
-          const transferId = `TRF-${academicYearName.replace(/[^0-9]/g, '').slice(0, 4) || 'PAST'}-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+        const gender          = String(row['Gender'] || '').trim() || null;
+        
+        let permAddress     = String(row['Permanent Address'] || row['Address'] || '').trim() || null;
+        if (permAddress && (permAddress.startsWith('-null') || permAddress.toLowerCase() === 'null')) {
+          permAddress = null;
+        }
+
+        let dob             = String(row['DOB'] || row['Date of Birth'] || '').trim() || null;
+        // Format DOB e.g. 2075-7-27 -> 2075-07-27
+        if (dob && dob.includes('-')) {
+          const parts = dob.split('-');
+          if (parts.length === 3) {
+            const y = parts[0];
+            const m = parts[1].padStart(2, '0');
+            const d = parts[2].padStart(2, '0');
+            dob = `${y}-${m}-${d}`;
+          }
+        }
+
+        const motherTongue    = String(row['Mother Tongue'] || row['Ethnicity'] || '').trim() || null;
+        let disabilityType  = String(row['Disability Type'] || row['Disability'] || '').trim() || null;
+        if (disabilityType && disabilityType.toLowerCase() === 'no disability') {
+          disabilityType = 'None';
+        }
+
+        const rawIsTransferred = String(row['Is Transferred'] || row['isTransferred'] || '').trim().toLowerCase();
+        const isExplicitTransferred = rawIsTransferred === 'yes' || rawIsTransferred === 'true' || rawIsTransferred === '1' || rawIsTransferred === 'transferred';
+
+        // CASE 1: Student has NO EMIS ID and treatNoEmisAsTransferred is true OR row is marked as Transferred
+        if ((!hasEmisId && treatNoEmisAsTransferred) || isExplicitTransferred) {
+          const transferId = rawEmisId || `TRF-${academicYearName.replace(/[^0-9]/g, '').slice(0, 4) || 'PAST'}-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
 
           const user = await prisma.user.create({
             data: { username: transferId, passwordHash: defaultPasswordHash, role: 'STUDENT', isActive: false },
@@ -418,7 +446,9 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
             data: {
               userId: user.id,
               studentId: transferId,
+              emisId: rawEmisId || null,
               fullName,
+              fullNameNepali,
               fatherName,
               motherName,
               guardianName,
@@ -430,7 +460,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
               disability: disabilityType,
               status: 'TRANSFERRED',
               isActive: false,
-              transferReason: `विगत सत्र (${academicYearName}) अभिलेख / सरुवा (No EMIS ID recorded)`,
+              transferReason: isExplicitTransferred ? 'IEMIS Transferred (सरुवा भएको)' : `विगत सत्र (${academicYearName}) अभिलेख / सरुवा (No EMIS ID recorded)`,
               transferDateBs: targetAy?.endDateBs || dob || null,
             },
           });
@@ -440,7 +470,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
               data: {
                 studentId: student.id,
                 classId: targetClassId,
-                rollNo: rollNo ? parseInt(rollNo) : null,
+                rollNo: rollNo && !isNaN(parseInt(rollNo)) ? parseInt(rollNo) : null,
                 isActive: false,
               },
             });
