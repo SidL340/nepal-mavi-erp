@@ -39,6 +39,8 @@ import {
   Activity,
   CalendarDays,
   Flame,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -139,6 +141,7 @@ export default function TeachersPage() {
 
   // Directory filter state
   const [activeCategoryTab, setActiveCategoryTab] = useState<'ALL' | 'TEACHING' | 'NON_TEACHING'>('ALL');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterType, setFilterType] = useState('');
   const [inchargeFilter, setInchargeFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -721,9 +724,9 @@ export default function TeachersPage() {
       {/* ─── TAB 1: FACULTY & STAFF DIRECTORY ─── */}
       {mainViewTab === 'directory' && (
         <div className="space-y-4">
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-2xs">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
             {/* Category Switcher Tabs */}
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200">
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 shrink-0">
               <button
                 onClick={() => setActiveCategoryTab('ALL')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
@@ -759,9 +762,9 @@ export default function TeachersPage() {
               </button>
             </div>
 
-            {/* Search & Incharge Filter */}
-            <div className="flex flex-1 items-center gap-2 max-w-lg flex-wrap sm:flex-nowrap">
-              <div className="relative flex-1 min-w-[180px]">
+            {/* Search & Incharge Filter + View Toggle */}
+            <div className="flex flex-1 items-center gap-2 max-w-xl flex-wrap sm:flex-nowrap">
+              <div className="relative flex-1 min-w-[170px]">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
@@ -794,205 +797,485 @@ export default function TeachersPage() {
                 <option value="RASTRIYA">स्थाई (Gov)</option>
                 <option value="NIJI_SROTH">निजी स्रोत (Private)</option>
               </select>
+
+              {/* View Toggle: List vs Cards */}
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+                    viewMode === 'list'
+                      ? 'bg-[#1e3a5f] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="List View (तालिका / सूची स्वरूप)"
+                >
+                  <List size={14} />
+                  <span className="hidden sm:inline">List (सूची)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
+                    viewMode === 'grid'
+                      ? 'bg-[#1e3a5f] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Grid View (कार्ड स्वरूप)"
+                >
+                  <LayoutGrid size={14} />
+                  <span className="hidden sm:inline">Cards</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Grid of Staff cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {isLoading ? (
-              <div className="col-span-full py-12 text-center text-gray-400">
-                <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
-                <p className="mt-2 text-xs">Loading staff directory...</p>
+          {/* ═════════ 1. LIST / TABLE VIEW ═════════ */}
+          {viewMode === 'list' && (
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-2xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-700 divide-y divide-gray-200">
+                  <thead className="bg-[#1e3a5f] text-white font-bold uppercase tracking-wider text-[11px]">
+                    <tr>
+                      <th className="py-3 px-3 w-12 text-center">क्र.सं.</th>
+                      <th className="py-3 px-4 min-w-[220px]">शिक्षक / कर्मचारी विवरण</th>
+                      <th className="py-3 px-3 w-28">प्रकार</th>
+                      <th className="py-3 px-3 min-w-[160px]">पद / तह</th>
+                      <th className="py-3 px-3 min-w-[130px]">सम्पर्क</th>
+                      <th className="py-3 px-4 min-w-[200px]">विशेष जिम्मेवारी (Incharge Roles)</th>
+                      <th className="py-3 px-3 min-w-[130px] text-center">कार्य प्रगति</th>
+                      <th className="py-3 px-4 text-right min-w-[120px]">कार्यहरू</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-gray-400">
+                          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
+                          <p className="mt-2 text-xs">Loading staff directory...</p>
+                        </td>
+                      </tr>
+                    ) : displayedStaff.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-gray-400">
+                          <Users size={32} className="mx-auto text-gray-300 mb-1" />
+                          <p className="text-sm font-semibold text-gray-600">No staff found matching filter</p>
+                          <p className="text-xs text-gray-400">Use &apos;Add Staff&apos; or &apos;Add Teacher&apos; to register members.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      displayedStaff.map((staff: any, idx: number) => {
+                        const isNonTeaching = staff.shreni === 'NON_TEACHING';
+                        const staffTasks = staff.tasks || [];
+                        const completedCount = staffTasks.filter((t: any) => t.status === 'COMPLETED').length;
+
+                        return (
+                          <tr key={staff.id} className="hover:bg-blue-50/40 transition">
+                            {/* S.N. */}
+                            <td className="py-3 px-3 text-center font-mono font-bold text-gray-500">
+                              {idx + 1}
+                            </td>
+
+                            {/* Name & Photo */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-extrabold text-xs overflow-hidden border shadow-2xs ${
+                                    isNonTeaching
+                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
+                                      : 'bg-blue-100 text-[#1e3a5f] border-blue-200'
+                                  }`}
+                                >
+                                  {staff.photoUrl ? (
+                                    <img src={staff.photoUrl} alt={staff.fullName} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span>{staff.fullName.slice(0, 2).toUpperCase()}</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-extrabold text-gray-900 text-xs flex items-center gap-1.5">
+                                    <span>{staff.fullName}</span>
+                                    <span
+                                      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 text-[9px] font-extrabold ${
+                                        isNonTeaching
+                                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                          : 'bg-blue-50 text-blue-800 border border-blue-200'
+                                      }`}
+                                    >
+                                      {isNonTeaching ? <Briefcase size={9} /> : <GraduationCap size={9} />}
+                                      <span>{isNonTeaching ? 'कर्मचारी' : 'शिक्षक'}</span>
+                                    </span>
+                                  </div>
+                                  {staff.fullNameNepali && (
+                                    <p className="text-[11px] text-gray-500 font-nepali">{staff.fullNameNepali}</p>
+                                  )}
+                                  {staff.panNo && (
+                                    <p className="text-[9.5px] font-mono text-gray-400">PAN: {staff.panNo}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Type */}
+                            <td className="py-3 px-3">
+                              <span
+                                className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                                  staff.type === 'RASTRIYA'
+                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}
+                              >
+                                {staff.type === 'RASTRIYA' ? '🏛️ स्थाई (Gov)' : '🤝 निजी स्रोत'}
+                              </span>
+                            </td>
+
+                            {/* Post / Designation */}
+                            <td className="py-3 px-3">
+                              <div className="font-bold text-gray-900 text-xs">
+                                {staff.post || (isNonTeaching ? 'कार्यालय सहयोगी' : 'शिक्षक')}
+                              </div>
+                              {staff.shreni && staff.shreni !== 'NON_TEACHING' && (
+                                <span className="inline-block text-[10px] text-gray-500 bg-slate-100 px-1.5 py-0.2 rounded mt-0.5 font-semibold">
+                                  {staff.shreni}
+                                </span>
+                              )}
+                              {staff.subjects && staff.subjects.length > 0 && (
+                                <div className="text-[10px] text-blue-800 flex items-center gap-1 mt-0.5 flex-wrap">
+                                  <BookOpen size={10} />
+                                  <span>{staff.subjects.map((s: any) => s.subject?.name || s.subjectId).join(', ')}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Contact */}
+                            <td className="py-3 px-3">
+                              {staff.phone ? (
+                                <div className="flex items-center gap-1 font-mono text-xs font-semibold text-gray-800">
+                                  <Phone size={12} className="text-gray-400" />
+                                  <span>{staff.phone}</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-[11px]">-</span>
+                              )}
+                              {staff.email && (
+                                <div className="flex items-center gap-1 text-[10.5px] text-gray-500 truncate max-w-[150px] mt-0.5">
+                                  <Mail size={11} className="text-gray-400" />
+                                  <span>{staff.email}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Special Incharge Roles */}
+                            <td className="py-3 px-4">
+                              {staff.inchargeRole ? (
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap gap-1">
+                                    {staff.inchargeRole
+                                      .split(',')
+                                      .map((r: string) => r.trim())
+                                      .filter(Boolean)
+                                      .map((roleKey: string) => {
+                                        const info = INCHARGE_ROLES_CONFIG[roleKey] || {
+                                          label: roleKey,
+                                          nepali: roleKey,
+                                          color: 'text-purple-800',
+                                          bg: 'bg-purple-50',
+                                          border: 'border-purple-200',
+                                        };
+                                        return (
+                                          <span
+                                            key={roleKey}
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-extrabold ${info.bg} ${info.border} ${info.color}`}
+                                          >
+                                            <Award size={10} />
+                                            <span>{info.nepali}</span>
+                                          </span>
+                                        );
+                                      })}
+                                  </div>
+                                  {staff.inchargeTitle && (
+                                    <p className="text-[10px] text-purple-950 font-bold">
+                                      📌 {staff.inchargeTitle}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openAssignRoleModal(staff)}
+                                  className="text-[10.5px] font-semibold text-purple-700 hover:text-purple-900 bg-purple-50/60 hover:bg-purple-100/80 px-2 py-1 rounded-md border border-purple-200/70 transition cursor-pointer flex items-center gap-1"
+                                >
+                                  <Plus size={11} />
+                                  <span>Assign Role</span>
+                                </button>
+                              )}
+                            </td>
+
+                            {/* Tasks Progress */}
+                            <td className="py-3 px-3 text-center">
+                              <div className="inline-flex flex-col items-center gap-1">
+                                <span
+                                  className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded-md border ${
+                                    staffTasks.length > 0 && completedCount === staffTasks.length
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                      : staffTasks.length > 0
+                                      ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                      : 'bg-slate-50 text-gray-500 border-gray-200'
+                                  }`}
+                                >
+                                  {completedCount} / {staffTasks.length} Done
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openTaskModal(undefined, staff.id)}
+                                  className="text-[10px] font-bold text-purple-700 hover:underline cursor-pointer flex items-center gap-0.5"
+                                >
+                                  <span>+ Task</span>
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openAssignRoleModal(staff)}
+                                  className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 transition cursor-pointer"
+                                  title="Assign / Manage Incharge Roles"
+                                >
+                                  <Award size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(staff)}
+                                  className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition cursor-pointer"
+                                  title="Edit Staff Details"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`Are you sure you want to remove "${staff.fullName}"?`)) {
+                                      deleteTeacherMutation.mutate(staff.id);
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer"
+                                  title="Remove Staff"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            ) : displayedStaff.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
-                <Users size={32} className="mx-auto text-gray-300 mb-1" />
-                <p className="text-sm font-semibold text-gray-600">No staff found matching filter</p>
-                <p className="text-xs text-gray-400">Use &apos;Add Staff&apos; or &apos;Add Teacher&apos; to register members.</p>
-              </div>
-            ) : (
-              displayedStaff.map((staff: any) => {
-                const isNonTeaching = staff.shreni === 'NON_TEACHING';
-                const inchargeInfo = staff.inchargeRole ? INCHARGE_ROLES_CONFIG[staff.inchargeRole] : null;
-                const staffTasks = staff.tasks || [];
-                const completedCount = staffTasks.filter((t: any) => t.status === 'COMPLETED').length;
+            </div>
+          )}
 
-                return (
-                  <div
-                    key={staff.id}
-                    className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs hover:shadow-md transition space-y-3 relative group"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-extrabold text-sm overflow-hidden border shadow-2xs ${
-                            isNonTeaching
-                              ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
-                              : 'bg-blue-100 text-[#1e3a5f] border-blue-200'
-                          }`}
-                        >
-                          {staff.photoUrl ? (
-                            <img src={staff.photoUrl} alt={staff.fullName} className="h-full w-full object-cover" />
-                          ) : (
-                            <span>{staff.fullName.slice(0, 2).toUpperCase()}</span>
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="font-extrabold text-sm text-gray-900 leading-tight flex items-center gap-1.5">
-                            <span>{staff.fullName}</span>
-                          </h3>
-                          {staff.fullNameNepali && (
-                            <p className="text-[10px] text-gray-500 font-nepali">{staff.fullNameNepali}</p>
-                          )}
+          {/* ═════════ 2. GRID / CARD VIEW ═════════ */}
+          {viewMode === 'grid' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {isLoading ? (
+                <div className="col-span-full py-12 text-center text-gray-400">
+                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
+                  <p className="mt-2 text-xs">Loading staff directory...</p>
+                </div>
+              ) : displayedStaff.length === 0 ? (
+                <div className="col-span-full py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100">
+                  <Users size={32} className="mx-auto text-gray-300 mb-1" />
+                  <p className="text-sm font-semibold text-gray-600">No staff found matching filter</p>
+                  <p className="text-xs text-gray-400">Use &apos;Add Staff&apos; or &apos;Add Teacher&apos; to register members.</p>
+                </div>
+              ) : (
+                displayedStaff.map((staff: any) => {
+                  const isNonTeaching = staff.shreni === 'NON_TEACHING';
+                  const inchargeInfo = staff.inchargeRole ? INCHARGE_ROLES_CONFIG[staff.inchargeRole] : null;
+                  const staffTasks = staff.tasks || [];
+                  const completedCount = staffTasks.filter((t: any) => t.status === 'COMPLETED').length;
 
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span
-                              className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-extrabold ${
-                                isNonTeaching
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                  : 'bg-blue-50 text-blue-800 border border-blue-200'
-                              }`}
-                            >
-                              {isNonTeaching ? <Briefcase size={10} /> : <GraduationCap size={10} />}
-                              <span>{isNonTeaching ? 'गैर-शैक्षिक कर्मचारी' : 'शिक्षक'}</span>
-                            </span>
+                  return (
+                    <div
+                      key={staff.id}
+                      className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs hover:shadow-md transition space-y-3 relative group"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-extrabold text-sm overflow-hidden border shadow-2xs ${
+                              isNonTeaching
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
+                                : 'bg-blue-100 text-[#1e3a5f] border-blue-200'
+                            }`}
+                          >
+                            {staff.photoUrl ? (
+                              <img src={staff.photoUrl} alt={staff.fullName} className="h-full w-full object-cover" />
+                            ) : (
+                              <span>{staff.fullName.slice(0, 2).toUpperCase()}</span>
+                            )}
+                          </div>
+                          <div>
+                            <h3 className="font-extrabold text-sm text-gray-900 leading-tight flex items-center gap-1.5">
+                              <span>{staff.fullName}</span>
+                            </h3>
+                            {staff.fullNameNepali && (
+                              <p className="text-[10px] text-gray-500 font-nepali">{staff.fullNameNepali}</p>
+                            )}
 
-                            <span
-                              className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold ${
-                                staff.type === 'RASTRIYA'
-                                  ? 'bg-indigo-50 text-indigo-700'
-                                  : 'bg-amber-50 text-amber-700'
-                              }`}
-                            >
-                              {staff.type === 'RASTRIYA' ? 'स्थाई (Gov)' : 'निजी स्रोत'}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-extrabold ${
+                                  isNonTeaching
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : 'bg-blue-50 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {isNonTeaching ? <Briefcase size={10} /> : <GraduationCap size={10} />}
+                                <span>{isNonTeaching ? 'गैर-शैक्षिक कर्मचारी' : 'शिक्षक'}</span>
+                              </span>
+
+                              <span
+                                className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                                  staff.type === 'RASTRIYA'
+                                    ? 'bg-indigo-50 text-indigo-700'
+                                    : 'bg-amber-50 text-amber-700'
+                                }`}
+                              >
+                                {staff.type === 'RASTRIYA' ? 'स्थाई (Gov)' : 'निजी स्रोत'}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openAssignRoleModal(staff)}
-                          className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 transition cursor-pointer"
-                          title="Assign Special Incharge Role & Duties"
-                        >
-                          <Award size={15} />
-                        </button>
-                        <button
-                          onClick={() => openEditModal(staff)}
-                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition cursor-pointer"
-                          title="Edit Staff Details"
-                        >
-                          <Edit2 size={15} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`Are you sure you want to remove "${staff.fullName}"?`)) {
-                              deleteTeacherMutation.mutate(staff.id);
-                            }
-                          }}
-                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer"
-                          title="Remove Staff"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Special Incharge Badges */}
-                    {staff.inchargeRole && (
-                      <div className="space-y-1.5 p-2 rounded-xl bg-purple-50/50 border border-purple-100">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1">
-                            <Award size={12} className="text-purple-700" />
-                            <span>विशेष जिम्मेवारी (Incharge Roles):</span>
-                          </span>
+                        {/* Actions */}
+                        <div className="flex items-center gap-1">
                           <button
                             onClick={() => openAssignRoleModal(staff)}
-                            className="text-[10px] font-bold text-purple-700 hover:underline cursor-pointer"
+                            className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 transition cursor-pointer"
+                            title="Assign Special Incharge Role & Duties"
                           >
-                            Edit
+                            <Award size={15} />
+                          </button>
+                          <button
+                            onClick={() => openEditModal(staff)}
+                            className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-800 transition cursor-pointer"
+                            title="Edit Staff Details"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to remove "${staff.fullName}"?`)) {
+                                deleteTeacherMutation.mutate(staff.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer"
+                            title="Remove Staff"
+                          >
+                            <Trash2 size={15} />
                           </button>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {staff.inchargeRole
-                            .split(',')
-                            .map((r: string) => r.trim())
-                            .filter(Boolean)
-                            .map((roleKey: string) => {
-                              const info = INCHARGE_ROLES_CONFIG[roleKey] || {
-                                label: roleKey,
-                                nepali: roleKey,
-                                color: 'text-purple-800',
-                                bg: 'bg-purple-50',
-                                border: 'border-purple-200',
-                              };
-                              return (
-                                <span
-                                  key={roleKey}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-extrabold ${info.bg} ${info.border} ${info.color}`}
-                                >
-                                  <span>{info.nepali}</span>
-                                </span>
-                              );
-                            })}
-                        </div>
-                        {staff.inchargeTitle && (
-                          <p className="text-[10px] text-purple-900 font-bold">
-                            📌 {staff.inchargeTitle}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="border-t border-gray-50 pt-2 space-y-1 text-xs text-gray-600">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-400 font-medium">पद / Post:</span>
-                        <span className="font-bold text-gray-900 bg-slate-50 px-2 py-0.5 rounded-md border border-gray-100">
-                          {staff.post || (isNonTeaching ? 'कार्यालय सहयोगी' : 'शिक्षक')}
-                        </span>
                       </div>
 
-                      {staff.phone && (
-                        <div className="flex justify-between font-mono">
-                          <span className="text-gray-400 font-sans">Phone:</span>
-                          <span className="font-semibold">{staff.phone}</span>
+                      {/* Special Incharge Badges */}
+                      {staff.inchargeRole && (
+                        <div className="space-y-1.5 p-2 rounded-xl bg-purple-50/50 border border-purple-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1">
+                              <Award size={12} className="text-purple-700" />
+                              <span>विशेष जिम्मेवारी (Incharge Roles):</span>
+                            </span>
+                            <button
+                              onClick={() => openAssignRoleModal(staff)}
+                              className="text-[10px] font-bold text-purple-700 hover:underline cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {staff.inchargeRole
+                              .split(',')
+                              .map((r: string) => r.trim())
+                              .filter(Boolean)
+                              .map((roleKey: string) => {
+                                const info = INCHARGE_ROLES_CONFIG[roleKey] || {
+                                  label: roleKey,
+                                  nepali: roleKey,
+                                  color: 'text-purple-800',
+                                  bg: 'bg-purple-50',
+                                  border: 'border-purple-200',
+                                };
+                                return (
+                                  <span
+                                    key={roleKey}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-extrabold ${info.bg} ${info.border} ${info.color}`}
+                                  >
+                                    <span>{info.nepali}</span>
+                                  </span>
+                                );
+                              })}
+                          </div>
+                          {staff.inchargeTitle && (
+                            <p className="text-[10px] text-purple-900 font-bold">
+                              📌 {staff.inchargeTitle}
+                            </p>
+                          )}
                         </div>
                       )}
 
-                      {/* Tasks progress count */}
-                      <div className="flex justify-between items-center pt-1">
-                        <span className="text-gray-400 flex items-center gap-1">
-                          <CheckSquare size={12} />
-                          <span>जिम्मेवारी तथा कार्यहरू:</span>
-                        </span>
-                        <span className="font-bold font-mono text-[11px] text-purple-900 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
-                          {completedCount} / {staffTasks.length} Done
-                        </span>
+                      <div className="border-t border-gray-50 pt-2 space-y-1 text-xs text-gray-600">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-400 font-medium">पद / Post:</span>
+                          <span className="font-bold text-gray-900 bg-slate-50 px-2 py-0.5 rounded-md border border-gray-100">
+                            {staff.post || (isNonTeaching ? 'कार्यालय सहयोगी' : 'शिक्षक')}
+                          </span>
+                        </div>
+
+                        {staff.phone && (
+                          <div className="flex justify-between font-mono">
+                            <span className="text-gray-400 font-sans">Phone:</span>
+                            <span className="font-semibold">{staff.phone}</span>
+                          </div>
+                        )}
+
+                        {/* Tasks progress count */}
+                        <div className="flex justify-between items-center pt-1">
+                          <span className="text-gray-400 flex items-center gap-1">
+                            <CheckSquare size={12} />
+                            <span>जिम्मेवारी तथा कार्यहरू:</span>
+                          </span>
+                          <span className="font-bold font-mono text-[11px] text-purple-900 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                            {completedCount} / {staffTasks.length} Done
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Quick Button to Assign Task */}
+                      <div className="border-t border-gray-100 pt-2 flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => openAssignRoleModal(staff)}
+                          className="flex-1 py-1.5 px-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-gray-700 text-[11px] font-bold text-center transition cursor-pointer"
+                        >
+                          {staff.inchargeRole ? '⚙️ Manage Roles' : '+ Incharge Roles'}
+                        </button>
+                        <button
+                          onClick={() => openTaskModal(undefined, staff.id)}
+                          className="flex-1 py-1.5 px-2 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-[11px] font-bold text-center transition cursor-pointer"
+                        >
+                          + Add Task
+                        </button>
                       </div>
                     </div>
-
-                    {/* Quick Button to Assign Task */}
-                    <div className="border-t border-gray-100 pt-2 flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => openAssignRoleModal(staff)}
-                        className="flex-1 py-1.5 px-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-gray-700 text-[11px] font-bold text-center transition cursor-pointer"
-                      >
-                        {staff.inchargeRole ? '⚙️ Manage Roles' : '+ Incharge Roles'}
-                      </button>
-                      <button
-                        onClick={() => openTaskModal(undefined, staff.id)}
-                        className="flex-1 py-1.5 px-2 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 text-[11px] font-bold text-center transition cursor-pointer"
-                      >
-                        + Add Task
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
       )}
 
