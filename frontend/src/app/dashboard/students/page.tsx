@@ -924,6 +924,10 @@ export default function StudentsPage() {
                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                                           उत्तीर्ण (Graduated)
                                         </span>
+                                      ) : !student.isActive || student.status === 'PAST_RECORD' ? (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                          📁 विगत अभिलेख (Record Only)
+                                        </span>
                                       ) : null}
                                     </div>
                                     {student.fullNameNepali && (
@@ -944,11 +948,15 @@ export default function StudentsPage() {
 
                           <td className="px-4 py-3">
                             {enrollment?.class ? (
-                              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                !student.isActive ? 'bg-slate-100 text-slate-700 border border-slate-200' : 'bg-blue-50 text-blue-700'
+                              }`}>
                                 {enrollment.class.name} {enrollment.class.section ? `- ${enrollment.class.section}` : ''}
                               </span>
                             ) : (
-                              <span className="text-[11px] text-gray-400">Not Assigned</span>
+                              <span className="text-[11px] text-gray-400">
+                                {!student.isActive ? 'विगत अभिलेख (Record Only)' : 'Not Assigned'}
+                              </span>
                             )}
                           </td>
 

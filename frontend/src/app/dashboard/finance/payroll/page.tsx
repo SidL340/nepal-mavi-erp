@@ -851,38 +851,38 @@ export default function PayrollPage() {
                 <th rowspan="2">क्र.सं.</th>
                 <th rowspan="2" style="min-width: 100px;">कर्मचारीको नाम</th>
                 <th rowspan="2">तह/दर्जा</th>
-                <th rowspan="2">मूल तलब<br/>[A]</th>
+                <th rowspan="2">मूल तलब</th>
                 <th colspan="3">ग्रेड (Grade)</th>
-                <th rowspan="2">जम्मा तलब<br/>(ग्रेड सहित)<br/>[E=A+D]</th>
-                <th rowspan="2">क.सं. कोष<br/>थप १०%<br/>[F]</th>
-                <th rowspan="2">बीमा<br/>थप<br/>[G]</th>
-                <th rowspan="2">कुल तलब<br/>[H=E+F+G]</th>
+                <th rowspan="2">जम्मा तलब<br/>(ग्रेड सहित)</th>
+                <th rowspan="2">क.सं. कोष<br/>थप १०%</th>
+                <th rowspan="2">बीमा<br/>थप</th>
+                <th rowspan="2">कुल तलब</th>
                 <th colspan="5">भत्ताहरू (Allowances)</th>
-                <th rowspan="2">जम्मा<br/>भत्ता<br/>[N]</th>
-                <th rowspan="2">जम्मा तलब<br/>भत्ता<br/>[O=H+N]</th>
-                <th rowspan="2">त्रैमासिक<br/>तलब भत्ता<br/>[P=O×${monthCount}]</th>
+                <th rowspan="2">जम्मा<br/>भत्ता</th>
+                <th rowspan="2">जम्मा तलब<br/>भत्ता</th>
+                <th rowspan="2">त्रैमासिक<br/>तलब भत्ता</th>
                 <th colspan="3">विभिन्न कट्टी (Deductions)</th>
-                <th rowspan="2">जम्मा<br/>कट्टी<br/>[T=Q+R+S]</th>
-                <th rowspan="2">बाँकी पाउनु<br/>पर्ने<br/>[U=P-T]</th>
-                <th rowspan="2">चाडपर्व<br/>खर्च<br/>[V=E]</th>
-                <th rowspan="2">पोसाक<br/>भत्ता<br/>[W]</th>
-                <th rowspan="2">जम्मा<br/>[X=U+V+W]</th>
-                <th rowspan="2">सा.सु. कर<br/>१% कट्टी<br/>[Y=1%]</th>
-                <th rowspan="2">खुद भुक्तानी<br/>[Z=X-Y]</th>
+                <th rowspan="2">जम्मा<br/>कट्टी</th>
+                <th rowspan="2">बाँकी पाउनु<br/>पर्ने</th>
+                <th rowspan="2">चाडपर्व<br/>खर्च</th>
+                <th rowspan="2">पोसाक<br/>भत्ता</th>
+                <th rowspan="2">जम्मा<br/>रकम</th>
+                <th rowspan="2">सा.सु. कर<br/>१% कट्टी</th>
+                <th rowspan="2">खुद भुक्तानी</th>
                 <th rowspan="2" style="min-width: 65px;">दस्तखत<br/>(Signature)</th>
               </tr>
               <tr>
-                <th>संख्या<br/>[B]</th>
-                <th>दर<br/>[C]</th>
-                <th>रकम<br/>[D=B×C]</th>
-                <th>प्र.अ.<br/>[I]</th>
-                <th>महङ्गी<br/>[J]</th>
-                <th>दुर्गम<br/>[K]</th>
-                <th>प्रोत्साहन<br/>[L]</th>
-                <th>अन्य<br/>[M]</th>
-                <th>क.सं. कोष २०%<br/>[Q]</th>
-                <th>सापट<br/>[R]</th>
-                <th>बीमा<br/>[S]</th>
+                <th>संख्या</th>
+                <th>दर</th>
+                <th>रकम</th>
+                <th>प्र.अ. भत्ता</th>
+                <th>महङ्गी भत्ता</th>
+                <th>दुर्गम भत्ता</th>
+                <th>प्रोत्साहन</th>
+                <th>अन्य</th>
+                <th>क.सं. कोष २०%</th>
+                <th>सापट</th>
+                <th>बीमा</th>
               </tr>
             </thead>
             <tbody>
@@ -1192,7 +1192,7 @@ export default function PayrollPage() {
                     }}
                     className="rounded text-purple-600 w-4 h-4 cursor-pointer"
                   />
-                  <span>🎁 चाडपर्व खर्च समावेश (Dashain Allowance = 1 Month E)</span>
+                  <span>🎁 चाडपर्व खर्च समावेश (Dashain / Festival Allowance)</span>
                 </label>
 
                 <div className="flex items-center gap-1.5">
@@ -1226,7 +1226,7 @@ export default function PayrollPage() {
               </div>
 
               <span className="text-[11px] text-gray-500 font-medium">
-                * १०% संचय कोष थप [F], २०% संचय कोष कट्टी [Q], बीमा [G & S] र १% कर [Y] स्वतः हिसाब हुन्छ।
+                * १०% संचय कोष थप, २०% संचय कोष कट्टी, सावधिक जीवन बीमा र १% सामाजिक सुरक्षा कर स्वतः हिसाब हुन्छ।
               </span>
             </div>
           </div>
@@ -1358,36 +1358,36 @@ export default function PayrollPage() {
                     <th className="py-2.5 px-2 text-center w-8">क्र.सं.</th>
                     <th className="py-2.5 px-3 min-w-[160px]">कर्मचारीको नाम</th>
                     <th className="py-2.5 px-2 min-w-[120px]">तह / स्केल</th>
-                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-900/60">मूल तलब<br/>[A]</th>
-                    <th className="py-2.5 px-2 min-w-[65px] text-center">ग्रेड संख्या<br/>[B]</th>
-                    <th className="py-2.5 px-2 min-w-[70px] text-right">ग्रेड दर<br/>[C]</th>
-                    <th className="py-2.5 px-2 min-w-[80px] text-right bg-blue-950/70">जम्मा ग्रेड<br/>[D=B×C]</th>
-                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-blue-900">जम्मा तलब<br/>[E=A+D]</th>
-                    <th className="py-2.5 px-2 min-w-[80px] text-right">क.सं. कोष १०%<br/>[F]</th>
-                    <th className="py-2.5 px-2 min-w-[65px] text-right">बीमा थप<br/>[G]</th>
-                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-indigo-950">कुल तलब<br/>[H=E+F+G]</th>
-                    {/* Allowances I, J, K, L, M */}
-                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-950/90">प्र.अ. भत्ता<br/>[I]</th>
-                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-950/90">महङ्गी भत्ता<br/>[J]</th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">दुर्गम भत्ता<br/>[K]</th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">प्रोत्साहन<br/>[L]</th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">अन्य भत्ता<br/>[M]</th>
-                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-900 font-black">जम्मा भत्ता<br/>[N=I+J+K+L+M]</th>
-                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-purple-950">मासिक जम्मा<br/>[O=H+N]</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-900/60">मूल तलब</th>
+                    <th className="py-2.5 px-2 min-w-[65px] text-center">ग्रेड संख्या</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right">ग्रेड दर</th>
+                    <th className="py-2.5 px-2 min-w-[80px] text-right bg-blue-950/70">जम्मा ग्रेड रकम</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-blue-900">जम्मा तलब</th>
+                    <th className="py-2.5 px-2 min-w-[80px] text-right">क.सं. कोष १०%</th>
+                    <th className="py-2.5 px-2 min-w-[65px] text-right">बीमा थप</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-indigo-950">कुल तलब</th>
+                    {/* Allowances */}
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-950/90">प्र.अ. भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-950/90">महङ्गी भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">दुर्गम भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">प्रोत्साहन भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">अन्य भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-900 font-black">जम्मा भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-purple-950">मासिक जम्मा</th>
                     <th className="py-2.5 px-2 min-w-[105px] text-right bg-slate-900 text-amber-300">
-                      {monthCount}M तलब भत्ता<br/>[P=O×{monthCount}]
+                      {monthCount} महिना तलब भत्ता
                     </th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-950">कोष २०% कट्टी<br/>[Q]</th>
-                    <th className="py-2.5 px-2 min-w-[75px] text-right bg-rose-950/70">सापट कट्टी<br/>[R]</th>
-                    <th className="py-2.5 px-2 min-w-[70px] text-right bg-rose-950/70">बीमा कट्टी<br/>[S]</th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-900 text-white">जम्मा कट्टी<br/>[T=Q+R+S]</th>
-                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-950">बाँकी पाउनु<br/>[U=P-T]</th>
-                    <th className="py-2.5 px-2 min-w-[75px] text-right">चाडपर्व<br/>[V=E]</th>
-                    <th className="py-2.5 px-2 min-w-[70px] text-right">पोसाक<br/>[W]</th>
-                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-emerald-950">जम्मा रकम<br/>[X=U+V+W]</th>
-                    <th className="py-2.5 px-2 min-w-[75px] text-right">सा.सु. कर १%<br/>[Y]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-950">कोष २०% कट्टी</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right bg-rose-950/70">सापट कट्टी</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right bg-rose-950/70">बीमा कट्टी</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-900 text-white">जम्मा कट्टी</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-950">बाँकी पाउनु पर्ने</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right">चाडपर्व खर्च</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right">पोसाक भत्ता</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-emerald-950">जम्मा पाउनु पर्ने</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right">सा.सु. कर १%</th>
                     <th className="py-2.5 px-3 min-w-[110px] text-right bg-emerald-700 text-white font-black">
-                      खुद भुक्तानी<br/>[Z=X-Y]
+                      खुद भुक्तानी
                     </th>
                   </tr>
                 </thead>
@@ -2179,7 +2179,7 @@ export default function PayrollPage() {
             </div>
 
             <div className="space-y-3 text-xs">
-              {/* [I] प्र.अ. भत्ता */}
+              {/* प्र.अ. भत्ता */}
               <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
@@ -2195,7 +2195,7 @@ export default function PayrollPage() {
                       }}
                       className="rounded text-purple-700 w-4 h-4 cursor-pointer"
                     />
-                    <span>प्र.अ. भत्ता [I] (Principal Only)</span>
+                    <span>प्र.अ. भत्ता (Principal Only)</span>
                   </label>
                   <span className="text-[10px] text-gray-500">Applicable?</span>
                 </div>
@@ -2211,7 +2211,7 @@ export default function PayrollPage() {
                 />
               </div>
 
-              {/* [J] महङ्गी भत्ता */}
+              {/* महङ्गी भत्ता */}
               <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
@@ -2227,7 +2227,7 @@ export default function PayrollPage() {
                       }}
                       className="rounded text-purple-700 w-4 h-4 cursor-pointer"
                     />
-                    <span>महङ्गी भत्ता [J]</span>
+                    <span>महङ्गी भत्ता</span>
                   </label>
                   <span className="text-[10px] text-gray-500">Applicable?</span>
                 </div>
@@ -2243,7 +2243,7 @@ export default function PayrollPage() {
                 />
               </div>
 
-              {/* [K] दुर्गम भत्ता */}
+              {/* दुर्गम भत्ता */}
               <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
@@ -2259,7 +2259,7 @@ export default function PayrollPage() {
                       }}
                       className="rounded text-purple-700 w-4 h-4 cursor-pointer"
                     />
-                    <span>दुर्गम भत्ता [K]</span>
+                    <span>दुर्गम भत्ता</span>
                   </label>
                   <span className="text-[10px] text-gray-500">Applicable?</span>
                 </div>
@@ -2275,7 +2275,7 @@ export default function PayrollPage() {
                 />
               </div>
 
-              {/* [L] प्रोत्साहन भत्ता */}
+              {/* प्रोत्साहन भत्ता */}
               <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
@@ -2291,7 +2291,7 @@ export default function PayrollPage() {
                       }}
                       className="rounded text-purple-700 w-4 h-4 cursor-pointer"
                     />
-                    <span>प्रोत्साहन भत्ता [L]</span>
+                    <span>प्रोत्साहन भत्ता</span>
                   </label>
                   <span className="text-[10px] text-gray-500">Applicable?</span>
                 </div>
@@ -2307,7 +2307,7 @@ export default function PayrollPage() {
                 />
               </div>
 
-              {/* [M] अन्य भत्ता */}
+              {/* अन्य भत्ता */}
               <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
@@ -2323,7 +2323,7 @@ export default function PayrollPage() {
                       }}
                       className="rounded text-purple-700 w-4 h-4 cursor-pointer"
                     />
-                    <span>अन्य भत्ता [M]</span>
+                    <span>अन्य भत्ता</span>
                   </label>
                   <span className="text-[10px] text-gray-500">Applicable?</span>
                 </div>

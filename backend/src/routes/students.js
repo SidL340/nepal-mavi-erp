@@ -593,7 +593,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
             dateOfBirthBs: dob,
             ethnicity: motherTongue,
             disability: disabilityType,
-            status: isActiveYear ? 'ACTIVE' : 'ACTIVE',
+            status: isActiveYear ? 'ACTIVE' : 'PAST_RECORD',
             isActive: isActiveYear,
           },
         });
