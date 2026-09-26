@@ -2458,12 +2458,12 @@ export default function ExamsPage() {
                 </div>
               </div>
 
-              {/* ─── Multi-Shift Configuration Section ─── */}
-              <div className="space-y-3 rounded-2xl border border-purple-200/80 bg-purple-50/40 p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/60 pb-2.5">
+              {/* ─── Shift Configuration Section ─── */}
+              <div className="space-y-3 rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/80 pb-2.5">
                   <div>
                     <h3 className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
-                      <Clock size={15} className="text-purple-600" />
+                      <Clock size={16} className="text-purple-600" />
                       <span>Exam Shifts & Class Timings (परीक्षा सत्र तथा समय तालिका)</span>
                     </h3>
                     <p className="text-[10px] text-gray-500 font-nepali">
@@ -2487,13 +2487,13 @@ export default function ExamsPage() {
                           },
                         ]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
                         addExamShifts.length === 1
-                          ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-blue-300'
+                          ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md ring-2 ring-blue-300'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
                       }`}
                     >
-                      <Sun size={13} className={addExamShifts.length === 1 ? 'text-amber-300' : 'text-amber-500'} />
+                      <Sun size={14} className={addExamShifts.length === 1 ? 'text-amber-300' : 'text-amber-500'} />
                       <span>Single Shift (एकल सत्र)</span>
                     </button>
 
@@ -2501,11 +2501,21 @@ export default function ExamsPage() {
                       type="button"
                       onClick={() => {
                         const allC = classesData || [];
-                        const upper = allC.filter((c: any) => {
-                          const n = (c.name || '').toLowerCase();
-                          return n.includes('8') || n.includes('9') || n.includes('10') || n.includes('11') || n.includes('12');
-                        }).map((c: any) => c.id);
-                        const lower = allC.filter((c: any) => !upper.includes(c.id)).map((c: any) => c.id);
+                        const upper = allC
+                          .filter((c: any) => {
+                            const n = (c.name || '').toLowerCase();
+                            return (
+                              n.includes('8') ||
+                              n.includes('9') ||
+                              n.includes('10') ||
+                              n.includes('11') ||
+                              n.includes('12')
+                            );
+                          })
+                          .map((c: any) => c.id);
+                        const lower = allC
+                          .filter((c: any) => !upper.includes(c.id))
+                          .map((c: any) => c.id);
                         setAddExamShifts([
                           {
                             name: 'MORNING',
@@ -2523,13 +2533,13 @@ export default function ExamsPage() {
                           },
                         ]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
                         addExamShifts.length > 1
-                          ? 'bg-purple-700 text-white border-purple-700 shadow-xs ring-2 ring-purple-300'
+                          ? 'bg-purple-700 text-white border-purple-700 shadow-md ring-2 ring-purple-300'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
                       }`}
                     >
-                      <Layers size={13} className={addExamShifts.length > 1 ? 'text-amber-300' : 'text-purple-600'} />
+                      <Layers size={14} className={addExamShifts.length > 1 ? 'text-amber-300' : 'text-purple-600'} />
                       <span>Multiple Shifts (बहु-सत्र / Morning + Day)</span>
                     </button>
                   </div>
@@ -2541,7 +2551,7 @@ export default function ExamsPage() {
                     return (
                       <div
                         key={sIdx}
-                        className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-3"
+                        className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs space-y-3"
                       >
                         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                           <div className="flex items-center gap-2">
@@ -2549,7 +2559,9 @@ export default function ExamsPage() {
                               {sIdx + 1}
                             </span>
                             <span className="font-extrabold text-xs text-gray-900">
-                              Shift #{sIdx + 1}: {sh.nameNepali || sh.name}
+                              {addExamShifts.length === 1
+                                ? 'Single Shift Timing & Classes'
+                                : `Shift #${sIdx + 1}: ${sh.nameNepali || sh.name}`}
                             </span>
                           </div>
 
@@ -2559,7 +2571,7 @@ export default function ExamsPage() {
                               onClick={() => {
                                 setAddExamShifts(addExamShifts.filter((_, idx) => idx !== sIdx));
                               }}
-                              className="text-rose-500 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 hover:underline"
+                              className="text-rose-500 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 hover:underline cursor-pointer"
                             >
                               <Trash2 size={12} />
                               <span>Remove Shift</span>
@@ -2569,7 +2581,7 @@ export default function ExamsPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                           <div>
-                            <label className="block font-bold text-gray-700 mb-1">Shift Type *</label>
+                            <label className="block font-bold text-gray-700 mb-1">Shift Name / Type *</label>
                             <select
                               value={sh.name}
                               onChange={(e) => {
@@ -2805,12 +2817,12 @@ export default function ExamsPage() {
                 </div>
               </div>
 
-              {/* ─── Multi-Shift Configuration Section for Edit ─── */}
-              <div className="space-y-3 rounded-2xl border border-purple-200/80 bg-purple-50/40 p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/60 pb-2.5">
+              {/* ─── Shift Configuration Section for Edit ─── */}
+              <div className="space-y-3 rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-purple-200/80 pb-2.5">
                   <div>
                     <h3 className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
-                      <Clock size={15} className="text-purple-600" />
+                      <Clock size={16} className="text-purple-600" />
                       <span>Exam Shifts & Class Timings (परीक्षा सत्र तथा समय तालिका)</span>
                     </h3>
                     <p className="text-[10px] text-gray-500 font-nepali">
@@ -2834,13 +2846,13 @@ export default function ExamsPage() {
                           },
                         ]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
                         editExamShifts.length === 1
-                          ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-blue-300'
+                          ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md ring-2 ring-blue-300'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
                       }`}
                     >
-                      <Sun size={13} className={editExamShifts.length === 1 ? 'text-amber-300' : 'text-amber-500'} />
+                      <Sun size={14} className={editExamShifts.length === 1 ? 'text-amber-300' : 'text-amber-500'} />
                       <span>Single Shift (एकल सत्र)</span>
                     </button>
 
@@ -2848,11 +2860,21 @@ export default function ExamsPage() {
                       type="button"
                       onClick={() => {
                         const allC = classesData || [];
-                        const upper = allC.filter((c: any) => {
-                          const n = (c.name || '').toLowerCase();
-                          return n.includes('8') || n.includes('9') || n.includes('10') || n.includes('11') || n.includes('12');
-                        }).map((c: any) => c.id);
-                        const lower = allC.filter((c: any) => !upper.includes(c.id)).map((c: any) => c.id);
+                        const upper = allC
+                          .filter((c: any) => {
+                            const n = (c.name || '').toLowerCase();
+                            return (
+                              n.includes('8') ||
+                              n.includes('9') ||
+                              n.includes('10') ||
+                              n.includes('11') ||
+                              n.includes('12')
+                            );
+                          })
+                          .map((c: any) => c.id);
+                        const lower = allC
+                          .filter((c: any) => !upper.includes(c.id))
+                          .map((c: any) => c.id);
                         setEditExamShifts([
                           {
                             name: 'MORNING',
@@ -2870,13 +2892,13 @@ export default function ExamsPage() {
                           },
                         ]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 border ${
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
                         editExamShifts.length > 1
-                          ? 'bg-purple-700 text-white border-purple-700 shadow-xs ring-2 ring-purple-300'
+                          ? 'bg-purple-700 text-white border-purple-700 shadow-md ring-2 ring-purple-300'
                           : 'bg-white text-gray-700 border-gray-200 hover:bg-slate-50'
                       }`}
                     >
-                      <Layers size={13} className={editExamShifts.length > 1 ? 'text-amber-300' : 'text-purple-600'} />
+                      <Layers size={14} className={editExamShifts.length > 1 ? 'text-amber-300' : 'text-purple-600'} />
                       <span>Multiple Shifts (बहु-सत्र / Morning + Day)</span>
                     </button>
                   </div>
@@ -2888,7 +2910,7 @@ export default function ExamsPage() {
                     return (
                       <div
                         key={sIdx}
-                        className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-3"
+                        className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs space-y-3"
                       >
                         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                           <div className="flex items-center gap-2">
@@ -2896,7 +2918,9 @@ export default function ExamsPage() {
                               {sIdx + 1}
                             </span>
                             <span className="font-extrabold text-xs text-gray-900">
-                              Shift #{sIdx + 1}: {sh.nameNepali || sh.name}
+                              {editExamShifts.length === 1
+                                ? 'Single Shift Timing & Classes'
+                                : `Shift #${sIdx + 1}: ${sh.nameNepali || sh.name}`}
                             </span>
                           </div>
 
@@ -2906,7 +2930,7 @@ export default function ExamsPage() {
                               onClick={() => {
                                 setEditExamShifts(editExamShifts.filter((_, idx) => idx !== sIdx));
                               }}
-                              className="text-rose-500 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 hover:underline"
+                              className="text-rose-500 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 hover:underline cursor-pointer"
                             >
                               <Trash2 size={12} />
                               <span>Remove Shift</span>
@@ -2916,7 +2940,7 @@ export default function ExamsPage() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                           <div>
-                            <label className="block font-bold text-gray-700 mb-1">Shift Type *</label>
+                            <label className="block font-bold text-gray-700 mb-1">Shift Name / Type *</label>
                             <select
                               value={sh.name}
                               onChange={(e) => {

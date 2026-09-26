@@ -93,6 +93,49 @@ router.post('/rooms/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN
   }
 });
 
+// PUT /api/seat-plans/rooms/:id — update exam room
+router.put('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const roomId = parseInt(req.params.id);
+    const { roomNo, building, totalBenches, seatsPerBench } = req.body;
+    if (!roomNo || !totalBenches) {
+      return res.status(400).json({ success: false, message: 'Room No and total benches are required.' });
+    }
+
+    const benches = parseInt(totalBenches);
+    const spb = parseInt(seatsPerBench) || 2;
+
+    const updated = await prisma.examRoom.update({
+      where: { id: roomId },
+      data: {
+        roomNo: String(roomNo).trim(),
+        building: building ? String(building).trim() : null,
+        totalBenches: benches,
+        seatsPerBench: spb,
+        totalCapacity: benches * spb,
+      },
+    });
+
+    return res.json({ success: true, data: updated, message: 'परीक्षा कोठा विवरण सफलतापूर्वक परिमार्जन गरियो!' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// DELETE /api/seat-plans/rooms/:id — delete exam room
+router.delete('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
+  try {
+    const roomId = parseInt(req.params.id);
+    await prisma.examSeatPlan.deleteMany({ where: { roomId } });
+    await prisma.examRoom.delete({ where: { id: roomId } });
+    return res.json({ success: true, message: 'परीक्षा कोठा सफलतापूर्वक हटाइयो!' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // ── SMART AUTO SEAT PLANNING (SHIFT-WISE) ───────────────────────────────────
 
 // GET /api/seat-plans — get seat plan for an exam & shift

@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import {
   Grid,
   Plus,
   Trash2,
+  Edit2,
   Printer,
   Sparkles,
   School,
@@ -25,6 +26,10 @@ import {
   Square,
   HelpCircle,
   Hash,
+  LayoutGrid,
+  Columns,
+  Info,
+  BadgeCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -32,17 +37,33 @@ import toast from 'react-hot-toast';
 export default function ExamSeatPlanningPage() {
   const queryClient = useQueryClient();
 
+  // Primary Selection States
   const [selectedExamId, setSelectedExamId] = useState('');
   const [selectedShift, setSelectedShift] = useState<string>('DAY');
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
   const [selectedRoomIdsForAllocation, setSelectedRoomIdsForAllocation] = useState<number[]>([]);
 
-  // Room Plan Form
+  // Add Room Modal & Form
+  const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
   const [roomNo, setRoomNo] = useState('');
   const [building, setBuilding] = useState('Main Block');
-  const [totalBenches, setTotalBenches] = useState('15');
+  const [columnLayout, setColumnLayout] = useState<'2_COLUMNS' | '3_COLUMNS' | '1_COLUMN'>('2_COLUMNS');
+  const [leftBenches, setLeftBenches] = useState('8');
+  const [rightBenches, setRightBenches] = useState('8');
+  const [middleBenches, setMiddleBenches] = useState('0');
   const [seatsPerBench, setSeatsPerBench] = useState('2');
+
+  // Edit Room Modal & Form
+  const [editingRoom, setEditingRoom] = useState<any>(null);
+  const [isEditRoomModalOpen, setIsEditRoomModalOpen] = useState(false);
+  const [editRoomNo, setEditRoomNo] = useState('');
+  const [editBuilding, setEditBuilding] = useState('');
+  const [editColumnLayout, setEditColumnLayout] = useState<'2_COLUMNS' | '3_COLUMNS' | '1_COLUMN'>('2_COLUMNS');
+  const [editLeftBenches, setEditLeftBenches] = useState('8');
+  const [editRightBenches, setEditRightBenches] = useState('8');
+  const [editMiddleBenches, setEditMiddleBenches] = useState('0');
+  const [editSeatsPerBench, setEditSeatsPerBench] = useState('2');
 
   // Fetch Exams
   const { data: examsData } = useQuery({
@@ -84,12 +105,58 @@ export default function ExamSeatPlanningPage() {
   const currentExam = examsData?.find((e: any) => e.id.toString() === selectedExamId);
   const examShifts = currentExam?.shifts || [];
 
+  // Available shifts list: combines standard shifts + exam-specific shifts
+  const availableShifts = useMemo(() => {
+    const list = [
+      {
+        name: 'MORNING',
+        nameNepali: 'बिहानी सत्र (Morning Shift)',
+        startTime: '07:00 AM',
+        endTime: '10:00 AM',
+      },
+      {
+        name: 'DAY',
+        nameNepali: 'दिवा सत्र (Day Shift)',
+        startTime: '11:00 AM',
+        endTime: '02:00 PM',
+      },
+      {
+        name: 'EVENING',
+        nameNepali: 'साँझ सत्र (Evening Shift)',
+        startTime: '03:00 PM',
+        endTime: '06:00 PM',
+      },
+    ];
+
+    if (examShifts && examShifts.length > 0) {
+      examShifts.forEach((s: any) => {
+        const existingIdx = list.findIndex((x) => x.name === s.name);
+        if (existingIdx >= 0) {
+          list[existingIdx] = {
+            ...list[existingIdx],
+            nameNepali: s.nameNepali || list[existingIdx].nameNepali,
+            startTime: s.startTime || list[existingIdx].startTime,
+            endTime: s.endTime || list[existingIdx].endTime,
+          };
+        } else {
+          list.push({
+            name: s.name,
+            nameNepali: s.nameNepali || s.name,
+            startTime: s.startTime || '07:00 AM',
+            endTime: s.endTime || '10:00 AM',
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [examShifts]);
+
   // When selected exam changes, set default shift
   useEffect(() => {
     if (currentExam) {
       if (examShifts.length > 0) {
-        const firstShiftName = examShifts[0].name;
-        setSelectedShift(firstShiftName);
+        setSelectedShift(examShifts[0].name);
       } else if (currentExam.shift) {
         setSelectedShift(currentExam.shift);
       }
@@ -98,16 +165,22 @@ export default function ExamSeatPlanningPage() {
 
   // When shift changes, auto-select classes belonging to that shift
   useEffect(() => {
-    if (!currentExam) return;
+    if (!currentExam) {
+      if (classesData && selectedClassIds.length === 0) {
+        setSelectedClassIds(classesData.map((c: any) => c.id));
+      }
+      return;
+    }
 
     if (examShifts.length > 0) {
       const matchedShift = examShifts.find((s: any) => s.name === selectedShift);
       if (matchedShift) {
         let shiftCids: number[] = [];
         try {
-          shiftCids = typeof matchedShift.classIds === 'string'
-            ? JSON.parse(matchedShift.classIds)
-            : (matchedShift.classIds || []);
+          shiftCids =
+            typeof matchedShift.classIds === 'string'
+              ? JSON.parse(matchedShift.classIds)
+              : matchedShift.classIds || [];
         } catch {
           shiftCids = [];
         }
@@ -141,25 +214,107 @@ export default function ExamSeatPlanningPage() {
     enabled: !!selectedExamId,
   });
 
+  const seatPlans: any[] = seatPlansData || [];
+
+  // Helper to parse room column configuration
+  const getRoomLayoutBreakdown = (r: any) => {
+    const total = r.totalBenches || 16;
+    const l = Math.ceil(total / 2);
+    const right = total - l;
+    return {
+      leftBenches: l,
+      rightBenches: right,
+      middleBenches: 0,
+      seatsPerBench: r.seatsPerBench || 2,
+    };
+  };
+
   // Create Room Mutation
   const createRoomMutation = useMutation({
     mutationFn: async () => {
       if (!roomNo.trim()) throw new Error('Please enter Room Number/Name.');
+      const l = parseInt(leftBenches) || 0;
+      const r = parseInt(rightBenches) || 0;
+      const m = columnLayout === '3_COLUMNS' ? parseInt(middleBenches) || 0 : 0;
+      const computedTotalBenches = l + r + m || 16;
+      const spb = parseInt(seatsPerBench) || 2;
+
       const res = await api.post('/seat-plans/rooms', {
         roomNo: roomNo.trim(),
         building: building.trim(),
-        totalBenches: parseInt(totalBenches) || 15,
-        seatsPerBench: parseInt(seatsPerBench) || 2,
+        totalBenches: computedTotalBenches,
+        seatsPerBench: spb,
       });
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(data.message || 'Room created successfully!');
+      toast.success(data.message || 'Exam Room created successfully!');
       setRoomNo('');
+      setIsAddRoomModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['exam-rooms'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || err.message || 'Failed to create room');
+    },
+  });
+
+  // Update Room Mutation
+  const updateRoomMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingRoom) return;
+      if (!editRoomNo.trim()) throw new Error('Please enter Room Number/Name.');
+      const l = parseInt(editLeftBenches) || 0;
+      const r = parseInt(editRightBenches) || 0;
+      const m = editColumnLayout === '3_COLUMNS' ? parseInt(editMiddleBenches) || 0 : 0;
+      const computedTotalBenches = l + r + m || 16;
+      const spb = parseInt(editSeatsPerBench) || 2;
+
+      const res = await api.put(`/seat-plans/rooms/${editingRoom.id}`, {
+        roomNo: editRoomNo.trim(),
+        building: editBuilding.trim(),
+        totalBenches: computedTotalBenches,
+        seatsPerBench: spb,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Room updated successfully!');
+      setIsEditRoomModalOpen(false);
+      setEditingRoom(null);
+      queryClient.invalidateQueries({ queryKey: ['exam-rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || err.message || 'Failed to update room');
+    },
+  });
+
+  const openEditRoomModal = (r: any) => {
+    setEditingRoom(r);
+    setEditRoomNo(r.roomNo || '');
+    setEditBuilding(r.building || '');
+    const breakdown = getRoomLayoutBreakdown(r);
+    setEditLeftBenches(String(breakdown.leftBenches));
+    setEditRightBenches(String(breakdown.rightBenches));
+    setEditMiddleBenches('0');
+    setEditColumnLayout('2_COLUMNS');
+    setEditSeatsPerBench(String(r.seatsPerBench || 2));
+    setIsEditRoomModalOpen(true);
+  };
+
+  // Delete Room Mutation
+  const deleteRoomMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/seat-plans/rooms/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Room deleted');
+      queryClient.invalidateQueries({ queryKey: ['exam-rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete room');
     },
   });
 
@@ -178,28 +333,16 @@ export default function ExamSeatPlanningPage() {
     },
   });
 
-  // Delete Room Mutation
-  const deleteRoomMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.delete(`/seat-plans/rooms/${id}`);
-      return res.data;
-    },
-    onSuccess: () => {
-      toast.success('Room deleted');
-      queryClient.invalidateQueries({ queryKey: ['exam-rooms'] });
-      queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
-    },
-  });
-
-  // Auto Generate Mutation
+  // Auto Generate Seat Plan Mutation
   const autoGenerateMutation = useMutation({
     mutationFn: async () => {
       if (!selectedExamId || selectedClassIds.length === 0) {
         throw new Error('Please select an Exam and at least one Class');
       }
-      const targetRoomIds = selectedRoomIdsForAllocation.length > 0
-        ? selectedRoomIdsForAllocation
-        : rooms.map((r: any) => r.id);
+      const targetRoomIds =
+        selectedRoomIdsForAllocation.length > 0
+          ? selectedRoomIdsForAllocation
+          : rooms.map((r: any) => r.id);
 
       if (targetRoomIds.length === 0) {
         throw new Error('Please add at least one Exam Room first in Step 1');
@@ -222,11 +365,13 @@ export default function ExamSeatPlanningPage() {
     },
   });
 
-  // Clear Seat Plan for this Shift Mutation
+  // Clear Seat Plan Mutation
   const clearShiftSeatPlanMutation = useMutation({
     mutationFn: async () => {
       if (!selectedExamId) return;
-      const res = await api.delete(`/seat-plans/exam/${selectedExamId}?shift=${encodeURIComponent(selectedShift)}`);
+      const res = await api.delete(
+        `/seat-plans/exam/${selectedExamId}?shift=${encodeURIComponent(selectedShift)}`
+      );
       return res.data;
     },
     onSuccess: () => {
@@ -260,546 +405,445 @@ export default function ExamSeatPlanningPage() {
     );
   };
 
-  const printDoorNotice = () => {
-    if (!seatPlansData || seatPlansData.length === 0) {
-      toast.error('No seat plan to print');
-      return;
-    }
+  // Group seat plans by room for physical classroom view
+  const seatPlansByRoom = useMemo(() => {
+    const map: Record<string, { room: any; seats: any[]; benches: Record<number, any[]> }> = {};
 
-    const printWin = window.open('', '_blank');
-    if (!printWin) {
-      window.print();
-      return;
-    }
-
-    const examName = currentExam?.nameNepali || currentExam?.name || 'Examination';
-    const shiftInfo = examShifts.find((s: any) => s.name === selectedShift);
-    const shiftLabel = shiftInfo
-      ? `${shiftInfo.nameNepali || shiftInfo.name} (${shiftInfo.startTime || ''} - ${shiftInfo.endTime || ''})`
-      : `${selectedShift} SHIFT`;
-
-    // Group seats by room
-    const seatsByRoom: Record<string, any[]> = {};
-    seatPlansData.forEach((s: any) => {
-      const rName = s.room ? `Room ${s.room.roomNo} (${s.room.building || 'Main Block'})` : 'Exam Room';
-      if (!seatsByRoom[rName]) seatsByRoom[rName] = [];
-      seatsByRoom[rName].push(s);
+    seatPlans.forEach((s: any) => {
+      const rId = s.roomId;
+      if (!map[rId]) {
+        map[rId] = {
+          room: s.room,
+          seats: [],
+          benches: {},
+        };
+      }
+      map[rId].seats.push(s);
+      if (!map[rId].benches[s.benchNo]) {
+        map[rId].benches[s.benchNo] = [];
+      }
+      map[rId].benches[s.benchNo].push(s);
     });
 
-    const roomSections = Object.entries(seatsByRoom).map(([rName, seats]) => {
-      const rows = seats.map((s) => `
-        <tr>
-          <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-weight: bold;">${s.benchNo}</td>
-          <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-weight: bold; background: #f8fafc;">${s.seatPosition}</td>
-          <td style="border: 1px solid #1e3a5f; padding: 5px; font-weight: bold;">${s.student?.fullName || '—'}</td>
-          <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-weight: bold; color: #1e3a5f;">${s.student?.classEnrollment?.[0]?.class?.name || '—'}</td>
-          <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-family: monospace; font-weight: bold;">${s.rollNo || '—'}</td>
-          <td style="border: 1px solid #1e3a5f; padding: 5px; text-align: center; font-family: monospace;">${s.student?.studentId || '—'}</td>
-        </tr>
-      `).join('');
+    return map;
+  }, [seatPlans]);
 
-      return `
-        <div style="page-break-after: always; padding: 10px;">
-          <div style="text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px;">
-            <div style="font-size: 16px; font-weight: 900; color: #1e3a5f;">श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट</div>
-            <div style="font-size: 13px; font-weight: 800; color: #b91c1c; margin-top: 2px;">${examName} — परीक्षा कोठा सिट योजना (Door Notice)</div>
-            <div style="font-size: 12px; font-weight: bold; color: #0284c7; margin-top: 3px;">
-              ⏱️ सत्र (Shift): ${shiftLabel}
-            </div>
-            <div style="font-size: 14px; font-weight: 900; background: #fef3c7; color: #78350f; display: inline-block; padding: 3px 16px; border-radius: 4px; margin-top: 6px;">
-              ${rName} • कुल विद्यार्थी: ${seats.length} जना
+  // Distinct class badge colors for anti-cheating visualization
+  const getClassBadgeColor = (className: string) => {
+    const colors = [
+      'bg-blue-100 text-blue-900 border-blue-300',
+      'bg-purple-100 text-purple-900 border-purple-300',
+      'bg-emerald-100 text-emerald-900 border-emerald-300',
+      'bg-amber-100 text-amber-900 border-amber-300',
+      'bg-rose-100 text-rose-900 border-rose-300',
+      'bg-cyan-100 text-cyan-900 border-cyan-300',
+      'bg-indigo-100 text-indigo-900 border-indigo-300',
+      'bg-teal-100 text-teal-900 border-teal-300',
+    ];
+    let hash = 0;
+    for (let i = 0; i < className.length; i++) {
+      hash = className.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const idx = Math.abs(hash) % colors.length;
+    return colors[idx];
+  };
+
+  // Print Door Notice (ढोका सूचना)
+  const printDoorNotice = () => {
+    if (seatPlans.length === 0) {
+      toast.error('No seat plan to print. Please generate seats first.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print');
+      return;
+    }
+
+    const examTitle = currentExam ? `${currentExam.name} (${currentExam.nameNepali || ''})` : 'Examination';
+    const shiftInfo = availableShifts.find((s) => s.name === selectedShift);
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Exam Door Notice - ${examTitle}</title>
+        <style>
+          @page { size: A4; margin: 12mm; }
+          body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 0; color: #111; }
+          .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
+          .title { font-size: 16px; font-weight: bold; color: #1e3a5f; }
+          .subtitle { font-size: 13px; font-weight: bold; margin-top: 2px; }
+          .meta { font-size: 11px; margin-top: 4px; color: #444; }
+          .room-card { page-break-after: always; margin-bottom: 20px; }
+          .room-header { background: #1e3a5f; color: white; padding: 8px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+          .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+          .column-title { text-align: center; background: #e2e8f0; font-weight: bold; padding: 4px; font-size: 11px; border-radius: 3px; margin-bottom: 6px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 10.5px; }
+          th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; }
+          th { background: #f1f5f9; font-weight: bold; }
+          .desk-no { font-weight: bold; font-family: monospace; }
+          .student-name { font-weight: bold; }
+          .class-tag { font-weight: bold; color: #1e3a5f; }
+        </style>
+      </head>
+      <body>
+    `;
+
+    Object.values(seatPlansByRoom).forEach(({ room, seats, benches }) => {
+      const benchKeys = Object.keys(benches).map(Number).sort((a, b) => a - b);
+      const half = Math.ceil(benchKeys.length / 2);
+      const leftBenchKeys = benchKeys.slice(0, half);
+      const rightBenchKeys = benchKeys.slice(half);
+
+      html += `
+        <div class="room-card">
+          <div class="header">
+            <div class="title">श्री नेपाल माध्यमिक विद्यालय (NEPAL SECONDARY SCHOOL)</div>
+            <div class="subtitle">परीक्षा कक्षा ढोका टाँस सूचना (EXAMINATION DOOR NOTICE)</div>
+            <div class="meta">
+              <strong>${examTitle}</strong> &nbsp;|&nbsp; 
+              <strong>सत्र (Shift):</strong> ${shiftInfo?.nameNepali || selectedShift} (${shiftInfo?.startTime || ''} - ${shiftInfo?.endTime || ''})
             </div>
           </div>
 
-          <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-            <thead>
-              <tr style="background: #1e3a5f; color: #fff;">
-                <th style="padding: 6px; border: 1px solid #1e3a5f; width: 60px;">Bench No</th>
-                <th style="padding: 6px; border: 1px solid #1e3a5f; width: 60px;">Position</th>
-                <th style="padding: 6px; border: 1px solid #1e3a5f;">Student Name</th>
-                <th style="padding: 6px; border: 1px solid #1e3a5f; width: 90px;">Class</th>
-                <th style="padding: 6px; border: 1px solid #1e3a5f; width: 60px;">Roll No</th>
-                <th style="padding: 6px; border: 1px solid #1e3a5f; width: 90px;">Student ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
+          <div class="room-header">
+            <span>कोठा नं: ${room.roomNo} (${room.building || 'Main Block'})</span>
+            <span>कुल विद्यार्थी: ${seats.length} जना &nbsp;|&nbsp; कुल बेन्च: ${benchKeys.length}</span>
+          </div>
 
-          <div style="margin-top: 24px; display: flex; justify-content: space-between; font-size: 11px; font-weight: bold;">
-            <div>Room Invigilator (निरीक्षक)</div>
-            <div>Exam Controller (परीक्षा प्रमुख)</div>
-            <div>Headmaster / Seal (प्रधानाध्यापक)</div>
+          <div class="grid-container">
+            <div>
+              <div class="column-title">⬅️ बायाँ लहर (LEFT ROW BENCHES)</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bench</th>
+                    <th>बायाँ सिट (Left)</th>
+                    <th>दायाँ सिट (Right)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${leftBenchKeys.map((bNo) => {
+                    const bSeats = benches[bNo] || [];
+                    const leftS = bSeats.find((s: any) => s.seatPosition === 'LEFT');
+                    const rightS = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
+                    return `
+                      <tr>
+                        <td class="desk-no">B-${bNo}</td>
+                        <td>${leftS ? `<span class="student-name">${leftS.student?.fullName}</span><br><span class="class-tag">${leftS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${leftS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
+                        <td>${rightS ? `<span class="student-name">${rightS.student?.fullName}</span><br><span class="class-tag">${rightS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${rightS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <div class="column-title">➡️ दायाँ लहर (RIGHT ROW BENCHES)</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Bench</th>
+                    <th>बायाँ सिट (Left)</th>
+                    <th>दायाँ सिट (Right)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rightBenchKeys.map((bNo) => {
+                    const bSeats = benches[bNo] || [];
+                    const leftS = bSeats.find((s: any) => s.seatPosition === 'LEFT');
+                    const rightS = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
+                    return `
+                      <tr>
+                        <td class="desk-no">B-${bNo}</td>
+                        <td>${leftS ? `<span class="student-name">${leftS.student?.fullName}</span><br><span class="class-tag">${leftS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${leftS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
+                        <td>${rightS ? `<span class="student-name">${rightS.student?.fullName}</span><br><span class="class-tag">${rightS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${rightS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       `;
-    }).join('');
+    });
 
-    printWin.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Exam Door Notice - ${examName} (${selectedShift})</title>
-          <style>
-            @page { size: A4 portrait; margin: 10mm; }
-            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
-          </style>
-        </head>
-        <body>
-          ${roomSections}
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
-          </script>
-        </body>
+    html += `
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
       </html>
-    `);
-    printWin.document.close();
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
+  // Print Desk Slips (डेस्क स्लिपहरू)
   const printDeskSlips = () => {
-    if (!seatPlansData || seatPlansData.length === 0) {
-      toast.error('No seat plan to generate desk slips for');
+    if (seatPlans.length === 0) {
+      toast.error('No seat plan to print.');
       return;
     }
 
-    const printWin = window.open('', '_blank');
-    if (!printWin) {
-      window.print();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print');
       return;
     }
 
-    const examName = currentExam?.nameNepali || currentExam?.name || 'Examination';
-    const shiftInfo = examShifts.find((s: any) => s.name === selectedShift);
-    const shiftLabel = shiftInfo
-      ? `${shiftInfo.nameNepali || shiftInfo.name} (${shiftInfo.startTime || ''} - ${shiftInfo.endTime || ''})`
-      : `${selectedShift} SHIFT`;
+    const examTitle = currentExam ? currentExam.name : 'Examination';
+    const shiftInfo = availableShifts.find((s) => s.name === selectedShift);
 
-    const slipsHtml = seatPlansData.map((seat: any) => {
-      const roomTitle = seat.room?.roomNo ? `${seat.room.roomNo} (${seat.room.building || 'Main Block'})` : 'Exam Room';
-      const className = seat.student?.classEnrollment?.[0]?.class?.name || '—';
-      const rollNo = seat.rollNo || seat.student?.classEnrollment?.[0]?.rollNo || '—';
-      const classNum = (className.match(/\d+/) || ['00'])[0].padStart(2, '0');
-      const rollStr = String(rollNo).padStart(2, '0');
-      const symbolNo = `2081${classNum}${rollStr}`;
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Desk Slips - ${examTitle}</title>
+        <style>
+          @page { size: A4; margin: 8mm; }
+          body { font-family: sans-serif; font-size: 10px; margin: 0; padding: 0; }
+          .slips-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+          .slip-card {
+            border: 1.5px dashed #475569;
+            border-radius: 6px;
+            padding: 8px 10px;
+            box-sizing: border-box;
+            background: #fff;
+            position: relative;
+          }
+          .school-name { font-weight: bold; font-size: 11px; text-align: center; color: #1e3a5f; }
+          .exam-name { font-size: 9.5px; text-align: center; color: #475569; margin-bottom: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; }
+          .bench-badge { background: #1e3a5f; color: white; font-weight: bold; font-size: 10px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
+          .side-badge { font-weight: bold; font-size: 9px; padding: 2px 4px; border-radius: 3px; }
+          .student-info { margin-top: 4px; font-size: 11px; }
+          .student-name { font-size: 12px; font-weight: bold; color: #0f172a; }
+          .meta-row { display: flex; justify-content: space-between; margin-top: 3px; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="slips-grid">
+    `;
 
-      return `
+    seatPlans.forEach((seat: any) => {
+      html += `
         <div class="slip-card">
-          <div class="slip-header">
-            <div class="school-title">श्री नेपाल मा.वि., विश्रामपुर, रौतहट</div>
-            <div class="exam-title">${examName} — 2081</div>
-            <div class="shift-badge">⏱️ ${shiftLabel}</div>
+          <div class="school-name">NEPAL SECONDARY SCHOOL</div>
+          <div class="exam-name">${examTitle} &bull; ${shiftInfo?.nameNepali || selectedShift}</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+            <span class="bench-badge">${seat.room?.roomNo || 'Room'} &bull; Bench #${seat.benchNo}</span>
+            <span class="side-badge" style="background:${seat.seatPosition === 'LEFT' ? '#dbeafe; color:#1e40af' : '#f3e8ff; color:#6b21a8'}">${seat.seatPosition} SEAT</span>
           </div>
-
-          <div class="seat-coords">
-            <div class="coord-box room-badge">🏢 ${roomTitle}</div>
-            <div class="coord-box bench-badge">🪑 Bench #${seat.benchNo} (${seat.seatPosition})</div>
-          </div>
-
           <div class="student-info">
-            <div class="name-row">
-              <span class="label">परीक्षार्थी:</span>
-              <span class="st-name">${seat.student?.fullName || '—'}</span>
+            <div class="student-name">${seat.student?.fullName}</div>
+            <div class="meta-row">
+              <span><strong>Class:</strong> ${seat.student?.classEnrollment?.[0]?.class?.name || '—'}</span>
+              <span><strong>Roll No:</strong> ${seat.rollNo || '—'}</span>
+              <span><strong>EMIS:</strong> ${seat.student?.studentId || seat.student?.emisId || '—'}</span>
             </div>
-            <div class="details-row">
-              <div><strong>कक्षा:</strong> ${className}</div>
-              <div><strong>रोल:</strong> <span class="badge-num">${rollNo}</span></div>
-            </div>
-            <div class="symbol-row">
-              <span class="label">Symbol No:</span>
-              <span class="symbol-num">${symbolNo}</span>
-            </div>
-          </div>
-
-          <div class="slip-footer">
-            <span>EMIS: ${seat.student?.studentId || '—'}</span>
-            <span class="cut-line">✂️ DESK SLIP</span>
           </div>
         </div>
       `;
-    }).join('');
+    });
 
-    printWin.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Desk Slips - ${examName} (${selectedShift})</title>
-          <style>
-            @page { size: A4 portrait; margin: 8mm; }
-            * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; background: #fff; color: #111; }
-            .slips-grid {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 6mm;
-            }
-            .slip-card {
-              border: 1.5px dashed #1e3a5f;
-              border-radius: 8px;
-              padding: 8px 10px;
-              background: #fffdfa;
-              page-break-inside: avoid;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              height: 64mm;
-            }
-            .slip-header {
-              text-align: center;
-              border-bottom: 1px solid #cbd5e1;
-              padding-bottom: 3px;
-              margin-bottom: 4px;
-            }
-            .school-title {
-              font-size: 11px;
-              font-weight: 900;
-              color: #1e3a5f;
-            }
-            .exam-title {
-              font-size: 10px;
-              font-weight: 800;
-              color: #b91c1c;
-            }
-            .shift-badge {
-              font-size: 9px;
-              font-weight: bold;
-              color: #0369a1;
-              margin-top: 1px;
-            }
-            .seat-coords {
-              display: flex;
-              gap: 4px;
-              justify-content: space-between;
-              margin-bottom: 4px;
-            }
-            .coord-box {
-              font-size: 9.5px;
-              font-weight: 900;
-              padding: 2px 6px;
-              border-radius: 4px;
-              text-align: center;
-              flex: 1;
-            }
-            .room-badge {
-              background: #f1f5f9;
-              color: #334155;
-              border: 1px solid #cbd5e1;
-            }
-            .bench-badge {
-              background: #fef3c7;
-              color: #92400e;
-              border: 1px solid #fde68a;
-            }
-            .student-info {
-              background: #fff;
-              border: 1px solid #e2e8f0;
-              border-radius: 6px;
-              padding: 5px 7px;
-              font-size: 10px;
-            }
-            .name-row {
-              font-size: 11.5px;
-              font-weight: 900;
-              color: #0f172a;
-              margin-bottom: 3px;
-              display: flex;
-              align-items: baseline;
-              gap: 4px;
-            }
-            .label {
-              font-size: 9px;
-              color: #64748b;
-              font-weight: normal;
-            }
-            .st-name {
-              color: #1e3a5f;
-            }
-            .details-row {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 3px;
-              font-size: 10px;
-            }
-            .badge-num {
-              font-family: monospace;
-              font-weight: 900;
-              color: #1e3a5f;
-            }
-            .symbol-row {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              background: #f0fdf4;
-              border: 1px solid #bbf7d0;
-              padding: 1px 6px;
-              border-radius: 4px;
-            }
-            .symbol-num {
-              font-family: monospace;
-              font-weight: 900;
-              font-size: 11.5px;
-              color: #166534;
-              letter-spacing: 0.5px;
-            }
-            .slip-footer {
-              display: flex;
-              justify-content: space-between;
-              font-size: 8px;
-              color: #64748b;
-              font-family: monospace;
-              padding-top: 2px;
-            }
-            .cut-line {
-              font-weight: bold;
-              color: #94a3b8;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="slips-grid">
-            ${slipsHtml}
-          </div>
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); }, 400); };
-          </script>
-        </body>
+    html += `
+        </div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
       </html>
-    `);
-    printWin.document.close();
-  };
+    `;
 
-  const totalSchoolBenches = rooms.reduce((sum, r) => sum + (r.totalBenches || 0), 0);
-  const totalSchoolCapacity = rooms.reduce((sum, r) => sum + (r.totalCapacity || r.totalBenches * 2), 0);
-  const seatPlans = seatPlansData || [];
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* ─── TOP HEADER BAR ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2">
             <Link
               href="/dashboard/exams"
-              className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-[#1e3a5f] transition"
+              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-600 transition"
+              title="Back to Exams"
             >
-              <ArrowLeft size={14} />
-              <span>Back to Exams</span>
+              <ArrowLeft size={16} />
             </Link>
+            <h1 className="text-xl font-black text-[#1e3a5f] flex items-center gap-2">
+              <Grid className="text-blue-600" size={24} />
+              <span>Anti-Cheating Exam Seat Planning (परीक्षा सिट योजना)</span>
+            </h1>
           </div>
-          <h1 className="text-xl md:text-2xl font-extrabold text-[#1e3a5f] flex items-center gap-2">
-            <Grid className="text-[#1e3a5f]" />
-            <span>Room Plan & Shift-Wise Anti-Cheating Seat Allocation</span>
-          </h1>
-          <p className="text-xs text-gray-500 font-nepali mt-0.5">
-            कोठा तथा बेन्च योजना (Room & Desk Plan) तयार गरी प्रत्येक सत्रका लागि एकान्तर (Interleaved) सिट प्लान, डेस्क स्लिप र ढोका टाँस निकाल्नुहोस्
+          <p className="text-xs text-gray-500 font-nepali mt-1">
+            कोठा क्षमता, बेन्च व्यवस्थापन, फरक कक्षाका विद्यार्थीहरूलाई एकान्तर (Interleaved) सिट प्लान र ढोका सूचना
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link
             href="/dashboard/exams/admit-cards"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 transition shadow-2xs"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 px-3.5 py-2 text-xs font-bold text-purple-900 transition shadow-2xs"
           >
-            <Printer size={14} className="text-purple-600" />
+            <Users size={14} />
             <span>Admit Cards (प्रवेश पत्र)</span>
           </Link>
 
           <button
-            onClick={printDeskSlips}
+            type="button"
+            onClick={printDoorNotice}
             disabled={seatPlans.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-50"
-            title="Print bench desk slips to stick on desks"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-700 transition shadow-2xs disabled:opacity-40"
           >
-            <Printer size={14} className="text-amber-700" />
-            <span>Print Desk Slips (डेस्क स्लिप टाँस)</span>
+            <Printer size={14} className="text-blue-600" />
+            <span>Print Door Notice (ढोका टाँस)</span>
           </button>
 
           <button
-            onClick={printDoorNotice}
+            type="button"
+            onClick={printDeskSlips}
             disabled={seatPlans.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-700 transition shadow-2xs disabled:opacity-40"
           >
-            <Printer size={14} />
-            <span>Print Door Notice ({selectedShift})</span>
+            <Printer size={14} className="text-purple-600" />
+            <span>Desk Slips (स्लिपहरू)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsAddRoomModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-4 py-2 text-xs font-bold text-white transition shadow-xs"
+          >
+            <Plus size={14} />
+            <span>Add Exam Room (कोठा थप्नुहोस्)</span>
           </button>
         </div>
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      {/* ─── STEP 1: ROOM & BENCH PLAN (कोठा तथा बेन्च योजना) ───────────────── */}
+      {/* ─── STEP 1: ROOM & DESK STRUCTURE CONFIGURATION ─────────────────────── */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-3xl border-2 border-blue-200/80 bg-white p-6 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-blue-100 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-blue-700 text-white font-black text-sm flex items-center justify-center shadow-xs">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-blue-100 text-blue-900 font-black text-xs flex items-center justify-center">
               १
             </div>
             <div>
-              <h2 className="text-sm font-black text-[#1e3a5f] flex items-center gap-2 uppercase tracking-wide">
-                <Building size={16} className="text-blue-700" />
-                <span>STEP 1: Room Plan (कोठा तथा बेन्च व्यवस्थापन)</span>
+              <h2 className="text-xs font-extrabold text-gray-900 flex items-center gap-2 uppercase tracking-wide">
+                <Building size={14} className="text-blue-600" />
+                <span>STEP 1: Exam Rooms & Physical Desk Layout (कोठा तथा बेन्च संरचना)</span>
               </h2>
               <p className="text-[11px] text-gray-500 font-nepali">
-                पहिले परीक्षा कोठा, भवन र त्यस कोठामा रहेका डेस्क/बेन्चको संख्या प्रविष्टि गर्नुहोस्
+                प्रत्येक कोठामा बायाँ र दायाँ लहर (Left/Right Rows) का बेन्चहरू र प्रति बेन्च सिट क्षमता
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-xl bg-blue-50 border border-blue-200/80 px-3 py-1 font-bold text-[#1e3a5f] text-xs">
-              कुल <strong>{rooms.length}</strong> कोठा • <strong>{totalSchoolBenches}</strong> बेन्च • <strong>{totalSchoolCapacity}</strong> सिट क्षमता/सत्र
-            </span>
-          </div>
+          {rooms.length === 0 && (
+            <button
+              onClick={() => seedRoomsMutation.mutate()}
+              disabled={seedRoomsMutation.isPending}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5"
+            >
+              <Sparkles size={13} />
+              <span>{seedRoomsMutation.isPending ? 'Seeding...' : 'Auto-Seed Standard Rooms'}</span>
+            </button>
+          )}
         </div>
 
-        {/* Quick Room Creator Form */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createRoomMutation.mutate();
-          }}
-          className="rounded-2xl bg-slate-50/90 border border-slate-200 p-4 space-y-3 text-xs"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="md:col-span-2">
-              <label className="block font-bold text-gray-700 mb-1">Room No. / Room Name *</label>
-              <input
-                required
-                type="text"
-                placeholder="e.g. Room 101, Hall A, Science Wing"
-                value={roomNo}
-                onChange={(e) => setRoomNo(e.target.value)}
-                className="erp-input font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-gray-700 mb-1">Building / Block</label>
-              <input
-                type="text"
-                placeholder="e.g. Main Block"
-                value={building}
-                onChange={(e) => setBuilding(e.target.value)}
-                className="erp-input"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-gray-700 mb-1">No. of Benches *</label>
-              <input
-                required
-                type="number"
-                min="1"
-                max="100"
-                value={totalBenches}
-                onChange={(e) => setTotalBenches(e.target.value)}
-                className="erp-input font-mono font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-gray-700 mb-1">Seats / Bench</label>
-              <select
-                value={seatsPerBench}
-                onChange={(e) => setSeatsPerBench(e.target.value)}
-                className="erp-input font-bold"
-              >
-                <option value="2">2 Seats (Left & Right)</option>
-                <option value="3">3 Seats (L, M, R)</option>
-                <option value="1">1 Seat (Single Desk)</option>
-              </select>
-            </div>
+        {/* Existing Room Cards with Edit & Delete */}
+        {isRoomsLoading ? (
+          <div className="py-6 text-center text-gray-400 text-xs">Loading examination rooms...</div>
+        ) : rooms.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-300 p-8 text-center space-y-2">
+            <School className="mx-auto text-gray-300" size={32} />
+            <p className="text-xs font-bold text-gray-700">No Exam Rooms Configured Yet</p>
+            <p className="text-[11px] text-gray-400">
+              Click &quot;Add Exam Room&quot; or &quot;Auto-Seed Standard Rooms&quot; to configure your school&apos;s exam halls.
+            </p>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {rooms.map((r: any) => {
+              const breakdown = getRoomLayoutBreakdown(r);
+              const isSelectedForAllocation = selectedRoomIdsForAllocation.includes(r.id);
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-slate-200/80">
-            <div className="text-[11px] text-gray-600 font-nepali flex items-center gap-1">
-              <span>अनुमानित क्षमता:</span>
-              <strong className="text-blue-900 font-mono">
-                {parseInt(totalBenches || '0') * parseInt(seatsPerBench || '2')}
-              </strong>
-              <span>जना विद्यार्थी प्रति सत्र</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {rooms.length === 0 && (
-                <button
-                  type="button"
-                  disabled={seedRoomsMutation.isPending}
-                  onClick={() => seedRoomsMutation.mutate()}
-                  className="rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-blue-900 px-3.5 py-1.5 text-xs font-bold transition shadow-2xs"
+              return (
+                <div
+                  key={r.id}
+                  className={`rounded-2xl border p-3.5 text-xs space-y-2 transition relative group ${
+                    isSelectedForAllocation
+                      ? 'border-blue-300 bg-blue-50/40 shadow-xs'
+                      : 'border-gray-200 bg-white opacity-85'
+                  }`}
                 >
-                  ⚡ Auto-Add Standard Rooms 1-5
-                </button>
-              )}
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={isSelectedForAllocation}
+                        onChange={() => handleToggleRoomForAllocation(r.id)}
+                        className="rounded text-blue-600 h-3.5 w-3.5 cursor-pointer"
+                        title="Include room in seat allocation"
+                      />
+                      <strong className="text-gray-900 font-black text-sm">{r.roomNo}</strong>
+                    </div>
 
-              <button
-                type="submit"
-                disabled={createRoomMutation.isPending || !roomNo.trim()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 text-xs font-bold transition shadow-xs disabled:opacity-50"
-              >
-                <Plus size={14} />
-                <span>{createRoomMutation.isPending ? 'Adding...' : 'Add Exam Room (कोठा थप्नुहोस्)'}</span>
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Configured Rooms Cards Grid */}
-        <div className="space-y-2">
-          <h3 className="font-bold text-xs text-gray-700 uppercase tracking-wider">
-            हाल सिर्जना गरिएका परीक्षा कोठाहरू ({rooms.length} Rooms Available):
-          </h3>
-
-          {isRoomsLoading ? (
-            <div className="py-6 text-center text-gray-400 text-xs">Loading exam rooms...</div>
-          ) : rooms.length === 0 ? (
-            <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-gray-200 text-xs text-gray-500 space-y-1">
-              <Building size={28} className="mx-auto text-gray-300 mb-1" />
-              <p className="font-bold text-gray-700">कुनै परीक्षा कोठा सिर्जना गरिएको छैन।</p>
-              <p className="text-[11px]">माथिको फारम प्रयोग गरी वा &quot;Auto-Add Standard Rooms&quot; क्लिक गरी कोठा थप्नुहोस्।</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
-              {rooms.map((r: any) => {
-                const isSelectedForAllocation = selectedRoomIdsForAllocation.includes(r.id);
-                return (
-                  <div
-                    key={r.id}
-                    className={`rounded-2xl border p-3 text-xs space-y-1.5 transition relative group ${
-                      isSelectedForAllocation
-                        ? 'border-blue-300 bg-blue-50/40'
-                        : 'border-gray-200 bg-white opacity-80'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <strong className="text-gray-900 font-extrabold text-sm">{r.roomNo}</strong>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEditRoomModal(r)}
+                        title="Edit Room Layout"
+                        className="text-gray-400 hover:text-blue-600 p-1 rounded-md hover:bg-blue-50 transition"
+                      >
+                        <Edit2 size={13} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`Are you sure you want to delete ${r.roomNo}?`)) {
+                          if (
+                            confirm(
+                              `Are you sure you want to delete ${r.roomNo}? This will also remove any seat allocations linked to this room.`
+                            )
+                          ) {
                             deleteRoomMutation.mutate(r.id);
                           }
                         }}
                         title="Delete Room"
-                        className="text-gray-400 hover:text-rose-600 transition"
+                        className="text-gray-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition"
                       >
                         <Trash2 size={13} />
                       </button>
                     </div>
+                  </div>
 
-                    <p className="text-[10px] text-gray-500 truncate">{r.building || 'Main Block'}</p>
+                  <p className="text-[11px] text-gray-500 truncate">{r.building || 'Main Block'}</p>
 
-                    <div className="pt-1 border-t border-slate-200/60 flex items-center justify-between font-mono text-[10px] font-bold">
+                  <div className="rounded-xl bg-slate-50 p-2 border border-slate-200/60 space-y-1 font-mono text-[10.5px]">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>📐 Layout:</span>
+                      <span className="font-bold text-slate-800">
+                        Left: {breakdown.leftBenches} | Right: {breakdown.rightBenches}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between font-bold border-t border-slate-200/50 pt-1">
                       <span className="text-gray-600">{r.totalBenches} Benches</span>
                       <span className="text-blue-700">{r.totalCapacity || r.totalBenches * 2} Seats</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}
@@ -817,7 +861,7 @@ export default function ExamSeatPlanningPage() {
                 <span>STEP 2: Choose Exam, Shift & Classes (परीक्षा, सत्र तथा कक्षा छनौट)</span>
               </h2>
               <p className="text-[11px] text-purple-800 font-nepali">
-                कुन परीक्षा र कुन शिफ्ट (बिहानी वा दिवा) का लागि सिट योजना बनाउने हो चयन गर्नुहोस्
+                कुन परीक्षा र कुन सत्र (बिहानी वा दिवा) का लागि सिट योजना बनाउने हो चयन गर्नुहोस्
               </p>
             </div>
           </div>
@@ -874,81 +918,65 @@ export default function ExamSeatPlanningPage() {
           </div>
         </div>
 
-        {/* Shift Selector Pills */}
-        <div className="space-y-2 pt-2 border-t border-gray-100">
+        {/* ── Shift Selector Cards (Always Visible) ── */}
+        <div className="space-y-2 pt-2 border-t border-purple-100">
           <label className="block font-bold text-gray-800 text-xs flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Clock size={14} className="text-blue-600" />
-              <span>Choose Shift to Plan (कुन सत्रको सिट योजना बनाउने?):</span>
+              <Clock size={14} className="text-purple-700" />
+              <span>Choose Exam Shift to Plan (सत्र छनौट):</span>
             </span>
             <span className="text-[11px] text-gray-500 font-normal">
-              Rooms and benches are automatically reused across shifts without conflicts.
+              बिहानी र दिवा सत्रका लागि अलग-अलग सिट प्लान स्वतः सुरक्षित हुन्छ।
             </span>
           </label>
 
-          <div className="flex flex-wrap gap-2.5">
-            {examShifts.length > 0 ? (
-              examShifts.map((sh: any) => {
-                const isSelected = selectedShift === sh.name;
-                const isMorning = (sh.name || '').toUpperCase().includes('MORN');
-                return (
-                  <button
-                    key={sh.id || sh.name}
-                    type="button"
-                    onClick={() => setSelectedShift(sh.name)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
-                      isSelected
-                        ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md scale-[1.02]'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {isMorning ? (
-                      <Sun size={14} className={isSelected ? 'text-amber-300' : 'text-amber-600'} />
-                    ) : (
-                      <Moon size={14} className={isSelected ? 'text-blue-200' : 'text-indigo-600'} />
-                    )}
-                    <span>{sh.nameNepali || sh.name}</span>
-                    {(sh.startTime || sh.endTime) && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                        isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 border'
-                      }`}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {availableShifts.map((sh: any) => {
+              const isSelected = selectedShift === sh.name;
+              const isMorning = (sh.name || '').toUpperCase().includes('MORN');
+              const isEvening = (sh.name || '').toUpperCase().includes('EVEN');
+
+              return (
+                <button
+                  key={sh.name}
+                  type="button"
+                  onClick={() => setSelectedShift(sh.name)}
+                  className={`flex items-center justify-between p-3 rounded-2xl text-xs font-bold transition border text-left ${
+                    isSelected
+                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md ring-2 ring-purple-400 scale-[1.01]'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`h-8 w-8 rounded-xl flex items-center justify-center ${
+                        isSelected
+                          ? 'bg-white/20 text-white'
+                          : isMorning
+                          ? 'bg-amber-100 text-amber-700'
+                          : isEvening
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      {isMorning ? <Sun size={16} /> : isEvening ? <Moon size={16} /> : <Sun size={16} />}
+                    </div>
+                    <div>
+                      <span className="block font-bold text-xs">{sh.nameNepali}</span>
+                      <span
+                        className={`text-[10.5px] font-mono ${
+                          isSelected ? 'text-blue-100' : 'text-gray-500'
+                        }`}
+                      >
                         {sh.startTime} - {sh.endTime}
                       </span>
-                    )}
-                  </button>
-                );
-              })
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setSelectedShift('MORNING')}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
-                    selectedShift === 'MORNING'
-                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <Sun size={14} className="text-amber-500" />
-                  <span>Morning Shift (बिहानी सत्र)</span>
-                  <span className="text-[10px] opacity-80 font-mono">07:00 - 10:00 AM</span>
-                </button>
+                    </div>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedShift('DAY')}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition border ${
-                    selectedShift === 'DAY'
-                      ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <Sun size={14} className="text-amber-500" />
-                  <span>Day Shift (दिवा सत्र)</span>
-                  <span className="text-[10px] opacity-80 font-mono">11:00 AM - 02:00 PM</span>
+                  {isSelected && <BadgeCheck size={18} className="text-amber-300 shrink-0" />}
                 </button>
-              </>
-            )}
+              );
+            })}
           </div>
         </div>
 
@@ -975,240 +1003,591 @@ export default function ExamSeatPlanningPage() {
                   key={cls.id}
                   type="button"
                   onClick={() => handleToggleClass(cls.id)}
-                  className={`p-2 rounded-xl border text-center font-bold text-xs transition ${
+                  className={`flex items-center gap-2 rounded-xl border p-2 text-xs font-bold transition text-left ${
                     isSelected
-                      ? 'bg-blue-50 border-[#1e3a5f] text-[#1e3a5f] ring-1 ring-[#1e3a5f]'
-                      : 'border-gray-200 text-gray-600 hover:bg-slate-50'
+                      ? 'border-purple-600 bg-purple-50 text-purple-900 shadow-2xs'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  {cls.name} {cls.section ? `(${cls.section})` : ''}
+                  {isSelected ? (
+                    <CheckSquare size={14} className="text-purple-600 shrink-0" />
+                  ) : (
+                    <Square size={14} className="text-gray-400 shrink-0" />
+                  )}
+                  <span className="truncate">{cls.name}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Select Rooms for this Allocation */}
-        <div className="space-y-2.5 pt-2.5 border-t border-gray-100 text-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
-            <div>
-              <label className="font-bold text-gray-800 flex items-center gap-1.5">
-                <Building size={14} className="text-purple-700" />
-                <span>Select Rooms for this Exam Shift (यस {selectedShift} शिफ्टका लागि प्रयोग गरिने कोठाहरू):</span>
-              </label>
-              <p className="text-[10px] text-gray-500 font-nepali">
-                यस सत्रमा कुन-कुन कोठामा विद्यार्थी राख्ने हो छनौट गर्नुहोस् (अनचेक गरिएका कोठाहरूमा विद्यार्थी राखिने छैन)
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedRoomIdsForAllocation(rooms.map((r: any) => r.id))}
-                className="text-blue-600 hover:underline font-bold text-[10.5px]"
-              >
-                Select All Rooms
-              </button>
-              <span className="text-gray-300">|</span>
-              <button
-                type="button"
-                onClick={() => setSelectedRoomIdsForAllocation([])}
-                className="text-gray-500 hover:underline font-bold text-[10.5px]"
-              >
-                Deselect All
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-            {rooms.map((r: any) => {
-              const isChecked = selectedRoomIdsForAllocation.includes(r.id);
-              const roomCap = r.totalCapacity || r.totalBenches * (r.seatsPerBench || 2);
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => handleToggleRoomForAllocation(r.id)}
-                  className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between gap-1.5 ${
-                    isChecked
-                      ? 'bg-purple-50 border-purple-600 text-purple-950 ring-2 ring-purple-600/30 shadow-xs'
-                      : 'border-gray-200 bg-white text-gray-400 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-xs truncate text-gray-900">{r.roomNo}</span>
-                    <span className={`h-4 w-4 rounded-md flex items-center justify-center text-[10px] font-bold ${
-                      isChecked ? 'bg-purple-700 text-white' : 'border border-gray-300 bg-white'
-                    }`}>
-                      {isChecked ? '✓' : ''}
-                    </span>
-                  </div>
-
-                  <p className="text-[10px] text-gray-500 truncate">{r.building || 'Main Block'}</p>
-
-                  <div className="pt-1 border-t border-purple-100 flex items-center justify-between text-[10px] font-mono">
-                    <span className="text-gray-500">{r.totalBenches} Desks</span>
-                    <span className="font-bold text-purple-800">{roomCap} Seats</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Capacity Status Badge */}
-          {selectedRoomIdsForAllocation.length > 0 && (
-            <div className="rounded-xl bg-purple-100/60 border border-purple-200 p-2.5 flex items-center justify-between text-[11px] text-purple-950 font-semibold">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                <span>
-                  छानिएका <strong>{selectedRoomIdsForAllocation.length}</strong> वटा कोठामा जम्मा{' '}
-                  <strong className="font-mono text-purple-900">
-                    {rooms
-                      .filter((r: any) => selectedRoomIdsForAllocation.includes(r.id))
-                      .reduce((sum: number, r: any) => sum + (r.totalCapacity || r.totalBenches * (r.seatsPerBench || 2)), 0)}
-                  </strong>{' '}
-                  सिट क्षमता उपलब्ध छ।
-                </span>
-              </div>
-              <span className="text-[10px] bg-white border border-purple-300 px-2 py-0.5 rounded-md font-bold text-purple-900 font-mono">
-                {selectedShift} SHIFT READY
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Generate Button Footer */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
-          <div className="text-[11px] text-gray-500 font-nepali">
-            💡 प्रणालीले एकापसमा नजिक नहुने गरी (Anti-cheating) बायाँ र दायाँ बेन्चमा फरक कक्षाका विद्यार्थीहरूलाई
-            स्वचालित रूपमा मिलाउँछ।
-          </div>
+        {/* Action Button */}
+        <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-purple-100">
+          <p className="text-[11px] text-gray-500 font-nepali">
+            💡 &quot;Smart Auto-Allocate&quot; ले फरक-फरक कक्षाका विद्यार्थीहरूलाई एकापसमा मिलाएर (Interleaving) नक्कल रोक्ने गरी सिट निर्धारण गर्दछ।
+          </p>
 
           <button
             type="button"
-            disabled={
-              autoGenerateMutation.isPending ||
-              !selectedExamId ||
-              selectedClassIds.length === 0 ||
-              rooms.length === 0
-            }
             onClick={() => autoGenerateMutation.mutate()}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 px-6 py-2.5 font-bold text-white shadow-md hover:from-purple-800 hover:to-blue-800 transition disabled:opacity-50 text-xs shrink-0"
+            disabled={autoGenerateMutation.isPending || !selectedExamId || selectedClassIds.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 px-6 py-3 text-xs font-bold text-white shadow-md transition disabled:opacity-50"
           >
-            {autoGenerateMutation.isPending ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                <span>Allocating Seats for {selectedShift}...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} />
-                <span>Generate Smart {selectedShift} Seat Plan (सिट योजना तयार गर्नुहोस्)</span>
-              </>
-            )}
+            <Sparkles size={16} className="text-amber-300" />
+            <span>
+              {autoGenerateMutation.isPending
+                ? 'Allocating Seats...'
+                : `Generate Smart ${selectedShift} Seat Plan`}
+            </span>
           </button>
         </div>
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      {/* ─── STEP 3: VISUAL LAYOUT & BENCH CARDS ────────────────────────────── */}
+      {/* ─── STEP 3: PHYSICAL CLASSROOM LAYOUT VIEW & SEAT PLAN ─────────────── */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-3xl border border-gray-200/90 bg-white p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-emerald-700 text-white font-black text-sm flex items-center justify-center shadow-xs">
-              ३
-            </div>
-            <div>
-              <h2 className="text-sm font-black text-gray-900 flex items-center gap-2 uppercase tracking-wide">
-                <Layers size={16} className="text-emerald-700" />
-                <span>STEP 3: Visual Bench & Door Plan — {selectedShift} Shift</span>
-              </h2>
-              <p className="text-[11px] text-gray-500 font-nepali">
-                प्रत्येक कोठा र बेन्च अनुसार विद्यार्थीहरूको सिट नक्सा
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1 font-bold text-emerald-900 text-xs">
-              Total Seated: <strong>{seatPlans.length}</strong> Students
-            </span>
-
-            <button
-              type="button"
-              onClick={printDeskSlips}
-              disabled={seatPlans.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-50"
-            >
-              <Printer size={13} className="text-amber-700" />
-              <span>Print Desk Slips</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={printDoorNotice}
-              disabled={seatPlans.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-800 hover:bg-blue-100 transition shadow-2xs disabled:opacity-50"
-            >
-              <Printer size={13} />
-              <span>Print Door Notice</span>
-            </button>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+              <Columns className="text-blue-600" size={18} />
+              <span>Realistic Physical Classroom Layout (भौतिक कक्षा कोठा सिट संरचना)</span>
+            </h2>
+            <p className="text-xs text-gray-500">
+              Active Shift: <strong className="text-purple-900">{selectedShift} Shift</strong> &bull; Total Seated Students: <strong>{seatPlans.length}</strong>
+            </p>
           </div>
         </div>
 
         {isSeatsLoading ? (
-          <div className="py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100 p-8">
+          <div className="py-12 text-center text-gray-400 bg-white rounded-3xl border border-gray-100 p-8">
             <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
             <p className="mt-2 text-xs">Loading seat plans for {selectedShift} shift...</p>
           </div>
         ) : seatPlans.length === 0 ? (
-          <div className="rounded-2xl border border-gray-100 bg-slate-50/50 p-12 text-center space-y-3">
-            <Grid size={36} className="mx-auto text-gray-300" />
+          <div className="rounded-3xl border border-gray-200 bg-slate-50/60 p-12 text-center space-y-3">
+            <Grid size={40} className="mx-auto text-gray-300" />
             <h3 className="text-sm font-bold text-gray-700">No Seat Plan Generated for {selectedShift} Shift Yet</h3>
             <p className="text-xs text-gray-400 max-w-md mx-auto">
-              Select an exam, choose the shift ({selectedShift}), check classes above, then click &quot;Generate Smart {selectedShift} Seat Plan&quot;.
+              Select an exam, choose shift ({selectedShift}), select classes, and click &quot;Generate Smart {selectedShift} Seat Plan&quot;.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {seatPlans.map((seat: any) => (
-              <div
-                key={seat.id}
-                className="rounded-2xl border border-gray-200 bg-white p-4 shadow-2xs hover:border-blue-400 transition space-y-2 text-xs"
-              >
-                <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                  <div className="flex items-center gap-1.5 font-mono font-bold text-[#1e3a5f]">
-                    <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                      {seat.room?.roomNo || 'Room 1'}
-                    </span>
-                    <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-[11px]">
-                      Bench #{seat.benchNo}
-                    </span>
-                  </div>
-                  <span
-                    className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                      seat.seatPosition === 'LEFT'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-purple-100 text-purple-800'
-                    }`}
-                  >
-                    {seat.seatPosition} SEAT
-                  </span>
-                </div>
+          <div className="space-y-8">
+            {Object.entries(seatPlansByRoom).map(([rId, { room, seats, benches }]) => {
+              const benchKeys = Object.keys(benches).map(Number).sort((a, b) => a - b);
+              const half = Math.ceil(benchKeys.length / 2);
+              const leftBenchKeys = benchKeys.slice(0, half);
+              const rightBenchKeys = benchKeys.slice(half);
 
-                <div className="space-y-0.5">
-                  <p className="font-extrabold text-gray-900 text-sm">{seat.student?.fullName}</p>
-                  <p className="text-[11px] font-semibold text-emerald-700">
-                    Class: {seat.student?.classEnrollment?.[0]?.class?.name || '—'} (Roll: {seat.rollNo || '—'})
-                  </p>
-                  <p className="text-[10px] font-mono text-gray-400">EMIS ID: {seat.student?.studentId}</p>
+              return (
+                <div
+                  key={rId}
+                  className="rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm space-y-5"
+                >
+                  {/* Room Banner */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-2xl bg-[#1e3a5f] text-white flex items-center justify-center font-black text-sm shadow-xs">
+                        🏢
+                      </div>
+                      <div>
+                        <h3 className="text-base font-extrabold text-gray-900">
+                          {room.roomNo} ({room.building || 'Main Block'})
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Total Desks in Room: <strong>{room.totalBenches}</strong> &bull; Seated Students: <strong>{seats.length}</strong> &bull; Shift: <span className="font-bold text-purple-700">{selectedShift}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 font-bold">
+                        Left Row: {leftBenchKeys.length} Desks
+                      </span>
+                      <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold">
+                        Right Row: {rightBenchKeys.length} Desks
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Teacher's Podium / Blackboard Bar at Front */}
+                  <div className="rounded-2xl border border-emerald-300 bg-emerald-50/80 p-3 text-center text-xs font-extrabold text-emerald-900 shadow-2xs flex items-center justify-center gap-2">
+                    <span>👨‍🏫 FRONT OF CLASSROOM: Teacher&apos;s Desk / Whiteboard (अगाडिको पोडियम / कालोपाटी)</span>
+                  </div>
+
+                  {/* Physical 2-Column Desk Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+                    {/* LEFT COLUMN DESKS */}
+                    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
+                          <span>⬅️ बायाँ लहर (LEFT ROW DESKS)</span>
+                        </span>
+                        <span className="text-[11px] font-mono text-gray-500">{leftBenchKeys.length} Desks</span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {leftBenchKeys.map((bNo) => {
+                          const bSeats = benches[bNo] || [];
+                          const leftSeat = bSeats.find((s: any) => s.seatPosition === 'LEFT');
+                          const rightSeat = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
+
+                          return (
+                            <div
+                              key={bNo}
+                              className="rounded-xl border border-slate-300 bg-white p-2.5 shadow-2xs space-y-1.5 hover:border-blue-400 transition"
+                            >
+                              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 border-b border-slate-100 pb-1">
+                                <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-900">
+                                  🪑 Bench #{bNo}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-mono">
+                                  {room.roomNo}-B{bNo}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {/* Left Seat */}
+                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9.5px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
+                                      LEFT
+                                    </span>
+                                    {leftSeat?.rollNo && (
+                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
+                                        Roll: {leftSeat.rollNo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {leftSeat ? (
+                                    <>
+                                      <p className="font-bold text-gray-900 text-xs truncate">
+                                        {leftSeat.student?.fullName}
+                                      </p>
+                                      <span
+                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                          leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                        )}`}
+                                      >
+                                        {leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
+                                  )}
+                                </div>
+
+                                {/* Right Seat */}
+                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9.5px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
+                                      RIGHT
+                                    </span>
+                                    {rightSeat?.rollNo && (
+                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
+                                        Roll: {rightSeat.rollNo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {rightSeat ? (
+                                    <>
+                                      <p className="font-bold text-gray-900 text-xs truncate">
+                                        {rightSeat.student?.fullName}
+                                      </p>
+                                      <span
+                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                          rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                        )}`}
+                                      >
+                                        {rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN DESKS */}
+                    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
+                          <span>➡️ दायाँ लहर (RIGHT ROW DESKS)</span>
+                        </span>
+                        <span className="text-[11px] font-mono text-gray-500">{rightBenchKeys.length} Desks</span>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {rightBenchKeys.map((bNo) => {
+                          const bSeats = benches[bNo] || [];
+                          const leftSeat = bSeats.find((s: any) => s.seatPosition === 'LEFT');
+                          const rightSeat = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
+
+                          return (
+                            <div
+                              key={bNo}
+                              className="rounded-xl border border-slate-300 bg-white p-2.5 shadow-2xs space-y-1.5 hover:border-blue-400 transition"
+                            >
+                              <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 border-b border-slate-100 pb-1">
+                                <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-900">
+                                  🪑 Bench #{bNo}
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-mono">
+                                  {room.roomNo}-B{bNo}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {/* Left Seat */}
+                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9.5px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
+                                      LEFT
+                                    </span>
+                                    {leftSeat?.rollNo && (
+                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
+                                        Roll: {leftSeat.rollNo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {leftSeat ? (
+                                    <>
+                                      <p className="font-bold text-gray-900 text-xs truncate">
+                                        {leftSeat.student?.fullName}
+                                      </p>
+                                      <span
+                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                          leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                        )}`}
+                                      >
+                                        {leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
+                                  )}
+                                </div>
+
+                                {/* Right Seat */}
+                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9.5px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
+                                      RIGHT
+                                    </span>
+                                    {rightSeat?.rollNo && (
+                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
+                                        Roll: {rightSeat.rollNo}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {rightSeat ? (
+                                    <>
+                                      <p className="font-bold text-gray-900 text-xs truncate">
+                                        {rightSeat.student?.fullName}
+                                      </p>
+                                      <span
+                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                          rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                        )}`}
+                                      >
+                                        {rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* ─── ADD ROOM MODAL ─────────────────────────────────────────────────── */}
+      {isAddRoomModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex items-center gap-2">
+                <Building className="text-blue-600" size={18} />
+                <h3 className="text-sm font-bold text-gray-900">Add Exam Room (परीक्षा कोठा तथा डेस्क संरचना)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddRoomModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createRoomMutation.mutate();
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Room No / Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={roomNo}
+                    onChange={(e) => setRoomNo(e.target.value)}
+                    placeholder="e.g. Room 101, Hall A"
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Building / Block</label>
+                  <input
+                    type="text"
+                    value={building}
+                    onChange={(e) => setBuilding(e.target.value)}
+                    placeholder="e.g. Main Building"
+                    className="erp-input"
+                  />
+                </div>
+              </div>
+
+              {/* Physical Desk Columns Layout */}
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-blue-200/60 pb-2">
+                  <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
+                    <Columns size={14} className="text-blue-600" />
+                    <span>Physical Desk Columns (कोठाको लहर संरचना)</span>
+                  </span>
+                  <span className="text-[10.5px] text-gray-500 font-nepali">२-लहर वा ३-लहर डेस्क</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">⬅️ Left Row Desks *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      required
+                      value={leftBenches}
+                      onChange={(e) => setLeftBenches(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-gray-500">बायाँ लहरका बेन्च</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">➡️ Right Row Desks *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      required
+                      value={rightBenches}
+                      onChange={(e) => setRightBenches(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-gray-500">दायाँ लहरका बेन्च</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk *</label>
+                    <select
+                      value={seatsPerBench}
+                      onChange={(e) => setSeatsPerBench(e.target.value)}
+                      className="erp-input font-bold"
+                    >
+                      <option value="1">1 Student / Desk</option>
+                      <option value="2">2 Students / Desk (Standard L & R)</option>
+                      <option value="3">3 Students / Desk</option>
+                    </select>
+                    <span className="text-[10px] text-gray-500">प्रति बेन्च सिट</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white p-3 border border-blue-200 flex items-center justify-between font-mono text-xs">
+                  <span className="text-gray-600 font-bold">
+                    Total: {(parseInt(leftBenches) || 0) + (parseInt(rightBenches) || 0)} Benches
+                  </span>
+                  <span className="font-extrabold text-blue-900">
+                    👥 Seating Capacity: {((parseInt(leftBenches) || 0) + (parseInt(rightBenches) || 0)) * (parseInt(seatsPerBench) || 2)} Students
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddRoomModalOpen(false)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createRoomMutation.isPending}
+                  className="rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                >
+                  {createRoomMutation.isPending ? 'Saving...' : 'Create Exam Room'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── EDIT ROOM MODAL ────────────────────────────────────────────────── */}
+      {isEditRoomModalOpen && editingRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex items-center gap-2">
+                <Building className="text-blue-600" size={18} />
+                <h3 className="text-sm font-bold text-gray-900">Edit Exam Room (कोठा तथा डेस्क संरचना सम्पादन)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditRoomModalOpen(false);
+                  setEditingRoom(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateRoomMutation.mutate();
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Room No / Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editRoomNo}
+                    onChange={(e) => setEditRoomNo(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Building / Block</label>
+                  <input
+                    type="text"
+                    value={editBuilding}
+                    onChange={(e) => setEditBuilding(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+              </div>
+
+              {/* Physical Desk Columns Layout for Edit */}
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-blue-200/60 pb-2">
+                  <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
+                    <Columns size={14} className="text-blue-600" />
+                    <span>Physical Desk Columns (कोठाको लहर संरचना)</span>
+                  </span>
+                  <span className="text-[10.5px] text-gray-500 font-nepali">२-लहर वा ३-लहर डेस्क</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">⬅️ Left Row Desks *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      required
+                      value={editLeftBenches}
+                      onChange={(e) => setEditLeftBenches(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-gray-500">बायाँ लहरका बेन्च</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">➡️ Right Row Desks *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      required
+                      value={editRightBenches}
+                      onChange={(e) => setEditRightBenches(e.target.value)}
+                      className="erp-input font-mono font-bold"
+                    />
+                    <span className="text-[10px] text-gray-500">दायाँ लहरका बेन्च</span>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk *</label>
+                    <select
+                      value={editSeatsPerBench}
+                      onChange={(e) => setEditSeatsPerBench(e.target.value)}
+                      className="erp-input font-bold"
+                    >
+                      <option value="1">1 Student / Desk</option>
+                      <option value="2">2 Students / Desk (Standard L & R)</option>
+                      <option value="3">3 Students / Desk</option>
+                    </select>
+                    <span className="text-[10px] text-gray-500">प्रति बेन्च सिट</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-white p-3 border border-blue-200 flex items-center justify-between font-mono text-xs">
+                  <span className="text-gray-600 font-bold">
+                    Total: {(parseInt(editLeftBenches) || 0) + (parseInt(editRightBenches) || 0)} Benches
+                  </span>
+                  <span className="font-extrabold text-blue-900">
+                    👥 Seating Capacity: {((parseInt(editLeftBenches) || 0) + (parseInt(editRightBenches) || 0)) * (parseInt(editSeatsPerBench) || 2)} Students
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditRoomModalOpen(false);
+                    setEditingRoom(null);
+                  }}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateRoomMutation.isPending}
+                  className="rounded-xl bg-blue-700 hover:bg-blue-800 px-5 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                >
+                  {updateRoomMutation.isPending ? 'Saving...' : 'Update Room'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
