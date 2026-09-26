@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { todayBS } from '@/lib/nepali-date';
@@ -22,6 +22,10 @@ import {
   Upload,
   RotateCcw,
   ShieldCheck,
+  Palette,
+  Stamp,
+  Save,
+  Check,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -32,22 +36,58 @@ const FONTS = [
   { id: 'kantipur', name: 'Kantipur Bold (कान्तिपुर शैली)', css: '"Kantipur", "Noto Sans Devanagari", sans-serif' },
 ];
 
+const COLOR_PRESETS = [
+  { id: 'dark-navy', name: 'Dark Navy', hex: '#0b1f3a' },
+  { id: 'pure-black', name: 'Pure Black', hex: '#000000' },
+  { id: 'deep-blue', name: 'Royal Blue', hex: '#1e3a5f' },
+  { id: 'slate-gray', name: 'Slate Gray', hex: '#334155' },
+  { id: 'crimson', name: 'Crimson Red', hex: '#991b1b' },
+  { id: 'forest-green', name: 'Forest Green', hex: '#065f46' },
+];
+
 export default function SchoolLettersPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'composer' | 'register'>('composer');
   const [search, setSearch] = useState('');
 
-  // Styling Customizer State
+  // Fetch School Profile for official default info, logo & seal
+  const { data: schoolProfile } = useQuery({
+    queryKey: ['school-profile'],
+    queryFn: async () => {
+      const res = await api.get('/school/profile');
+      return res.data?.data || {};
+    },
+  });
+
+  // Typography & Color Customizer State
   const [selectedFont, setSelectedFont] = useState(FONTS[0].id);
   const [fontSize, setFontSize] = useState<number>(15);
-  const [lineHeight, setLineHeight] = useState<number>(2.0);
-  const [showWatermark, setShowWatermark] = useState<boolean>(true);
+  const [lineHeight, setLineHeight] = useState<number>(1.9);
+  const [textColor, setTextColor] = useState<string>('#111827');
+  
+  // Header & Subject Customizer State
+  const [headerFontSize, setHeaderFontSize] = useState<number>(20);
+  const [headerColor, setHeaderColor] = useState<string>('#0b1f3a');
+  const [subjectFontSize, setSubjectFontSize] = useState<number>(16);
+  const [subjectColor, setSubjectColor] = useState<string>('#0b1f3a');
+  const [pageMargin, setPageMargin] = useState<'narrow' | 'standard' | 'wide'>('standard');
 
-  // Logo & Signature Upload State
-  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
-  const [customSignatureUrl, setCustomSignatureUrl] = useState<string | null>(null);
-  const [isPrincipalApproved, setIsPrincipalApproved] = useState<boolean>(true);
+  // Element Dimensions
+  const [logoSize, setLogoSize] = useState<number>(75);
+  const [sealSize, setSealSize] = useState<number>(75);
+  const [signatureWidth, setSignatureWidth] = useState<number>(130);
+
+  // Asset Visibility Toggles
+  const [showLogo, setShowLogo] = useState<boolean>(true);
+  const [showSeal, setShowSeal] = useState<boolean>(true);
   const [includeSignature, setIncludeSignature] = useState<boolean>(true);
+  const [showWatermark, setShowWatermark] = useState<boolean>(true);
+  const [isPrincipalApproved, setIsPrincipalApproved] = useState<boolean>(true);
+
+  // Logo, Seal & Signature State (Persistent with localStorage + school profile fallback)
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
+  const [customSealUrl, setCustomSealUrl] = useState<string | null>(null);
+  const [customSignatureUrl, setCustomSignatureUrl] = useState<string | null>(null);
 
   // Form State
   const [letterForm, setLetterForm] = useState({
@@ -66,12 +106,44 @@ export default function SchoolLettersPage() {
     body: `यस विद्यालयमा अध्ययनरत कक्षा ११ र १२ का सम्पूर्ण विद्यार्थी तथा अभिभावकहरूलाई जानकारी गराइन्छ कि मिति २०८३-०३-१७ गते बिहान ६ बजेदेखि कक्षा ११ र १२ को नियमित पठनपाठन सञ्चालन हुने भएकाले सबै विद्यार्थीहरू विद्यालय पोसाकमा समयमै उपस्थित भई नियमित रूपमा कक्षामा सहभागी हुन अनुरोध गरिन्छ।\n\nअनुपस्थित हुने विद्यार्थी स्वयं जिम्मेवार हुने व्यहोरा समेत जानकारी गराइन्छ।`,
     signatoryName: 'प्रेमलाल प्रसाद राउत',
     signatoryRole: 'प्रधानाध्यापक',
-    signatorySchool: 'श्री नेपाल मा. वि.',
-    signatoryAddress: 'विश्रामपुर, रौतहट',
     category: 'GENERAL',
   });
 
   const [selectedLetterForPrint, setSelectedLetterForPrint] = useState<any>(null);
+
+  // Initialize and auto-load saved Logo, Seal, Signature & School Info
+  useEffect(() => {
+    // 1. Check localStorage first for instant recall
+    if (typeof window !== 'undefined') {
+      const savedLogo = localStorage.getItem('official_school_logo');
+      const savedSeal = localStorage.getItem('official_school_seal');
+      const savedSign = localStorage.getItem('official_principal_signature');
+
+      if (savedLogo) setCustomLogoUrl(savedLogo);
+      if (savedSeal) setCustomSealUrl(savedSeal);
+      if (savedSign) setCustomSignatureUrl(savedSign);
+    }
+
+    // 2. If school profile is available, sync fallback details
+    if (schoolProfile && Object.keys(schoolProfile).length > 0) {
+      if (!customLogoUrl && schoolProfile.logoUrl) {
+        setCustomLogoUrl(schoolProfile.logoUrl);
+      }
+      if (!customSealUrl && schoolProfile.sealUrl) {
+        setCustomSealUrl(schoolProfile.sealUrl);
+      }
+
+      setLetterForm((prev) => ({
+        ...prev,
+        schoolNameNe: schoolProfile.nameNepali || prev.schoolNameNe,
+        schoolSubtitleNe: schoolProfile.address || prev.schoolSubtitleNe,
+        schoolEstdNe: schoolProfile.estYear ? `(स्थापित-${schoolProfile.estYear} साल)` : prev.schoolEstdNe,
+        schoolNameEn: schoolProfile.name || prev.schoolNameEn,
+        schoolSubtitleEn: `${schoolProfile.district || 'Rautahat'}, Nepal`,
+        signatoryName: schoolProfile.principalName || prev.signatoryName,
+      }));
+    }
+  }, [schoolProfile]);
 
   // Fetch letters register
   const { data: lettersData, isLoading } = useQuery({
@@ -84,28 +156,61 @@ export default function SchoolLettersPage() {
     },
   });
 
-  // Handle Logo Upload
+  // Handle Logo Upload (Persists to localStorage immediately)
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setCustomLogoUrl(reader.result as string);
-      toast.success('नयाँ लोगो लोड भयो (Custom logo uploaded)!');
+      const dataUrl = reader.result as string;
+      setCustomLogoUrl(dataUrl);
+      localStorage.setItem('official_school_logo', dataUrl);
+      toast.success('लोगो लोड भयो र स्थायी रूपमा सुरक्षित गरियो!');
     };
     reader.readAsDataURL(file);
   };
 
-  // Handle Signature Upload
+  // Handle Seal / Stamp Upload (Persists to localStorage immediately)
+  const handleSealUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setCustomSealUrl(dataUrl);
+      localStorage.setItem('official_school_seal', dataUrl);
+      toast.success('विद्यालयको छाप/स्ट्याम्प लोड भयो र सुरक्षित गरियो!');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Signature Upload (Persists to localStorage immediately)
   const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setCustomSignatureUrl(reader.result as string);
-      toast.success('प्रधानाध्यापकको डिजिटल हस्ताक्षर लोड भयो (Signature uploaded)!');
+      const dataUrl = reader.result as string;
+      setCustomSignatureUrl(dataUrl);
+      localStorage.setItem('official_principal_signature', dataUrl);
+      toast.success('प्रधानाध्यापकको डिजिटल हस्ताक्षर लोड भयो र सुरक्षित गरियो!');
     };
     reader.readAsDataURL(file);
+  };
+
+  // Save all custom assets into School Profile permanently on server
+  const saveAsPermanentDefault = async () => {
+    try {
+      await api.post('/school/profile', {
+        logoUrl: customLogoUrl || undefined,
+        sealUrl: customSealUrl || undefined,
+        principalName: letterForm.signatoryName || undefined,
+      });
+      toast.success('विद्यालयको लोगो, छाप र हस्ताक्षर सर्भरमा स्थायी रूपमा सुरक्षित भयो!');
+      queryClient.invalidateQueries({ queryKey: ['school-profile'] });
+    } catch (err: any) {
+      toast.success('स्थानीय रूपमा सुरक्षित भयो (Saved locally)!');
+    }
   };
 
   // Create & Dispatch Letter Mutation
@@ -141,20 +246,22 @@ export default function SchoolLettersPage() {
     const subEn = l.schoolSubtitleEn || letterForm.schoolSubtitleEn;
     const estdEn = l.schoolEstdEn || letterForm.schoolEstdEn;
 
+    const pageMarginCss = pageMargin === 'narrow' ? '10mm 15mm' : pageMargin === 'wide' ? '20mm 25mm' : '15mm 20mm';
+
     printWin.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
           <title>Letter - ${l.subject}</title>
           <style>
-            @page { size: A4 portrait; margin: 15mm 20mm; }
+            @page { size: A4 portrait; margin: ${pageMarginCss}; }
             * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             body { 
               font-family: ${activeFontCss}; 
               margin: 0; 
               padding: 0; 
               background: #fff; 
-              color: #111; 
+              color: ${textColor}; 
               font-size: ${fontSize}px; 
               line-height: ${lineHeight}; 
               position: relative;
@@ -177,25 +284,28 @@ export default function SchoolLettersPage() {
             .letterhead { 
               position: relative;
               padding-bottom: 10px; 
-              margin-bottom: 24px; 
+              margin-bottom: 22px; 
               border-bottom: 2.5px solid #111;
             }
             .emblem-left {
               position: absolute;
               left: 0;
-              top: 2px;
-              width: 78px;
-              height: 78px;
+              top: 0;
+              width: ${logoSize}px;
+              height: ${logoSize}px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
             }
             .header-text {
               text-align: center;
-              padding-left: 80px;
+              padding-left: ${showLogo ? `${logoSize + 10}px` : '0'};
               padding-right: 15px;
             }
             .school-ne {
-              font-size: 20px;
+              font-size: ${headerFontSize}px;
               font-weight: 900;
-              color: #0b1f3a;
+              color: ${headerColor};
               margin: 0;
               line-height: 1.25;
             }
@@ -238,26 +348,27 @@ export default function SchoolLettersPage() {
               justify-content: space-between;
               font-size: 13px;
               font-weight: bold;
-              margin-bottom: 12px;
+              margin-bottom: 10px;
             }
             .date-row {
               text-align: right;
-              font-size: 14px;
+              font-size: 13.5px;
               font-weight: bold;
-              margin-bottom: 25px;
+              margin-bottom: 20px;
             }
             .recipient-box { 
               font-size: 14.5px; 
               font-weight: bold; 
-              margin-bottom: 20px; 
+              margin-bottom: 18px; 
               white-space: pre-line; 
-              line-height: 1.6; 
+              line-height: 1.55; 
             }
             .subject-box { 
               text-align: center; 
-              font-size: 15.5px; 
+              font-size: ${subjectFontSize}px; 
               font-weight: 900; 
-              margin: 25px 0; 
+              color: ${subjectColor};
+              margin: 22px 0; 
               letter-spacing: 0.3px;
             }
             .salutation { 
@@ -269,23 +380,37 @@ export default function SchoolLettersPage() {
               text-indent: 45px; 
               font-size: ${fontSize}px; 
               line-height: ${lineHeight}; 
-              margin-bottom: 60px; 
+              color: ${textColor};
+              margin-bottom: 50px; 
               white-space: pre-line; 
             }
             .signatory-box { 
               float: right; 
               text-align: center; 
-              min-width: 220px; 
+              min-width: 200px; 
               font-size: 13px; 
               line-height: 1.4;
+              position: relative;
             }
-            .signature-graphic {
-              width: 140px;
-              height: 45px;
-              margin: 0 auto 5px auto;
+            .signatures-row {
               display: flex;
               align-items: center;
               justify-content: center;
+              gap: 12px;
+              min-height: 50px;
+              margin-bottom: 4px;
+            }
+            .signature-graphic {
+              width: ${signatureWidth}px;
+              height: 48px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .seal-graphic {
+              width: ${sealSize}px;
+              height: ${sealSize}px;
+              object-fit: contain;
             }
             .sign-name {
               font-weight: 900;
@@ -297,21 +422,11 @@ export default function SchoolLettersPage() {
               font-weight: bold;
               color: #1e3a5f;
             }
-            .sign-school {
-              font-size: 12.5px;
-              font-weight: bold;
-              color: #1e3a5f;
-            }
-            .sign-addr {
-              font-size: 12px;
-              color: #1e3a5f;
-              font-weight: bold;
-            }
           </style>
         </head>
         <body>
           <div class="watermark">
-            ${customLogoUrl ? `<img src="${customLogoUrl}" style="width:100%;height:100%;object-fit:contain;"/>` : `
+            ${customLogoUrl && showWatermark ? `<img src="${customLogoUrl}" style="width:100%;height:100%;object-fit:contain;"/>` : `
             <svg viewBox="0 0 100 100" class="w-full h-full">
               <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="none" stroke="#1e3a5f" stroke-width="2"/>
               <polygon points="50,15 80,30 80,70 50,85 20,70 20,30" fill="none" stroke="#1e3a5f" stroke-width="1.5"/>
@@ -321,23 +436,25 @@ export default function SchoolLettersPage() {
 
           <div class="letter-container">
             <div class="letterhead">
-              <div class="emblem-left">
-                ${customLogoUrl ? `<img src="${customLogoUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;"/>` : `
-                <svg viewBox="0 0 100 100" style="width:100%;height:100%;">
-                  <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
-                  <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
-                  <path id="curveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
-                  <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
-                    <textPath href="#curveTop" startOffset="50%">श्री नेपाल मा.वि. विश्रामपुर</textPath>
-                  </text>
-                  <path id="curveBottom" d="M 15 50 A 35 35 0 0 0 85 50" fill="none"/>
-                  <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
-                    <textPath href="#curveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
-                  </text>
-                  <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" stroke-width="1.5"/>
-                  <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
-                </svg>`}
-              </div>
+              ${showLogo ? `
+                <div class="emblem-left">
+                  ${customLogoUrl ? `<img src="${customLogoUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:50%;"/>` : `
+                  <svg viewBox="0 0 100 100" style="width:100%;height:100%;">
+                    <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
+                    <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
+                    <path id="curveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
+                    <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
+                      <textPath href="#curveTop" startOffset="50%">श्री नेपाल मा.वि. विश्रामपुर</textPath>
+                    </text>
+                    <path id="curveBottom" d="M 15 50 A 35 35 0 0 0 85 50" fill="none"/>
+                    <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
+                      <textPath href="#curveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
+                    </text>
+                    <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" stroke-width="1.5"/>
+                    <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
+                  </svg>`}
+                </div>
+              ` : ''}
 
               <div class="header-text">
                 <h1 class="school-ne">${schoolNe}</h1>
@@ -371,19 +488,22 @@ export default function SchoolLettersPage() {
             <div class="letter-body">${l.body}</div>
 
             <div class="signatory-box">
-              ${includeSignature && isPrincipalApproved ? `
-                <div class="signature-graphic">
-                  ${customSignatureUrl ? `<img src="${customSignatureUrl}" style="max-height:45px;max-width:140px;object-fit:contain;"/>` : `
-                  <svg viewBox="0 0 160 50" style="width:100%;height:100%;">
-                    <path d="M20,38 Q45,10 65,30 T105,25 Q125,12 145,28" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
-                    <path d="M50,30 Q65,42 95,35" fill="none" stroke="#111" stroke-width="1.5"/>
-                  </svg>`}
-                </div>
-              ` : '<div style="height:35px;"></div>'}
+              <div class="signatures-row">
+                ${showSeal && customSealUrl ? `
+                  <img src="${customSealUrl}" class="seal-graphic" alt="School Seal" />
+                ` : ''}
+                ${includeSignature && isPrincipalApproved ? `
+                  <div class="signature-graphic">
+                    ${customSignatureUrl ? `<img src="${customSignatureUrl}" style="max-height:48px;max-width:${signatureWidth}px;object-fit:contain;"/>` : `
+                    <svg viewBox="0 0 160 50" style="width:100%;height:100%;">
+                      <path d="M20,38 Q45,10 65,30 T105,25 Q125,12 145,28" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
+                      <path d="M50,30 Q65,42 95,35" fill="none" stroke="#111" stroke-width="1.5"/>
+                    </svg>`}
+                  </div>
+                ` : '<div style="height:35px;"></div>'}
+              </div>
               <div class="sign-name">${l.signatoryName || 'प्रेमलाल प्रसाद राउत'}</div>
               <div class="sign-role">${l.signatoryRole || 'प्रधानाध्यापक'}</div>
-              <div class="sign-school">${l.signatorySchool || 'श्री नेपाल मा. वि.'}</div>
-              <div class="sign-addr">${l.signatoryAddress || 'विश्रामपुर, रौतहट'}</div>
             </div>
           </div>
 
@@ -444,65 +564,132 @@ export default function SchoolLettersPage() {
                 <Sliders size={16} />
                 <span>Letter Editor & Controls (पत्र सम्पादन)</span>
               </h2>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                स्था. २००७ साल
-              </span>
+              <button
+                type="button"
+                onClick={saveAsPermanentDefault}
+                className="text-[10px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer"
+                title="Save current Logo, Seal & Signature permanently for future letters"
+              >
+                <Save size={12} />
+                <span>Save As Default</span>
+              </button>
             </div>
 
-            {/* Logo & Signature Upload Panel */}
+            {/* Logo, Seal & Signature Upload Panel (With permanent memory) */}
             <div className="rounded-xl bg-blue-50/70 p-3.5 border border-blue-200 space-y-3">
-              <span className="font-bold text-[#1e3a5f] text-xs block">
-                🖼️ School Logo & Principal Signature (लोगो र हस्ताक्षर):
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#1e3a5f] text-xs block">
+                  🖼️ Official Logo, Seal & Principal Signature:
+                </span>
+                <span className="text-[10px] font-semibold text-gray-500">Auto-saved for next time</span>
+              </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {/* Logo Upload */}
-                <div className="bg-white p-2.5 rounded-lg border border-blue-100 space-y-1.5">
-                  <span className="text-[11px] font-bold text-gray-700 block">विद्यालय लोगो:</span>
-                  <div className="flex items-center gap-2">
-                    <label className="flex-1 py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold text-center cursor-pointer transition">
-                      <Upload size={12} className="inline mr-1" />
-                      <span>Upload Logo</span>
-                      <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                    </label>
-                    {customLogoUrl && (
+                <div className="bg-white p-2 rounded-lg border border-blue-100 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-700">विद्यालय लोगो:</span>
+                    <input
+                      type="checkbox"
+                      checked={showLogo}
+                      onChange={(e) => setShowLogo(e.target.checked)}
+                      className="rounded text-blue-600"
+                      title="Show/Hide Logo"
+                    />
+                  </div>
+                  <label className="block py-1 px-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9.5px] font-bold text-center cursor-pointer transition">
+                    <Upload size={10} className="inline mr-1" />
+                    <span>Upload</span>
+                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                  </label>
+                  {customLogoUrl && (
+                    <div className="flex items-center justify-between pt-0.5">
+                      <span className="text-[9px] text-emerald-700 font-bold">✓ Loaded</span>
                       <button
                         type="button"
-                        onClick={() => setCustomLogoUrl(null)}
-                        className="p-1.5 text-gray-400 hover:text-rose-600 text-[10px]"
-                        title="Reset Logo"
+                        onClick={() => {
+                          setCustomLogoUrl(null);
+                          localStorage.removeItem('official_school_logo');
+                        }}
+                        className="text-gray-400 hover:text-rose-600 text-[9px]"
                       >
-                        <RotateCcw size={12} />
+                        Reset
                       </button>
-                    )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Seal / Stamp Upload */}
+                <div className="bg-white p-2 rounded-lg border border-blue-100 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-700">विद्यालय छाप:</span>
+                    <input
+                      type="checkbox"
+                      checked={showSeal}
+                      onChange={(e) => setShowSeal(e.target.checked)}
+                      className="rounded text-blue-600"
+                      title="Show/Hide Seal"
+                    />
                   </div>
+                  <label className="block py-1 px-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded text-[9.5px] font-bold text-center cursor-pointer transition">
+                    <Upload size={10} className="inline mr-1" />
+                    <span>Upload</span>
+                    <input type="file" accept="image/*" onChange={handleSealUpload} className="hidden" />
+                  </label>
+                  {customSealUrl && (
+                    <div className="flex items-center justify-between pt-0.5">
+                      <span className="text-[9px] text-emerald-700 font-bold">✓ Loaded</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomSealUrl(null);
+                          localStorage.removeItem('official_school_seal');
+                        }}
+                        className="text-gray-400 hover:text-rose-600 text-[9px]"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Signature Upload */}
-                <div className="bg-white p-2.5 rounded-lg border border-blue-100 space-y-1.5">
-                  <span className="text-[11px] font-bold text-gray-700 block">प्रधानाध्यापक हस्ताक्षर:</span>
-                  <div className="flex items-center gap-2">
-                    <label className="flex-1 py-1.5 px-2 bg-[#1e3a5f] hover:bg-[#2a5280] text-white rounded text-[10px] font-bold text-center cursor-pointer transition">
-                      <Upload size={12} className="inline mr-1" />
-                      <span>Upload Sign</span>
-                      <input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
-                    </label>
-                    {customSignatureUrl && (
+                <div className="bg-white p-2 rounded-lg border border-blue-100 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-gray-700">प्र.अ. हस्ताक्षर:</span>
+                    <input
+                      type="checkbox"
+                      checked={includeSignature}
+                      onChange={(e) => setIncludeSignature(e.target.checked)}
+                      className="rounded text-blue-600"
+                      title="Show/Hide Signature"
+                    />
+                  </div>
+                  <label className="block py-1 px-1.5 bg-[#1e3a5f] hover:bg-[#2a5280] text-white rounded text-[9.5px] font-bold text-center cursor-pointer transition">
+                    <Upload size={10} className="inline mr-1" />
+                    <span>Upload</span>
+                    <input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
+                  </label>
+                  {customSignatureUrl && (
+                    <div className="flex items-center justify-between pt-0.5">
+                      <span className="text-[9px] text-emerald-700 font-bold">✓ Loaded</span>
                       <button
                         type="button"
-                        onClick={() => setCustomSignatureUrl(null)}
-                        className="p-1.5 text-gray-400 hover:text-rose-600 text-[10px]"
-                        title="Reset Sign"
+                        onClick={() => {
+                          setCustomSignatureUrl(null);
+                          localStorage.removeItem('official_principal_signature');
+                        }}
+                        className="text-gray-400 hover:text-rose-600 text-[9px]"
                       >
-                        <RotateCcw size={12} />
+                        Reset
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Approval & Signature Toggles */}
-              <div className="flex flex-wrap items-center justify-between pt-1 gap-2 border-t border-blue-100 text-[11px]">
+              {/* Toggles Strip */}
+              <div className="flex flex-wrap items-center justify-between pt-1 gap-2 border-t border-blue-100 text-[10.5px]">
                 <label className="flex items-center gap-1.5 font-bold text-gray-800 cursor-pointer">
                   <input
                     type="checkbox"
@@ -510,36 +697,38 @@ export default function SchoolLettersPage() {
                     onChange={(e) => setIsPrincipalApproved(e.target.checked)}
                     className="rounded text-emerald-600"
                   />
-                  <span>प्रशासकीय स्वीकृति (Admin Approved)</span>
+                  <span>प्रशासकीय स्वीकृति (Approved)</span>
                 </label>
                 <label className="flex items-center gap-1.5 font-bold text-gray-800 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={includeSignature}
-                    onChange={(e) => setIncludeSignature(e.target.checked)}
+                    checked={showWatermark}
+                    onChange={(e) => setShowWatermark(e.target.checked)}
                     className="rounded text-[#1e3a5f]"
                   />
-                  <span>हस्ताक्षर समावेश (Include Signature)</span>
+                  <span>पृष्ठभूमि वाटरमार्क (Watermark)</span>
                 </label>
               </div>
             </div>
 
-            {/* Typography Customizer */}
-            <div className="rounded-xl bg-slate-50 p-3 border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between font-bold text-gray-700">
-                <span className="flex items-center gap-1">
-                  <Type size={14} className="text-[#1e3a5f]" />
-                  <span>Choose Font (फन्ट छनौट):</span>
+            {/* Typography & Color Customizer */}
+            <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between font-bold text-gray-800 text-xs">
+                <span className="flex items-center gap-1.5">
+                  <Palette size={14} className="text-[#1e3a5f]" />
+                  <span>Text Sizes, Colors & Spacing (फन्ट, रङ तथा आकार):</span>
                 </span>
-                <span className="text-[10px] font-mono text-gray-500">Size: {fontSize}px</span>
+                <span className="text-[10px] font-mono text-gray-500">Body: {fontSize}px</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+
+              {/* Font Selector */}
+              <div className="grid grid-cols-2 gap-1.5">
                 {FONTS.map((f) => (
                   <button
                     key={f.id}
                     type="button"
                     onClick={() => setSelectedFont(f.id)}
-                    className={`p-2 rounded-lg border text-left transition font-semibold text-[11px] cursor-pointer ${
+                    className={`p-1.5 rounded-lg border text-left transition font-semibold text-[10.5px] cursor-pointer ${
                       selectedFont === f.id
                         ? 'border-[#1e3a5f] bg-blue-50 text-[#1e3a5f] font-bold ring-1 ring-[#1e3a5f]'
                         : 'border-gray-200 bg-white text-gray-700 hover:bg-slate-100'
@@ -550,28 +739,103 @@ export default function SchoolLettersPage() {
                 ))}
               </div>
 
-              <div className="flex items-center justify-between pt-1 text-[11px] text-gray-600">
-                <div className="flex items-center gap-2">
-                  <span>Font Size:</span>
+              {/* Sliders: Body Font Size & Line Height */}
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200/80 text-[11px] text-gray-700">
+                <div>
+                  <div className="flex justify-between">
+                    <span>अक्षर आकार (Body Font):</span>
+                    <strong className="font-mono">{fontSize}px</strong>
+                  </div>
                   <input
                     type="range"
                     min="12"
-                    max="18"
+                    max="20"
                     step="0.5"
                     value={fontSize}
                     onChange={(e) => setFontSize(parseFloat(e.target.value))}
-                    className="w-20 cursor-pointer"
+                    className="w-full cursor-pointer accent-[#1e3a5f]"
                   />
                 </div>
-                <label className="flex items-center gap-1 font-bold text-gray-700 cursor-pointer">
+                <div>
+                  <div className="flex justify-between">
+                    <span>लाइन खाली ठाउँ (Line Spacing):</span>
+                    <strong className="font-mono">{lineHeight}x</strong>
+                  </div>
                   <input
-                    type="checkbox"
-                    checked={showWatermark}
-                    onChange={(e) => setShowWatermark(e.target.checked)}
-                    className="rounded border-gray-300 text-[#1e3a5f]"
+                    type="range"
+                    min="1.4"
+                    max="2.4"
+                    step="0.1"
+                    value={lineHeight}
+                    onChange={(e) => setLineHeight(parseFloat(e.target.value))}
+                    className="w-full cursor-pointer accent-[#1e3a5f]"
                   />
-                  <span>Watermark</span>
-                </label>
+                </div>
+              </div>
+
+              {/* Title & Subject Formatting Controls */}
+              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200/80 text-[11px] text-gray-700">
+                <div>
+                  <div className="flex justify-between">
+                    <span>शीर्षक आकार (Header Size):</span>
+                    <strong className="font-mono">{headerFontSize}px</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="16"
+                    max="26"
+                    step="1"
+                    value={headerFontSize}
+                    onChange={(e) => setHeaderFontSize(parseInt(e.target.value))}
+                    className="w-full cursor-pointer accent-[#1e3a5f]"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between">
+                    <span>विषय आकार (Subject Size):</span>
+                    <strong className="font-mono">{subjectFontSize}px</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="13"
+                    max="22"
+                    step="1"
+                    value={subjectFontSize}
+                    onChange={(e) => setSubjectFontSize(parseInt(e.target.value))}
+                    className="w-full cursor-pointer accent-[#1e3a5f]"
+                  />
+                </div>
+              </div>
+
+              {/* Color Presets Picker */}
+              <div className="space-y-1.5 pt-1 border-t border-slate-200/80">
+                <span className="text-[10px] font-bold text-gray-600 block">अक्षरको रङ छनौट (Text & Header Color):</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setHeaderColor(c.hex);
+                        setSubjectColor(c.hex);
+                        setTextColor(c.hex === '#991b1b' || c.hex === '#065f46' ? '#111827' : c.hex);
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 bg-white hover:bg-slate-100 text-[10px] font-bold cursor-pointer"
+                    >
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: c.hex }} />
+                      <span>{c.name}</span>
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-1 ml-auto">
+                    <span className="text-[10px] text-gray-500">Custom:</span>
+                    <input
+                      type="color"
+                      value={headerColor}
+                      onChange={(e) => setHeaderColor(e.target.value)}
+                      className="w-6 h-6 p-0 border border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -744,7 +1008,7 @@ export default function SchoolLettersPage() {
           {/* Right Live Letterhead A4 Paper (7 cols) */}
           <div
             style={{ fontFamily: activeFontCss }}
-            className="lg:col-span-7 rounded-2xl border-2 border-gray-300 bg-white p-12 shadow-xl space-y-5 text-left text-gray-900 min-h-[680px] relative overflow-hidden"
+            className="lg:col-span-7 rounded-2xl border-2 border-gray-300 bg-white p-12 shadow-xl space-y-5 text-left min-h-[700px] relative overflow-hidden"
           >
             {/* Watermark Emblem */}
             {showWatermark && (
@@ -763,30 +1027,43 @@ export default function SchoolLettersPage() {
             {/* School Header */}
             <div className="relative border-b-2 border-black pb-3">
               {/* Left Circular Emblem or Custom Logo */}
-              <div className="absolute left-0 top-0 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center">
-                {customLogoUrl ? (
-                  <img src={customLogoUrl} alt="Logo" className="w-full h-full object-contain" />
-                ) : (
-                  <svg viewBox="0 0 100 100" className="w-full h-full">
-                    <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
-                    <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
-                    <path id="previewCurveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
-                    <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
-                      <textPath href="#previewCurveTop" startOffset="50%">श्री नेपाल मा.वि. विश्रामपुर</textPath>
-                    </text>
-                    <path id="previewCurveBottom" d="M 15 50 A 35 35 0 0 0 85 50" fill="none"/>
-                    <text font-size="6.5" font-weight="bold" fill="#111" text-anchor="middle">
-                      <textPath href="#previewCurveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
-                    </text>
-                    <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" stroke-width="1.5"/>
-                    <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
-                  </svg>
-                )}
-              </div>
+              {showLogo && (
+                <div
+                  style={{ width: `${logoSize}px`, height: `${logoSize}px` }}
+                  className="absolute left-0 top-0 rounded-full overflow-hidden flex items-center justify-center"
+                >
+                  {customLogoUrl ? (
+                    <img src={customLogoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  ) : (
+                    <svg viewBox="0 0 100 100" style={{ width: `${logoSize}px`, height: `${logoSize}px` }}>
+                      <circle cx="50" cy="50" r="46" fill="none" stroke="#111" stroke-width="2.5"/>
+                      <circle cx="50" cy="50" r="41" fill="none" stroke="#111" stroke-width="1.2"/>
+                      <path id="previewCurveTop" d="M 15 50 A 35 35 0 0 1 85 50" fill="none"/>
+                      <text fontSize="6.5" fontWeight="bold" fill="#111" textAnchor="middle">
+                        <textPath href="#previewCurveTop" startOffset="50%">श्री नेपाल मा.वि. विश्रामपुर</textPath>
+                      </text>
+                      <path id="previewCurveBottom" d="M 15 50 A 35 35 0 0 0 85 50" fill="none"/>
+                      <text fontSize="6.5" fontWeight="bold" fill="#111" textAnchor="middle">
+                        <textPath href="#previewCurveBottom" startOffset="50%">स्था. २००७ • Estd. 2007</textPath>
+                      </text>
+                      <polygon points="50,22 56,36 71,36 59,45 63,59 50,50 37,59 41,45 29,36 44,36" fill="none" stroke="#111" strokeWidth="1.5"/>
+                      <path d="M42,54 Q50,48 58,54 L58,62 Q50,57 42,62 Z" fill="#111"/>
+                    </svg>
+                  )}
+                </div>
+              )}
 
               {/* Center Typography */}
-              <div className="text-center pl-16 pr-4 space-y-0.5">
-                <h2 className="text-xl font-black text-gray-950 tracking-tight">
+              <div
+                style={{
+                  paddingLeft: showLogo ? `${logoSize + 12}px` : '0',
+                }}
+                className="text-center pr-4 space-y-0.5"
+              >
+                <h2
+                  style={{ fontSize: `${headerFontSize}px`, color: headerColor }}
+                  className="font-black tracking-tight"
+                >
                   {letterForm.schoolNameNe}
                 </h2>
                 <p className="text-xs font-bold text-gray-900">
@@ -821,7 +1098,10 @@ export default function SchoolLettersPage() {
             </div>
 
             {/* Subject Centered Bold */}
-            <div className="text-center font-black text-sm md:text-base text-gray-950 my-3 tracking-wide">
+            <div
+              style={{ fontSize: `${subjectFontSize}px`, color: subjectColor }}
+              className="text-center font-black my-3 tracking-wide"
+            >
               विषय: {letterForm.subject}
             </div>
 
@@ -841,32 +1121,45 @@ export default function SchoolLettersPage() {
 
             {/* Letter Body */}
             <div
-              style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
-              className="text-gray-900 text-justify indent-10 whitespace-pre-line leading-relaxed"
+              style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight, color: textColor }}
+              className="text-justify indent-10 whitespace-pre-line leading-relaxed"
             >
               {letterForm.body}
             </div>
 
             {/* Signatory Footer Right */}
             <div className="pt-8 flex justify-end">
-              <div className="text-center w-56 space-y-0.5">
-                {includeSignature && isPrincipalApproved && (
-                  <div className="h-10 flex items-center justify-center">
-                    {customSignatureUrl ? (
-                      <img src={customSignatureUrl} alt="Signature" className="max-h-10 max-w-36 object-contain" />
-                    ) : (
-                      <svg viewBox="0 0 160 40" className="w-32 h-8">
-                        <path d="M20,28 Q45,5 65,22 T105,18 Q125,8 145,20" fill="none" stroke="#111" stroke-width="2.2" stroke-linecap="round"/>
-                      </svg>
-                    )}
-                  </div>
-                )}
+              <div className="text-center min-w-[200px] space-y-0.5">
+                <div className="flex items-center justify-center gap-3 min-h-[50px] mb-1">
+                  {showSeal && customSealUrl && (
+                    <img
+                      src={customSealUrl}
+                      alt="School Seal"
+                      style={{ width: `${sealSize}px`, height: `${sealSize}px` }}
+                      className="object-contain"
+                    />
+                  )}
+                  {includeSignature && isPrincipalApproved && (
+                    <div className="h-10 flex items-center justify-center">
+                      {customSignatureUrl ? (
+                        <img
+                          src={customSignatureUrl}
+                          alt="Signature"
+                          style={{ maxWidth: `${signatureWidth}px` }}
+                          className="max-h-12 object-contain"
+                        />
+                      ) : (
+                        <svg viewBox="0 0 160 40" className="w-32 h-8">
+                          <path d="M20,28 Q45,5 65,22 T105,18 Q125,8 145,20" fill="none" stroke="#111" strokeWidth="2.2" strokeLinecap="round"/>
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <p className="font-black text-xs text-gray-950">
                   {letterForm.signatoryName}
                 </p>
                 <p className="text-[11px] font-bold text-[#1e3a5f]">{letterForm.signatoryRole}</p>
-                <p className="text-[11px] font-bold text-[#1e3a5f]">{letterForm.signatorySchool}</p>
-                <p className="text-[10px] text-[#1e3a5f]">{letterForm.signatoryAddress}</p>
               </div>
             </div>
           </div>
