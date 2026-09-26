@@ -266,8 +266,19 @@ export default function PayrollPage() {
       const baseSalary = matchedScale ? matchedScale.moolTalab : (teacher.shreni === 'NON_TEACHING' ? 26082 : 38000);
       const gradeRate = matchedScale ? matchedScale.gradeAmount : (teacher.shreni === 'NON_TEACHING' ? 869 : 1200);
 
-      const isPrincipal = teacher.inchargeRole?.includes('PRINCIPAL') || teacher.post?.includes('प्रधानाध्यापक') || teacher.post?.includes('Principal');
-      const isVicePrincipal = teacher.inchargeRole?.includes('VICE_PRINCIPAL') || teacher.post?.includes('सहायक');
+      // Strictly Principal only for प्र.अ. भत्ता [I] (exclude assistant headmaster, vice principal, etc.)
+      const isPrincipal = Boolean(
+        (
+          teacher.inchargeRole === 'PRINCIPAL' ||
+          teacher.post === 'प्रधानाध्यापक (Headmaster / Principal)' ||
+          teacher.post === 'प्रधानाध्यापक' ||
+          teacher.post?.toLowerCase() === 'principal' ||
+          teacher.post?.toLowerCase() === 'headmaster'
+        ) &&
+        !teacher.post?.includes('सहायक') &&
+        !teacher.post?.includes('Assistant') &&
+        !teacher.inchargeRole?.includes('VICE')
+      );
 
       initialRows[teacher.id] = {
         teacherId: teacher.id,
@@ -285,8 +296,8 @@ export default function PayrollPage() {
         gradeAmount: gradeRate, // C
         bimaThap: globalInsuranceGovContribution, // G (Default 400)
         // Dedicated Allowance flags & values
-        hasPraABhata: isPrincipal || isVicePrincipal,
-        praABhata: isPrincipal ? 1000 : (isVicePrincipal ? 500 : 0), // I
+        hasPraABhata: isPrincipal,
+        praABhata: isPrincipal ? 1000 : 0, // I (प्र.अ. भत्ता strictly only for Principal)
         hasMahangiGhata: true,
         mahangiGhata: globalDearnessAmount, // J (Default 2000)
         hasDurgamBhata: false,
@@ -1380,7 +1391,7 @@ export default function PayrollPage() {
                                   const checked = e.target.checked;
                                   handleFieldChange(teacher.id, 'hasPraABhata', checked);
                                   if (checked && (!row.praABhata || row.praABhata === 0)) {
-                                    handleFieldChange(teacher.id, 'praABhata', 500);
+                                    handleFieldChange(teacher.id, 'praABhata', 1000);
                                   }
                                 }}
                                 className="rounded text-purple-700 w-3.5 h-3.5 cursor-pointer"
@@ -2028,12 +2039,12 @@ export default function PayrollPage() {
                         const checked = e.target.checked;
                         handleFieldChange(singleEditData.teacherId, 'hasPraABhata', checked);
                         if (checked && (!bulkRows[singleEditData.teacherId]?.praABhata || bulkRows[singleEditData.teacherId]?.praABhata === 0)) {
-                          handleFieldChange(singleEditData.teacherId, 'praABhata', 500);
+                          handleFieldChange(singleEditData.teacherId, 'praABhata', 1000);
                         }
                       }}
                       className="rounded text-purple-700 w-4 h-4 cursor-pointer"
                     />
-                    <span>प्र.अ. / इन्चार्ज भत्ता [I]</span>
+                    <span>प्र.अ. भत्ता [I] (Principal Only)</span>
                   </label>
                   <span className="text-[10px] text-gray-500">Applicable?</span>
                 </div>
