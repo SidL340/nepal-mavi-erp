@@ -1618,6 +1618,26 @@ export default function ExpensesPage() {
           </button>
 
           <button
+            onClick={() => {
+              const firstPending = displayedBills.find((b: any) => b.remainingDue > 0) || displayedBills[0] || null;
+              setSelectedPayableBill(firstPending);
+              if (firstPending) {
+                setInstAmount(firstPending.remainingDue > 0 ? firstPending.remainingDue.toString() : (firstPending.totalBillAmount || 0).toString());
+                setInstChequePayeeName(firstPending.partyName || '');
+              } else {
+                setInstAmount('');
+              }
+              setInstDateBs(todayBS());
+              setInstFinancialYearId('');
+              setIsPayInstallmentModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-900 hover:bg-emerald-100 shadow-2xs transition"
+          >
+            <CheckCircle2 size={14} className="text-emerald-700" />
+            <span>+ Pay Bill (बिल भुक्तानी)</span>
+          </button>
+
+          <button
             onClick={() => setIsAddModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 shadow-2xs transition"
           >
@@ -2420,18 +2440,18 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* ─── 6. PAY INSTALLMENT MODAL ─────────────────────────────────────────── */}
-      {isPayInstallmentModalOpen && selectedPayableBill && (
+      {/* ─── 6. PAY BILL / INSTALLMENT MODAL (बिल भुक्तानी) ────────────────── */}
+      {isPayInstallmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+          <div className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
-                <h2 className="text-base font-extrabold text-purple-950 flex items-center gap-2">
-                  <CreditCard size={18} className="text-purple-700" />
-                  <span>Pay Bill Installment (किस्ता भुक्तानी)</span>
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <CreditCard size={18} className="text-emerald-700" />
+                  <span>Pay Bill / Settle Payable (बिल भुक्तानी / किस्ता निकासा)</span>
                 </h2>
                 <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
-                  Bill No: <strong className="font-mono text-purple-900">{selectedPayableBill.billNo}</strong> | Party: <strong>{selectedPayableBill.partyName}</strong>
+                  दर्ता भएको बिलको रकम वा किस्ता भुक्तानी प्रविष्टि गर्नुहोस्
                 </p>
               </div>
               <button onClick={() => setIsPayInstallmentModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -2439,60 +2459,112 @@ export default function ExpensesPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 bg-purple-50 p-3 rounded-xl border border-purple-200 text-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Total Bill</span>
-                <p className="text-sm font-extrabold text-gray-900 font-mono">रू {(selectedPayableBill.totalBillAmount || 0).toLocaleString()}</p>
+            {displayedBills.length === 0 ? (
+              <div className="text-center py-8 space-y-3">
+                <CreditCard size={40} className="mx-auto text-gray-300" />
+                <h3 className="text-sm font-bold text-gray-700">कुनै पनि भुक्तानी बाँकी बिल दर्ता भएको छैन</h3>
+                <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                  पहिले विक्रेता/आपूर्तिकर्ताको बिल दर्ता गर्नुहोस्, त्यसपछि यहाँबाट किस्ता वा एकमुष्ट भुक्तानी गर्न सकिन्छ।
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPayInstallmentModalOpen(false);
+                    setIsRecordBillModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 text-xs font-bold shadow-sm"
+                >
+                  <Plus size={14} />
+                  <span>+ Register Bill (बिल दर्ता गर्नुहोस्)</span>
+                </button>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Paid So Far</span>
-                <p className="text-sm font-extrabold text-emerald-700 font-mono">रू {(selectedPayableBill.totalPaidAmount || 0).toLocaleString()}</p>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Remaining Due</span>
-                <p className="text-sm font-extrabold text-rose-700 font-mono">रू {(selectedPayableBill.remainingDue || 0).toLocaleString()}</p>
-              </div>
-            </div>
-
-            <form onSubmit={handlePayInstallmentSubmit} className="space-y-3.5 text-xs">
-              {/* Originating Bill Fiscal Year & Payment Fiscal Year */}
-              <div className="bg-purple-50/70 p-3 rounded-xl border border-purple-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold text-purple-950">
-                    बिल दर्ता भएको आ.व. (Originating FY):
-                  </span>
-                  <span className="text-[10px] font-black bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md border border-blue-200">
-                    आ.व. {selectedPayableBill.billFinancialYear || '—'}
-                  </span>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-extrabold text-[#1e3a5f]">
-                      भुक्तानी हुने आर्थिक वर्ष (Payment Fiscal Year) *
-                    </label>
-                    {autoResolvedInstFY && (
-                      <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-                        स्वतः पहिचान: {autoResolvedInstFY.year}
-                      </span>
-                    )}
-                  </div>
+            ) : (
+              <form onSubmit={handlePayInstallmentSubmit} className="space-y-4 text-xs">
+                {/* Bill Selector Dropdown */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                  <label className="block font-extrabold text-[#1e3a5f]">
+                    Select Payable Bill (भुक्तानी गर्नुपर्ने बिल छान्नुहोस्) *
+                  </label>
                   <select
-                    value={instFinancialYearId || autoResolvedInstFY?.id || activeFinancialYear?.id || ''}
-                    onChange={(e) => setInstFinancialYearId(e.target.value)}
-                    className="erp-input font-bold text-[#1e3a5f]"
+                    value={selectedPayableBill ? (selectedPayableBill.key || `${selectedPayableBill.partyId}_${selectedPayableBill.billNo}`) : ''}
+                    onChange={(e) => {
+                      const found = displayedBills.find((b: any) => (b.key || `${b.partyId}_${b.billNo}`) === e.target.value);
+                      if (found) {
+                        setSelectedPayableBill(found);
+                        setInstAmount(found.remainingDue > 0 ? found.remainingDue.toString() : (found.totalBillAmount || 0).toString());
+                        setInstChequePayeeName(found.partyName || '');
+                      }
+                    }}
+                    className="erp-input font-bold text-[#1e3a5f] text-xs"
                     required
                   >
-                    {financialYearsData?.map((y: any) => (
-                      <option key={y.id} value={y.id}>
-                        आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
-                      </option>
-                    ))}
+                    <option value="">-- भुक्तानी गर्नुपर्ने बिल छान्नुहोस् (Select Bill) --</option>
+                    {displayedBills.map((b: any) => {
+                      const isSettled = b.remainingDue <= 0;
+                      return (
+                        <option key={b.key || `${b.partyId}_${b.billNo}`} value={b.key || `${b.partyId}_${b.billNo}`}>
+                          {b.partyName} — Bill #{b.billNo} | बाँकी: रू {(b.remainingDue || 0).toLocaleString()} (कुल: रू {(b.totalBillAmount || 0).toLocaleString()}) {isSettled ? '✓ चुक्ता' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {selectedPayableBill && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 bg-purple-50 p-3 rounded-xl border border-purple-200 text-center">
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Total Bill</span>
+                        <p className="text-sm font-extrabold text-gray-900 font-mono">रू {(selectedPayableBill.totalBillAmount || 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Paid So Far</span>
+                        <p className="text-sm font-extrabold text-emerald-700 font-mono">रू {(selectedPayableBill.totalPaidAmount || 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Remaining Due</span>
+                        <p className="text-sm font-extrabold text-rose-700 font-mono">रू {(selectedPayableBill.remainingDue || 0).toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Originating Bill Fiscal Year & Payment Fiscal Year */}
+                    <div className="bg-purple-50/70 p-3 rounded-xl border border-purple-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-extrabold text-purple-950">
+                          बिल दर्ता भएको आ.व. (Originating FY):
+                        </span>
+                        <span className="text-[10px] font-black bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md border border-blue-200">
+                          आ.व. {selectedPayableBill.billFinancialYear || '—'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block font-extrabold text-[#1e3a5f]">
+                            भुक्तानी हुने आर्थिक वर्ष (Payment Fiscal Year) *
+                          </label>
+                          {autoResolvedInstFY && (
+                            <span className="text-[9.5px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                              स्वतः पहिचान: {autoResolvedInstFY.year}
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          value={instFinancialYearId || autoResolvedInstFY?.id || activeFinancialYear?.id || ''}
+                          onChange={(e) => setInstFinancialYearId(e.target.value)}
+                          className="erp-input font-bold text-[#1e3a5f]"
+                          required
+                        >
+                          {financialYearsData?.map((y: any) => (
+                            <option key={y.id} value={y.id}>
+                              आ.व. {y.year} {y.isActive ? '(चालु आ.व.)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-extrabold text-gray-800 mb-1">
                     Installment Amount (किस्ता रकम रू) *
@@ -2720,24 +2792,34 @@ export default function ExpensesPage() {
                   className="erp-input"
                 />
               </div>
+            </>
+          )}
 
-              <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsPayInstallmentModalOpen(false)}
-                  className="rounded-xl border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addExpenseMutation.isPending}
-                  className="rounded-xl bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 shadow-sm"
-                >
-                  {addExpenseMutation.isPending ? 'Processing...' : 'Disburse Installment'}
-                </button>
-              </div>
-            </form>
+          {selectedPayableBill ? (
+                  <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsPayInstallmentModalOpen(false)}
+                      className="rounded-xl border border-gray-200 px-4 py-2 font-bold text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={addExpenseMutation.isPending}
+                      className="rounded-xl bg-emerald-700 hover:bg-emerald-800 px-5 py-2 font-bold text-white shadow-sm flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>{addExpenseMutation.isPending ? 'Processing...' : 'Disburse Payment (भुक्तानी सम्पन्न गर्नुहोस्)'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-purple-200 bg-purple-50/50 p-6 text-center text-purple-900 font-bold">
+                    कृपया माथिको सूचीबाट भुक्तानी गर्नुपर्ने बिल छान्नुहोस् (Please select a bill from the dropdown above).
+                  </div>
+                )}
+              </form>
+            )}
           </div>
         </div>
       )}
