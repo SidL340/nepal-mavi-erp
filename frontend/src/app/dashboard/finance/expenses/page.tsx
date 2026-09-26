@@ -1845,7 +1845,16 @@ export default function ExpensesPage() {
                             {entry.voucherNo || `VOUCH-${entry.id}`}
                           </span>
                           {entry.billNo && (
-                            <span className="text-[10px] text-gray-400 font-mono">Bill: {entry.billNo}</span>
+                            <div className="mt-0.5 space-y-0.5">
+                              <span className="text-[10px] text-gray-500 font-mono font-bold block">
+                                Bill: #{entry.billNo}
+                              </span>
+                              {entry.billDateBs && (
+                                <span className="text-[9px] text-gray-400 font-mono block">
+                                  बिल मिति: {entry.billDateBs}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="py-3 px-4">
@@ -2063,9 +2072,16 @@ export default function ExpensesPage() {
                           <span className="text-[10.5px] font-mono text-gray-500 font-bold block">
                             Date: {bill.billDateBs}
                           </span>
-                          <span className="inline-block rounded bg-blue-100 text-blue-900 font-bold px-1.5 py-0.5 text-[9.5px] mt-0.5 border border-blue-200">
-                            दर्ता: आ.व. {bill.billFinancialYear || '—'}
-                          </span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="inline-block rounded bg-blue-100 text-blue-900 font-bold px-1.5 py-0.5 text-[9.5px] border border-blue-200">
+                              दर्ता: आ.व. {bill.billFinancialYear || '—'}
+                            </span>
+                            {bill.isCarriedForward && (
+                              <span className="inline-block rounded bg-amber-100 text-amber-900 font-black px-1.5 py-0.5 text-[9.5px] border border-amber-300 shadow-2xs">
+                                ⚡ विगत आ.व. को बक्यौता
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           <span className="font-bold text-gray-900 block text-sm">{bill.partyName}</span>
@@ -2086,20 +2102,37 @@ export default function ExpensesPage() {
                           रू {(bill.totalBillAmount || 0).toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-black text-emerald-700">
-                          <span className="text-sm">रू {(bill.totalPaidAmount || 0).toLocaleString()}</span>
-                          <div className="text-[10px] text-gray-500 font-sans mt-1 space-y-1">
-                            {bill.installments?.map((inst: any, iIdx: number) => (
-                              <div key={inst.id || iIdx} className="flex items-center justify-end gap-1 text-[9.5px] bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
-                                <span>किस्ता {iIdx + 1}:</span>
-                                <span className="bg-purple-100 text-purple-900 font-bold px-1 rounded text-[9px]">
-                                  आ.व. {inst.financialYear || '—'}
-                                </span>
-                                <span className="font-mono font-bold text-emerald-700">
-                                  रू {(inst.amount || 0).toLocaleString()}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                          <span className="text-sm block">रू {(bill.totalPaidAmount || 0).toLocaleString()}</span>
+                          
+                          {/* Year-by-Year Payment Breakdown */}
+                          {bill.fyPayments && Object.keys(bill.fyPayments).length > 0 ? (
+                            <div className="text-[10px] text-gray-600 font-sans mt-1 space-y-1">
+                              {Object.entries(bill.fyPayments).map(([fyName, amt]: any) => (
+                                <div key={fyName} className="flex items-center justify-end gap-1 text-[9.5px] bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                  <span className="bg-purple-100 text-purple-900 font-bold px-1 rounded text-[9px]">
+                                    आ.व. {fyName}
+                                  </span>
+                                  <span className="font-mono font-bold text-emerald-700">
+                                    रू {(amt || 0).toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-gray-500 font-sans mt-1 space-y-1">
+                              {bill.installments?.map((inst: any, iIdx: number) => (
+                                <div key={inst.id || iIdx} className="flex items-center justify-end gap-1 text-[9.5px] bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                  <span>किस्ता {iIdx + 1}:</span>
+                                  <span className="bg-purple-100 text-purple-900 font-bold px-1 rounded text-[9px]">
+                                    आ.व. {inst.financialYear || '—'}
+                                  </span>
+                                  <span className="font-mono font-bold text-emerald-700">
+                                    रू {(inst.amount || 0).toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-black text-rose-700 text-sm whitespace-nowrap">
                           रू {(bill.remainingDue || 0).toLocaleString()}

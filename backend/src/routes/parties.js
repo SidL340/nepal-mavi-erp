@@ -147,10 +147,19 @@ router.get('/payables-summary', authenticate, async (req, res) => {
       let billStatus = 'FULLY_PAID';
       if (remainingDue > 0 && b.totalPaidAmount > 0) billStatus = 'PARTIAL';
       else if (b.totalPaidAmount === 0 || remainingDue === b.totalBillAmount) billStatus = 'UNPAID';
+
+      // Group payments by Fiscal Year
+      const fyPaymentsMap = {};
+      b.installments.forEach(inst => {
+        const fyName = inst.financialYear || 'Other';
+        fyPaymentsMap[fyName] = (fyPaymentsMap[fyName] || 0) + (inst.amount || 0);
+      });
+
       return {
         ...b,
         remainingDue,
         status: billStatus,
+        fyPayments: fyPaymentsMap,
       };
     });
 
@@ -158,8 +167,22 @@ router.get('/payables-summary', authenticate, async (req, res) => {
       const fyIdNum = parseInt(financialYearId);
       bills = bills.filter(b => 
         b.billFinancialYearId === fyIdNum || 
-        b.installments.some(inst => inst.financialYearId === fyIdNum)
-      );
+        b.installments.some(inst => inst.financialYearId === fyIdNum) ||
+        (b.remainingDue > 0 && (b.billFinancialYearId == null || b.billFinancialYearId <= fyIdNum))
+      ).map(b => {
+        const isCarriedForward = b.billFinancialYearId != null && b.billFinancialYearId < fyIdNum;
+        const paidInThisFY = b.installments
+          .filter(inst => inst.financialYearId === fyIdNum)
+          .reduce((sum, inst) => sum + (inst.amount || 0), 0);
+        const paidInOtherFYs = b.totalPaidAmount - paidInThisFY;
+
+        return {
+          ...b,
+          isCarriedForward,
+          paidInThisFY,
+          paidInOtherFYs,
+        };
+      });
     }
 
     if (status && status !== 'ALL') {
