@@ -1430,7 +1430,11 @@ export default function UserManagementPage() {
                       { key: 'EXAM_INCHARGE', label: '📝 Exam Incharge (परीक्षा प्रमुख)', desc: 'Marksheet, Ledger, Exam Routine' },
                       { key: 'LIBRARIAN', label: '📚 Librarian (पुस्तकालय प्रमुख)', desc: 'Book Catalog, Issue/Return' },
                       { key: 'ACCOUNTANT', label: '💰 Accountant (लेखा प्रमुख)', desc: 'Fee Collection, Invoices' },
-                      { key: 'COORDINATOR', label: '🎯 Coordinator (शैक्षिक संयोजक)', desc: 'Academic supervision' },
+                      { key: 'COORDINATOR', label: '🎯 Coordinator (शैक्षिक संयोजक)', desc: 'Academic supervision & logs' },
+                      { key: 'DISCIPLINE_INCHARGE', label: '🛡️ Discipline Incharge (अनुशासन प्रमुख)', desc: 'Student conduct & incident logs' },
+                      { key: 'ECA_INCHARGE', label: '🏆 ECA Incharge (अतिरिक्त क्रियाकलाप)', desc: 'Sports, Quiz & Event Management' },
+                      { key: 'LAB_INCHARGE', label: '🔬 Lab Incharge (प्रयोगशाला प्रमुख)', desc: 'Science & Computer Lab apparatus' },
+                      { key: 'OTHER', label: '⭐ Special Duties (विशेष जिम्मेवारी)', desc: 'Committee decisions & meetings' },
                     ].map((duty) => {
                       const isChecked = editInchargeRoles.includes(duty.key);
                       return (
