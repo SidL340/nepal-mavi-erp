@@ -30,6 +30,12 @@ import {
   Columns,
   Info,
   BadgeCheck,
+  UserMinus,
+  UserPlus,
+  UserCheck,
+  Percent,
+  Filter,
+  Search,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -43,6 +49,20 @@ export default function ExamSeatPlanningPage() {
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
   const [selectedRoomIdsForAllocation, setSelectedRoomIdsForAllocation] = useState<number[]>([]);
+
+  // Excluded Student IDs state for seat planning
+  const [excludedStudentIds, setExcludedStudentIds] = useState<number[]>([]);
+  const [isEligibilityModalOpen, setIsEligibilityModalOpen] = useState(false);
+  const [eligibilitySearch, setEligibilitySearch] = useState('');
+  const [eligibilityClassFilter, setEligibilityClassFilter] = useState<string>('ALL');
+
+  // Late / Walk-in student allotment modal
+  const [isAllotModalOpen, setIsAllotModalOpen] = useState(false);
+  const [allotStudentId, setAllotStudentId] = useState<string>('');
+  const [allotRoomId, setAllotRoomId] = useState<string>('');
+  const [allotBenchNo, setAllotBenchNo] = useState<string>('');
+  const [allotPosition, setAllotPosition] = useState<string>('AUTO');
+  const [allotSearchQuery, setAllotSearchQuery] = useState('');
 
   // Add Room Modal & Form
   const [isAddRoomModalOpen, setIsAddRoomModalOpen] = useState(false);
@@ -216,6 +236,39 @@ export default function ExamSeatPlanningPage() {
 
   const seatPlans: any[] = seatPlansData || [];
 
+  // Fetch Students Eligibility & Attendance for selected classes
+  const { data: eligibilityData, isLoading: isEligibilityLoading } = useQuery({
+    queryKey: ['students-eligibility', selectedClassIds.sort().join(',')],
+    queryFn: async () => {
+      if (selectedClassIds.length === 0) return [];
+      const res = await api.get(`/seat-plans/students-eligibility?classIds=${selectedClassIds.join(',')}`);
+      return res.data?.data || [];
+    },
+    enabled: selectedClassIds.length > 0,
+  });
+
+  const studentsEligibility: any[] = eligibilityData || [];
+
+  // Excluded student helpers
+  const handleToggleExcludeStudent = (sId: number) => {
+    setExcludedStudentIds((prev) =>
+      prev.includes(sId) ? prev.filter((id) => id !== sId) : [...prev, sId]
+    );
+  };
+
+  const handleExcludeLowAttendance = (thresholdPct: number = 75) => {
+    const lowAttIds = studentsEligibility
+      .filter((s: any) => s.attendancePct < thresholdPct || s.status !== 'ACTIVE')
+      .map((s: any) => s.studentId);
+    setExcludedStudentIds(Array.from(new Set([...excludedStudentIds, ...lowAttIds])));
+    toast.success(`${lowAttIds.length} जना न्यून हाजिरी (<${thresholdPct}%) वा निष्क्रिय विद्यार्थीहरूलाई सिट प्लानबाट हटाइयो!`);
+  };
+
+  const handleIncludeAllStudents = () => {
+    setExcludedStudentIds([]);
+    toast.success('सबै विद्यार्थीहरूलाई सिट प्लानमा समावेश गरियो!');
+  };
+
   // Helper to parse room column configuration
   const getRoomLayoutBreakdown = (r: any) => {
     const total = r.totalBenches || 16;
@@ -333,7 +386,7 @@ export default function ExamSeatPlanningPage() {
     },
   });
 
-  // Auto Generate Seat Plan Mutation
+  // Auto Generate Seat Plan Mutation (With Excluded Students Support)
   const autoGenerateMutation = useMutation({
     mutationFn: async () => {
       if (!selectedExamId || selectedClassIds.length === 0) {
@@ -353,6 +406,7 @@ export default function ExamSeatPlanningPage() {
         shift: selectedShift || 'DAY',
         roomIds: targetRoomIds,
         classIds: selectedClassIds,
+        excludedStudentIds,
       });
       return res.data;
     },
@@ -362,6 +416,54 @@ export default function ExamSeatPlanningPage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || err.message || 'Failed to generate seat plan');
+    },
+  });
+
+  // Late / Manual Allot Student Mutation
+  const allotStudentMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedExamId || !allotStudentId) {
+        throw new Error('Please select an Exam and a Student.');
+      }
+      const res = await api.post('/seat-plans/allot-student', {
+        examId: parseInt(selectedExamId),
+        shift: selectedShift || 'DAY',
+        studentId: parseInt(allotStudentId),
+        roomId: allotRoomId ? parseInt(allotRoomId) : undefined,
+        benchNo: allotBenchNo ? parseInt(allotBenchNo) : undefined,
+        seatPosition: allotPosition !== 'AUTO' ? allotPosition : undefined,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Student seated successfully!');
+      setIsAllotModalOpen(false);
+      if (allotStudentId) {
+        setExcludedStudentIds((prev) => prev.filter((id) => id !== parseInt(allotStudentId)));
+      }
+      setAllotStudentId('');
+      setAllotRoomId('');
+      setAllotBenchNo('');
+      setAllotPosition('AUTO');
+      queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || err.message || 'Failed to allot seat');
+    },
+  });
+
+  // Remove Single Seat Allocation Mutation
+  const removeSeatMutation = useMutation({
+    mutationFn: async (seatId: number) => {
+      const res = await api.delete(`/seat-plans/seat/${seatId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('सिट आवंटन हटाइयो!');
+      queryClient.invalidateQueries({ queryKey: ['seat-plans'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to remove seat');
     },
   });
 
@@ -470,28 +572,37 @@ export default function ExamSeatPlanningPage() {
       <head>
         <title>Exam Door Notice - ${examTitle}</title>
         <style>
-          @page { size: A4; margin: 12mm; }
-          body { font-family: sans-serif; font-size: 11px; margin: 0; padding: 0; color: #111; }
-          .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
-          .title { font-size: 16px; font-weight: bold; color: #1e3a5f; }
-          .subtitle { font-size: 13px; font-weight: bold; margin-top: 2px; }
-          .meta { font-size: 11px; margin-top: 4px; color: #444; }
+          @page { size: A4 portrait; margin: 10mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; margin: 0; padding: 0; color: #111; }
+          .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
+          .title { font-size: 16px; font-weight: 800; color: #1e3a5f; letter-spacing: 0.5px; }
+          .subtitle { font-size: 13px; font-weight: 700; color: #334155; margin-top: 2px; }
+          .meta { font-size: 11px; margin-top: 4px; color: #475569; }
           .room-card { page-break-after: always; margin-bottom: 20px; }
-          .room-header { background: #1e3a5f; color: white; padding: 8px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; }
-          .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-          .column-title { text-align: center; background: #e2e8f0; font-weight: bold; padding: 4px; font-size: 11px; border-radius: 3px; margin-bottom: 6px; }
+          .room-card:last-child { page-break-after: auto; }
+          .room-header { background: #1e3a5f; color: white; padding: 7px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+          .section-title { font-size: 11px; font-weight: bold; color: #1e3a5f; margin: 8px 0 4px 0; border-left: 3px solid #1e3a5f; padding-left: 5px; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 10.5px; }
-          th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; }
-          th { background: #f1f5f9; font-weight: bold; }
-          .desk-no { font-weight: bold; font-family: monospace; }
-          .student-name { font-weight: bold; }
-          .class-tag { font-weight: bold; color: #1e3a5f; }
+          th, td { border: 1px solid #cbd5e1; padding: 4.5px 6px; text-align: left; vertical-align: middle; }
+          th { background: #f1f5f9; font-weight: 700; color: #1e293b; font-size: 10px; }
+          .seat-badge { font-weight: 800; font-family: monospace; background: #fef3c7; color: #92400e; padding: 2px 5px; border-radius: 3px; border: 1px solid #fde68a; font-size: 10.5px; white-space: nowrap; }
+          .bench-badge { font-weight: 700; font-family: monospace; color: #0f172a; }
+          .student-name { font-weight: 700; color: #0f172a; }
+          .class-tag { font-weight: 700; color: #1e3a5f; background: #e0f2fe; padding: 1px 4px; border-radius: 2px; font-size: 9.5px; }
+          .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+          .column-title { text-align: center; background: #e2e8f0; font-weight: bold; padding: 4px; font-size: 10.5px; border-radius: 3px; margin-bottom: 4px; color: #1e293b; }
         </style>
       </head>
       <body>
     `;
 
     Object.values(seatPlansByRoom).forEach(({ room, seats, benches }) => {
+      // Sort seats by bench and position
+      const sortedSeats = [...seats].sort((a, b) => {
+        if (a.benchNo !== b.benchNo) return a.benchNo - b.benchNo;
+        return (a.seatPosition || '').localeCompare(b.seatPosition || '');
+      });
+
       const benchKeys = Object.keys(benches).map(Number).sort((a, b) => a - b);
       const half = Math.ceil(benchKeys.length / 2);
       const leftBenchKeys = benchKeys.slice(0, half);
@@ -501,7 +612,7 @@ export default function ExamSeatPlanningPage() {
         <div class="room-card">
           <div class="header">
             <div class="title">श्री नेपाल माध्यमिक विद्यालय (NEPAL SECONDARY SCHOOL)</div>
-            <div class="subtitle">परीक्षा कक्षा ढोका टाँस सूचना (EXAMINATION DOOR NOTICE)</div>
+            <div class="subtitle">परीक्षा कोठा सिट सूचना (EXAMINATION ROOM SEAT DIRECTORY & NOTICE)</div>
             <div class="meta">
               <strong>${examTitle}</strong> &nbsp;|&nbsp; 
               <strong>सत्र (Shift):</strong> ${shiftInfo?.nameNepali || selectedShift} (${shiftInfo?.startTime || ''} - ${shiftInfo?.endTime || ''})
@@ -509,31 +620,72 @@ export default function ExamSeatPlanningPage() {
           </div>
 
           <div class="room-header">
-            <span>कोठा नं: ${room.roomNo} (${room.building || 'Main Block'})</span>
-            <span>कुल विद्यार्थी: ${seats.length} जना &nbsp;|&nbsp; कुल बेन्च: ${benchKeys.length}</span>
+            <span>🏢 परीक्षा कोठा (Room): <strong>${room.roomNo}</strong> (${room.building || 'Main Block'})</span>
+            <span>कुल विद्यार्थी: <strong>${seats.length} जना</strong> &nbsp;|&nbsp; कुल बेन्च: <strong>${benchKeys.length}</strong></span>
           </div>
 
+          <div class="section-title">📋 १ देखि अन्तिम सिट सम्मको नामावली (Sequential Room Seat List)</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 13%; text-align: center;">सिट नं. (Seat No)</th>
+                <th style="width: 14%; text-align: center;">डेस्क/बेन्च (Bench)</th>
+                <th style="width: 10%; text-align: center;">स्थान (Side)</th>
+                <th style="width: 28%;">विद्यार्थीको नाम (Student Name)</th>
+                <th style="width: 15%;">कक्षा (Class)</th>
+                <th style="width: 10%; text-align: center;">रोल (Roll)</th>
+                <th style="width: 10%; text-align: center;">EMIS / दर्ता नं.</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedSeats.map((s: any, idx: number) => {
+                const displaySeatNo = s.seatNo || `Seat ${String(idx + 1).padStart(2, '0')}`;
+                return `
+                  <tr>
+                    <td style="text-align: center;"><span class="seat-badge">🪑 ${displaySeatNo}</span></td>
+                    <td style="text-align: center;" class="bench-badge">Bench #${s.benchNo}</td>
+                    <td style="text-align: center; font-size: 9.5px; font-weight: bold; color: #475569;">${s.seatPosition}</td>
+                    <td class="student-name">${s.student?.fullName || '—'}</td>
+                    <td><span class="class-tag">${s.student?.classEnrollment?.[0]?.class?.name || 'Class ' + s.classId}</span></td>
+                    <td style="text-align: center; font-weight: bold; font-family: monospace;">#${s.rollNo || '-'}</td>
+                    <td style="text-align: center; font-family: monospace; font-size: 9.5px;">${s.student?.emisId || s.student?.studentId || '-'}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <div class="section-title" style="margin-top: 12px;">🗺️ कोठाको भौतिक डेस्क संरचना (Physical Classroom Desk Map)</div>
           <div class="grid-container">
             <div>
               <div class="column-title">⬅️ बायाँ लहर (LEFT ROW BENCHES)</div>
               <table>
                 <thead>
                   <tr>
-                    <th>Bench</th>
-                    <th>बायाँ सिट (Left)</th>
-                    <th>दायाँ सिट (Right)</th>
+                    <th style="width: 18%;">Bench</th>
+                    <th style="width: 82%;">सिट तथा परीक्षार्थी विवरण (Seated Students)</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${leftBenchKeys.map((bNo) => {
                     const bSeats = benches[bNo] || [];
-                    const leftS = bSeats.find((s: any) => s.seatPosition === 'LEFT');
-                    const rightS = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
                     return `
                       <tr>
-                        <td class="desk-no">B-${bNo}</td>
-                        <td>${leftS ? `<span class="student-name">${leftS.student?.fullName}</span><br><span class="class-tag">${leftS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${leftS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
-                        <td>${rightS ? `<span class="student-name">${rightS.student?.fullName}</span><br><span class="class-tag">${rightS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${rightS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
+                        <td class="bench-badge" style="text-align:center;">B-${bNo}</td>
+                        <td>
+                          <div style="display:flex; flex-wrap:wrap; gap:3px;">
+                            ${bSeats.length > 0 ? bSeats.map((s: any) => `
+                              <div style="flex:1 1 calc(50% - 4px); min-width:95px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                  <span class="seat-badge" style="font-size:9px; padding:1px 3px;">${s.seatNo || 'Seat'}</span>
+                                  <span style="font-size:8.5px; font-weight:bold; color:#1e3a5f;">${s.seatPosition}</span>
+                                </div>
+                                <div class="student-name" style="font-size:10px; margin-top:2px;">${s.student?.fullName}</div>
+                                <div style="font-size:9px; color:#475569;">${s.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${s.rollNo || '-'})</div>
+                              </div>
+                            `).join('') : '<span style="color:#999; font-style:italic;">खाली बेन्च</span>'}
+                          </div>
+                        </td>
                       </tr>
                     `;
                   }).join('')}
@@ -546,21 +698,30 @@ export default function ExamSeatPlanningPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Bench</th>
-                    <th>बायाँ सिट (Left)</th>
-                    <th>दायाँ सिट (Right)</th>
+                    <th style="width: 18%;">Bench</th>
+                    <th style="width: 82%;">सिट तथा परीक्षार्थी विवरण (Seated Students)</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${rightBenchKeys.map((bNo) => {
                     const bSeats = benches[bNo] || [];
-                    const leftS = bSeats.find((s: any) => s.seatPosition === 'LEFT');
-                    const rightS = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
                     return `
                       <tr>
-                        <td class="desk-no">B-${bNo}</td>
-                        <td>${leftS ? `<span class="student-name">${leftS.student?.fullName}</span><br><span class="class-tag">${leftS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${leftS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
-                        <td>${rightS ? `<span class="student-name">${rightS.student?.fullName}</span><br><span class="class-tag">${rightS.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${rightS.rollNo || '-'})</span>` : '<span style="color:#999">-</span>'}</td>
+                        <td class="bench-badge" style="text-align:center;">B-${bNo}</td>
+                        <td>
+                          <div style="display:flex; flex-wrap:wrap; gap:3px;">
+                            ${bSeats.length > 0 ? bSeats.map((s: any) => `
+                              <div style="flex:1 1 calc(50% - 4px); min-width:95px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                  <span class="seat-badge" style="font-size:9px; padding:1px 3px;">${s.seatNo || 'Seat'}</span>
+                                  <span style="font-size:8.5px; font-weight:bold; color:#1e3a5f;">${s.seatPosition}</span>
+                                </div>
+                                <div class="student-name" style="font-size:10px; margin-top:2px;">${s.student?.fullName}</div>
+                                <div style="font-size:9px; color:#475569;">${s.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${s.rollNo || '-'})</div>
+                              </div>
+                            `).join('') : '<span style="color:#999; font-style:italic;">खाली बेन्च</span>'}
+                          </div>
+                        </td>
                       </tr>
                     `;
                   }).join('')}
@@ -584,7 +745,7 @@ export default function ExamSeatPlanningPage() {
     printWindow.document.close();
   };
 
-  // Print Desk Slips (डेस्क स्लिपहरू)
+  // Print Desk Slips / Desk Cards (डेस्कमा टाँस्ने सिट स्टिकर/स्लिपहरू)
   const printDeskSlips = () => {
     if (seatPlans.length === 0) {
       toast.error('No seat plan to print.');
@@ -597,56 +758,80 @@ export default function ExamSeatPlanningPage() {
       return;
     }
 
-    const examTitle = currentExam ? currentExam.name : 'Examination';
+    const examTitle = currentExam ? `${currentExam.name} (${currentExam.nameNepali || ''})` : 'Examination';
     const shiftInfo = availableShifts.find((s) => s.name === selectedShift);
 
     let html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Desk Slips - ${examTitle}</title>
+        <title>Desk Stickers - ${examTitle}</title>
         <style>
           @page { size: A4; margin: 8mm; }
-          body { font-family: sans-serif; font-size: 10px; margin: 0; padding: 0; }
-          .slips-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; margin: 0; padding: 0; color: #111; }
+          .slips-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
           .slip-card {
-            border: 1.5px dashed #475569;
-            border-radius: 6px;
-            padding: 8px 10px;
+            border: 2px dashed #334155;
+            border-radius: 8px;
+            padding: 10px 12px;
             box-sizing: border-box;
             background: #fff;
             position: relative;
+            page-break-inside: avoid;
           }
-          .school-name { font-weight: bold; font-size: 11px; text-align: center; color: #1e3a5f; }
-          .exam-name { font-size: 9.5px; text-align: center; color: #475569; margin-bottom: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; }
-          .bench-badge { background: #1e3a5f; color: white; font-weight: bold; font-size: 10px; padding: 2px 6px; border-radius: 3px; display: inline-block; }
-          .side-badge { font-weight: bold; font-size: 9px; padding: 2px 4px; border-radius: 3px; }
-          .student-info { margin-top: 4px; font-size: 11px; }
-          .student-name { font-size: 12px; font-weight: bold; color: #0f172a; }
-          .meta-row { display: flex; justify-content: space-between; margin-top: 3px; font-size: 10px; }
+          .school-header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 4px; margin-bottom: 6px; }
+          .school-name { font-weight: 800; font-size: 11.5px; color: #1e3a5f; letter-spacing: 0.5px; }
+          .exam-name { font-size: 9.5px; font-weight: 700; color: #475569; margin-top: 1px; }
+          .seat-hero { background: #fef3c7; border: 1.5px solid #fde68a; border-radius: 6px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+          .seat-number-big { font-size: 18px; font-weight: 900; color: #92400e; font-family: monospace; }
+          .room-bench-info { text-align: right; font-size: 10.5px; font-weight: 800; color: #1e3a5f; }
+          .candidate-details { font-size: 11px; margin-top: 4px; line-height: 1.4; }
+          .candidate-name { font-size: 13px; font-weight: 800; color: #0f172a; }
+          .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px; font-size: 10px; }
+          .meta-item { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+          .cut-guide { text-align: right; font-size: 8px; color: #94a3b8; margin-top: 4px; font-style: italic; }
         </style>
       </head>
       <body>
         <div class="slips-grid">
     `;
 
-    seatPlans.forEach((seat: any) => {
+    // Sort seat plans room-wise and bench-wise
+    const sortedPlans = [...seatPlans].sort((a, b) => {
+      if (a.roomId !== b.roomId) return a.roomId - b.roomId;
+      if (a.benchNo !== b.benchNo) return a.benchNo - b.benchNo;
+      return (a.seatPosition || '').localeCompare(b.seatPosition || '');
+    });
+
+    sortedPlans.forEach((seat: any, idx: number) => {
+      const displaySeatNo = seat.seatNo || `Seat ${String(idx + 1).padStart(2, '0')}`;
       html += `
         <div class="slip-card">
-          <div class="school-name">NEPAL SECONDARY SCHOOL</div>
-          <div class="exam-name">${examTitle} &bull; ${shiftInfo?.nameNepali || selectedShift}</div>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-            <span class="bench-badge">${seat.room?.roomNo || 'Room'} &bull; Bench #${seat.benchNo}</span>
-            <span class="side-badge" style="background:${seat.seatPosition === 'LEFT' ? '#dbeafe; color:#1e40af' : '#f3e8ff; color:#6b21a8'}">${seat.seatPosition} SEAT</span>
+          <div class="school-header">
+            <div class="school-name">श्री नेपाल माध्यमिक विद्यालय (NEPAL SECONDARY SCHOOL)</div>
+            <div class="exam-name">${examTitle} &bull; ${shiftInfo?.nameNepali || selectedShift}</div>
           </div>
-          <div class="student-info">
-            <div class="student-name">${seat.student?.fullName}</div>
-            <div class="meta-row">
-              <span><strong>Class:</strong> ${seat.student?.classEnrollment?.[0]?.class?.name || '—'}</span>
-              <span><strong>Roll No:</strong> ${seat.rollNo || '—'}</span>
-              <span><strong>EMIS:</strong> ${seat.student?.studentId || seat.student?.emisId || '—'}</span>
+          
+          <div class="seat-hero">
+            <div>
+              <div style="font-size: 8.5px; font-weight: bold; color: #b45309; text-transform: uppercase;">EXAM SEAT NO (सिट नं.)</div>
+              <div class="seat-number-big">🪑 ${displaySeatNo}</div>
+            </div>
+            <div class="room-bench-info">
+              <div>🏢 ${seat.room?.roomNo || 'Room'}</div>
+              <div style="color: #475569; font-size: 9.5px;">Bench #${seat.benchNo} (${seat.seatPosition})</div>
             </div>
           </div>
+
+          <div class="candidate-details">
+            <div class="candidate-name">${seat.student?.fullName || 'Student'}</div>
+            <div class="meta-grid">
+              <div class="meta-item"><strong>कक्षा:</strong> ${seat.student?.classEnrollment?.[0]?.class?.name || 'Class ' + seat.classId}</div>
+              <div class="meta-item"><strong>रोल नं:</strong> #${seat.rollNo || '—'}</div>
+              <div class="meta-item" style="grid-column: span 2;"><strong>दर्ता / सिम्बोल:</strong> ${seat.student?.emisId || seat.student?.studentId || '—'}</div>
+            </div>
+          </div>
+          <div class="cut-guide">✂️ डेस्कमा टाँस्नका लागि यहाँबाट काट्नुहोस् (Cut along dotted line)</div>
         </div>
       `;
     });
@@ -1021,6 +1206,76 @@ export default function ExamSeatPlanningPage() {
           </div>
         </div>
 
+        {/* ─── Student Eligibility & Attendance Filter Section ─── */}
+        {selectedClassIds.length > 0 && (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-blue-200/60 pb-2">
+              <div className="flex items-center gap-2">
+                <Percent size={16} className="text-blue-700" />
+                <span className="font-extrabold text-xs text-[#1e3a5f]">
+                  Student Eligibility & Attendance Filter (परीक्षा सहभागी विद्यार्थी छनौट / न्यून हाजिरी विद्यार्थी हटाउने)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEligibilityModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition"
+              >
+                <Filter size={13} />
+                <span>Review / Filter Students ({studentsEligibility.length - excludedStudentIds.length}/{studentsEligibility.length} Included)</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-1.5 font-bold text-gray-700">
+                  <Users size={14} className="text-blue-600" />
+                  <span>Total in Shift Classes: <strong className="text-gray-900">{studentsEligibility.length}</strong></span>
+                </div>
+                <div className="flex items-center gap-1.5 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                  <UserCheck size={14} />
+                  <span>Eligible for Seat: <strong className="text-emerald-900">{studentsEligibility.length - excludedStudentIds.length}</strong></span>
+                </div>
+                {excludedStudentIds.length > 0 && (
+                  <div className="flex items-center gap-1.5 font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
+                    <UserMinus size={14} />
+                    <span>Excluded (सिट नतोकिने): <strong className="text-rose-900">{excludedStudentIds.length}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Exclusion Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleExcludeLowAttendance(75)}
+                  className="rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 text-[11px] font-bold border border-amber-300 transition"
+                  title="Exclude students whose attendance is below 75%"
+                >
+                  Exclude Attendance &lt; 75%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExcludeLowAttendance(60)}
+                  className="rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 text-[11px] font-bold border border-amber-300 transition"
+                  title="Exclude students whose attendance is below 60%"
+                >
+                  &lt; 60%
+                </button>
+                {excludedStudentIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleIncludeAllStudents}
+                    className="rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 px-2.5 py-1 text-[11px] font-bold border border-emerald-300 transition"
+                  >
+                    Include All
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Action Button */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-purple-100">
           <p className="text-[11px] text-gray-500 font-nepali">
@@ -1047,7 +1302,7 @@ export default function ExamSeatPlanningPage() {
       {/* ─── STEP 3: PHYSICAL CLASSROOM LAYOUT VIEW & SEAT PLAN ─────────────── */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
               <Columns className="text-blue-600" size={18} />
@@ -1056,6 +1311,45 @@ export default function ExamSeatPlanningPage() {
             <p className="text-xs text-gray-500">
               Active Shift: <strong className="text-purple-900">{selectedShift} Shift</strong> &bull; Total Seated Students: <strong>{seatPlans.length}</strong>
             </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                if (!selectedExamId) {
+                  toast.error('Please select an exam first');
+                  return;
+                }
+                setIsAllotModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white px-3.5 py-2 text-xs font-bold shadow-sm transition active:scale-95"
+            >
+              <UserPlus size={14} />
+              <span>➕ Allot Late Student (विद्यार्थी थप्नुहोस्)</span>
+            </button>
+
+            {seatPlans.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={printDoorNotice}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 text-xs font-bold shadow-sm transition active:scale-95"
+                >
+                  <Printer size={14} />
+                  <span>Print Door Notice</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={printDeskSlips}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-3.5 py-2 text-xs font-bold shadow-sm transition active:scale-95"
+                >
+                  <Printer size={14} />
+                  <span>Print Desk Slips</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1149,32 +1443,39 @@ export default function ExamSeatPlanningPage() {
                               <div className={`grid ${bSeats.length <= 1 ? 'grid-cols-1' : bSeats.length === 2 ? 'grid-cols-2' : bSeats.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'} gap-2 text-xs`}>
                                 {bSeats.length > 0 ? (
                                   bSeats.map((seat: any, sIdx: number) => (
-                                    <div key={sIdx} className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
-                                      <div className="flex items-center justify-between">
+                                    <div key={sIdx} className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 space-y-1 hover:bg-amber-50/30 transition shadow-2xs">
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-extrabold px-2 py-0.5 rounded-md bg-amber-200/90 text-amber-950 font-mono text-[11px] border border-amber-300 shadow-2xs">
+                                          🪑 {seat.seatNo || `Seat #${sIdx + 1}`}
+                                        </span>
                                         <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
-                                          seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100' :
-                                          seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100' :
-                                          seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100' :
-                                          'text-amber-700 bg-amber-100'
+                                          seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100 border border-blue-200' :
+                                          seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100 border border-purple-200' :
+                                          seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100 border border-emerald-200' :
+                                          seat.seatPosition === 'MID-L' ? 'text-cyan-700 bg-cyan-100 border border-cyan-200' :
+                                          seat.seatPosition === 'MID-R' ? 'text-indigo-700 bg-indigo-100 border border-indigo-200' :
+                                          'text-amber-700 bg-amber-100 border border-amber-200'
                                         }`}>
                                           {seat.seatPosition}
                                         </span>
-                                        {seat?.rollNo && (
-                                          <span className="text-[10px] font-bold text-gray-600 font-mono">
-                                            Roll: {seat.rollNo}
-                                          </span>
-                                        )}
                                       </div>
                                       <p className="font-bold text-gray-900 text-xs truncate">
                                         {seat.student?.fullName}
                                       </p>
-                                      <span
-                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
-                                          seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
-                                        )}`}
-                                      >
-                                        {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
-                                      </span>
+                                      <div className="flex items-center justify-between text-[10px] pt-0.5">
+                                        <span
+                                          className={`inline-block font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                            seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                          )}`}
+                                        >
+                                          {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                        </span>
+                                        {seat?.rollNo && (
+                                          <span className="font-bold text-gray-600 font-mono">
+                                            Roll: #{seat.rollNo}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   ))
                                 ) : (
@@ -1220,32 +1521,39 @@ export default function ExamSeatPlanningPage() {
                               <div className={`grid ${bSeats.length <= 1 ? 'grid-cols-1' : bSeats.length === 2 ? 'grid-cols-2' : bSeats.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'} gap-2 text-xs`}>
                                 {bSeats.length > 0 ? (
                                   bSeats.map((seat: any, sIdx: number) => (
-                                    <div key={sIdx} className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
-                                      <div className="flex items-center justify-between">
+                                    <div key={sIdx} className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 space-y-1 hover:bg-amber-50/30 transition shadow-2xs">
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-extrabold px-2 py-0.5 rounded-md bg-amber-200/90 text-amber-950 font-mono text-[11px] border border-amber-300 shadow-2xs">
+                                          🪑 {seat.seatNo || `Seat #${sIdx + 1}`}
+                                        </span>
                                         <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
-                                          seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100' :
-                                          seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100' :
-                                          seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100' :
-                                          'text-amber-700 bg-amber-100'
+                                          seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100 border border-blue-200' :
+                                          seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100 border border-purple-200' :
+                                          seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100 border border-emerald-200' :
+                                          seat.seatPosition === 'MID-L' ? 'text-cyan-700 bg-cyan-100 border border-cyan-200' :
+                                          seat.seatPosition === 'MID-R' ? 'text-indigo-700 bg-indigo-100 border border-indigo-200' :
+                                          'text-amber-700 bg-amber-100 border border-amber-200'
                                         }`}>
                                           {seat.seatPosition}
                                         </span>
-                                        {seat?.rollNo && (
-                                          <span className="text-[10px] font-bold text-gray-600 font-mono">
-                                            Roll: {seat.rollNo}
-                                          </span>
-                                        )}
                                       </div>
                                       <p className="font-bold text-gray-900 text-xs truncate">
                                         {seat.student?.fullName}
                                       </p>
-                                      <span
-                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
-                                          seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
-                                        )}`}
-                                      >
-                                        {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
-                                      </span>
+                                      <div className="flex items-center justify-between text-[10px] pt-0.5">
+                                        <span
+                                          className={`inline-block font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                            seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                          )}`}
+                                        >
+                                          {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                        </span>
+                                        {seat?.rollNo && (
+                                          <span className="font-bold text-gray-600 font-mono">
+                                            Roll: #{seat.rollNo}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   ))
                                 ) : (
@@ -1568,6 +1876,385 @@ export default function ExamSeatPlanningPage() {
                   className="rounded-xl bg-blue-700 hover:bg-blue-800 px-5 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
                 >
                   {updateRoomMutation.isPending ? 'Saving...' : 'Update Room'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ELIGIBILITY & ATTENDANCE FILTER MODAL ──────────────────────────── */}
+      {isEligibilityModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
+                  <Percent size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Student Eligibility & Attendance Review (परीक्षामा समावेश/बहिष्कार सूची)
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    न्यून हाजिरी वा परीक्षामा अनुपस्थित हुने विद्यार्थीहरूलाई सिट योजनाबाट हटाउनुहोस् जसले गर्दा सिट खेर जाँदैन।
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEligibilityModalOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Quick Actions Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+              <div className="md:col-span-2 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by student name or roll..."
+                    value={eligibilitySearch}
+                    onChange={(e) => setEligibilitySearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs"
+                  />
+                </div>
+                <select
+                  value={eligibilityClassFilter}
+                  onChange={(e) => setEligibilityClassFilter(e.target.value)}
+                  className="bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                >
+                  <option value="ALL">All Classes ({studentsEligibility.length})</option>
+                  {Array.from(new Set(studentsEligibility.map((s: any) => s.className))).map((cName: any) => (
+                    <option key={cName} value={cName}>
+                      {cName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2 flex items-center justify-end gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleExcludeLowAttendance(75)}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700 flex items-center gap-1 shadow-xs"
+                  title="Auto exclude students with < 75% attendance"
+                >
+                  <UserMinus size={13} />
+                  <span>Exclude &lt; 75%</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExcludeLowAttendance(60)}
+                  className="px-2.5 py-1.5 rounded-lg bg-rose-600 text-white font-bold hover:bg-rose-700 flex items-center gap-1 shadow-xs"
+                  title="Auto exclude students with < 60% attendance"
+                >
+                  <UserMinus size={13} />
+                  <span>Exclude &lt; 60%</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleIncludeAllStudents}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:bg-emerald-800 flex items-center gap-1 shadow-xs"
+                >
+                  <UserCheck size={13} />
+                  <span>Include All</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Students Table */}
+            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-xl">
+              {isEligibilityLoading ? (
+                <div className="p-8 text-center text-gray-500 text-xs">
+                  <RotateCcw className="animate-spin inline mr-2 text-blue-600" size={16} />
+                  Loading students eligibility and attendance records...
+                </div>
+              ) : studentsEligibility.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-xs">
+                  No enrolled students found for the selected classes.
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="sticky top-0 bg-slate-100 text-slate-700 font-bold border-b border-gray-200 z-10">
+                    <tr>
+                      <th className="py-2.5 px-3 w-12 text-center">Status</th>
+                      <th className="py-2.5 px-3">Student Name</th>
+                      <th className="py-2.5 px-3">Class</th>
+                      <th className="py-2.5 px-3 text-center">Roll No</th>
+                      <th className="py-2.5 px-3">Attendance %</th>
+                      <th className="py-2.5 px-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {studentsEligibility
+                      .filter((s: any) => {
+                        if (eligibilityClassFilter !== 'ALL' && s.className !== eligibilityClassFilter) return false;
+                        if (
+                          eligibilitySearch.trim() &&
+                          !s.fullName.toLowerCase().includes(eligibilitySearch.toLowerCase()) &&
+                          !String(s.rollNo || '').includes(eligibilitySearch)
+                        ) {
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((student: any) => {
+                        const isExcluded = excludedStudentIds.includes(student.studentId);
+                        const attPct = student.attendancePct ?? 100;
+                        const isLow = attPct < 75;
+
+                        return (
+                          <tr
+                            key={student.studentId}
+                            className={`hover:bg-slate-50 transition ${
+                              isExcluded ? 'bg-rose-50/40 opacity-70' : ''
+                            }`}
+                          >
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={!isExcluded}
+                                onChange={() => handleToggleExcludeStudent(student.studentId)}
+                                className="h-4 w-4 rounded text-[#1e3a5f] focus:ring-blue-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-2 px-3 font-bold text-gray-900">
+                              <div className="flex items-center gap-1.5">
+                                <span>{student.fullName}</span>
+                                {student.status !== 'ACTIVE' && (
+                                  <span className="px-1.5 py-0.2 rounded bg-gray-200 text-gray-700 text-[9px] font-bold">
+                                    {student.status}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-gray-600 font-medium">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-[#1e3a5f] font-bold text-[11px]">
+                                {student.className}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono font-bold text-gray-700">
+                              #{student.rollNo || '-'}
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-20 bg-gray-200 h-2 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      attPct >= 75 ? 'bg-emerald-500' : attPct >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+                                    }`}
+                                    style={{ width: `${Math.min(attPct, 100)}%` }}
+                                  />
+                                </div>
+                                <span
+                                  className={`font-mono font-bold text-[11px] ${
+                                    attPct >= 75 ? 'text-emerald-700' : attPct >= 60 ? 'text-amber-700' : 'text-rose-600'
+                                  }`}
+                                >
+                                  {attPct}%
+                                </span>
+                                {student.totalDays > 0 && (
+                                  <span className="text-[10px] text-gray-400">
+                                    ({student.presentDays}/{student.totalDays}d)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleExcludeStudent(student.studentId)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                                  isExcluded
+                                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                    : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                                }`}
+                              >
+                                {isExcluded ? '➕ Include in Exam' : '🚫 Exclude'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+              <div className="text-xs text-gray-600">
+                Total Students: <strong className="text-gray-900">{studentsEligibility.length}</strong> | Included:{' '}
+                <strong className="text-emerald-700">
+                  {studentsEligibility.length - excludedStudentIds.length}
+                </strong>{' '}
+                | Excluded: <strong className="text-rose-600">{excludedStudentIds.length}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEligibilityModalOpen(false)}
+                className="rounded-xl bg-[#1e3a5f] hover:bg-[#2a5280] px-5 py-2 text-xs font-bold text-white shadow-sm"
+              >
+                Apply & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── LATE / WALK-IN STUDENT ALLOTMENT MODAL ─────────────────────────── */}
+      {isAllotModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                  <UserPlus size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Allot Late / Walk-in Student (ढिलो आएका विद्यार्थी सिट व्यवस्थापन)
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    परीक्षाको दिन उपस्थित भएका वा छुटेका विद्यार्थीलाई खाली सिटमा तत्काल समावेश गर्नुहोस्।
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAllotModalOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                allotStudentMutation.mutate();
+              }}
+              className="space-y-4 text-xs"
+            >
+              {/* Student Selector */}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Select Student (विद्यार्थी छान्नुहोस्) *</label>
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    placeholder="Filter student list..."
+                    value={allotSearchQuery}
+                    onChange={(e) => setAllotSearchQuery(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-gray-200 rounded-lg text-xs"
+                  />
+                  <select
+                    required
+                    value={allotStudentId}
+                    onChange={(e) => setAllotStudentId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">-- Choose Student --</option>
+                    {studentsEligibility
+                      .filter((s: any) => {
+                        if (
+                          allotSearchQuery.trim() &&
+                          !s.fullName.toLowerCase().includes(allotSearchQuery.toLowerCase()) &&
+                          !String(s.rollNo || '').includes(allotSearchQuery)
+                        ) {
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((s: any) => {
+                        const isAlreadySeated = seatPlans.some((sp: any) => sp.studentId === s.studentId);
+                        const isExcluded = excludedStudentIds.includes(s.studentId);
+                        return (
+                          <option key={s.studentId} value={s.studentId}>
+                            {s.fullName} ({s.className}, Roll #{s.rollNo || '-'}) {isAlreadySeated ? '— [Already Seated]' : isExcluded ? '— [Excluded]' : ''}
+                          </option>
+                        );
+                      })}
+                  </select>
+                </div>
+              </div>
+
+              {/* Room Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Exam Room (परीक्षा कोठा)</label>
+                  <select
+                    value={allotRoomId}
+                    onChange={(e) => setAllotRoomId(e.target.value)}
+                    className="erp-input"
+                  >
+                    <option value="">Auto-Assign (पहिलो खाली कोठा)</option>
+                    {rooms.map((r: any) => (
+                      <option key={r.id} value={r.id}>
+                        {r.roomNo} ({r.building || 'Block'})
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-gray-500">खाली छाडेमा स्वतः उपयुक्त कोठा छानिनेछ</span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Desk / Bench No (वैकल्पिक)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Auto (स्वतः खाली बेन्च)"
+                    value={allotBenchNo}
+                    onChange={(e) => setAllotBenchNo(e.target.value)}
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Seat Position */}
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">Seat Position (सिट स्थिति)</label>
+                <select
+                  value={allotPosition}
+                  onChange={(e) => setAllotPosition(e.target.value)}
+                  className="erp-input font-bold"
+                >
+                  <option value="AUTO">Auto-detect next open position (स्वतः स्थान)</option>
+                  <option value="LEFT">LEFT (बायाँ सिट)</option>
+                  <option value="MID-L">MID-L (बायाँ-मध्य सिट)</option>
+                  <option value="MID-R">MID-R (दायाँ-मध्य सिट)</option>
+                  <option value="RIGHT">RIGHT (दायाँ सिट)</option>
+                  <option value="MIDDLE">MIDDLE (मध्य सिट)</option>
+                  <option value="SINGLE">SINGLE (एकल सिट)</option>
+                </select>
+              </div>
+
+              <div className="rounded-xl bg-amber-50 p-3 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                <Info size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  सिट निर्धारण गर्दा एन्टी-चिटिङ (Anti-cheating) नियम लागू हुनेछ र सोही कक्षाको विद्यार्थी एउटै डेस्कमा नपर्ने गरी स्थान दिइनेछ।
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAllotModalOpen(false)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={allotStudentMutation.isPending || !allotStudentId}
+                  className="rounded-xl bg-emerald-700 hover:bg-emerald-800 px-5 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <UserCheck size={14} />
+                  <span>{allotStudentMutation.isPending ? 'Allotting...' : 'Confirm & Seat Student'}</span>
                 </button>
               </div>
             </form>
