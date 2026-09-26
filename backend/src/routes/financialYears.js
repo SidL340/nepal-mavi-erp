@@ -207,7 +207,18 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
 router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { year, startDateBs, endDateBs, isActive } = req.body;
+    const {
+      year,
+      startDateBs,
+      endDateBs,
+      isActive,
+      openingCashBalance,
+      openingBankBalance,
+      openingPayables,
+      openingReceivables,
+      openingDetails,
+      remarks,
+    } = req.body;
 
     if (isActive) {
       await prisma.financialYear.updateMany({ data: { isActive: false } });
@@ -220,6 +231,12 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
         startDateBs: startDateBs ? startDateBs.trim() : undefined,
         endDateBs: endDateBs ? endDateBs.trim() : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
+        openingCashBalance: openingCashBalance !== undefined ? parseFloat(openingCashBalance) || 0 : undefined,
+        openingBankBalance: openingBankBalance !== undefined ? parseFloat(openingBankBalance) || 0 : undefined,
+        openingPayables: openingPayables !== undefined ? parseFloat(openingPayables) || 0 : undefined,
+        openingReceivables: openingReceivables !== undefined ? parseFloat(openingReceivables) || 0 : undefined,
+        openingDetails: openingDetails !== undefined ? (typeof openingDetails === 'string' ? openingDetails : JSON.stringify(openingDetails)) : undefined,
+        remarks: remarks !== undefined ? remarks : undefined,
       }
     });
 
@@ -227,6 +244,94 @@ router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT')
       success: true,
       data: updated,
       message: `Financial Year "${updated.year}" updated successfully.`
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 5B. GET OPENING BALANCES FOR A FINANCIAL YEAR ───────────────────────────
+router.get('/:id/opening-balances', authenticate, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const fy = await prisma.financialYear.findUnique({ where: { id } });
+    if (!fy) return res.status(404).json({ success: false, message: 'Financial Year not found.' });
+
+    // Bank accounts for detail map
+    const bankAccounts = await prisma.bankAccount.findMany({ where: { isActive: true } });
+
+    let parsedDetails = { bankBalances: {}, vendorDues: {} };
+    if (fy.openingDetails) {
+      try {
+        parsedDetails = typeof fy.openingDetails === 'string' ? JSON.parse(fy.openingDetails) : fy.openingDetails;
+      } catch (e) {}
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        financialYearId: fy.id,
+        year: fy.year,
+        openingCashBalance: fy.openingCashBalance || 0,
+        openingBankBalance: fy.openingBankBalance || 0,
+        totalOpeningLiquidBalance: (fy.openingCashBalance || 0) + (fy.openingBankBalance || 0),
+        openingPayables: fy.openingPayables || 0,
+        openingReceivables: fy.openingReceivables || 0,
+        openingDetails: parsedDetails,
+        bankAccounts,
+        remarks: fy.remarks || '',
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── 5C. UPDATE OPENING BALANCES FOR A FINANCIAL YEAR ────────────────────────
+router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const {
+      openingCashBalance = 0,
+      openingBankBalance = 0,
+      openingPayables = 0,
+      openingReceivables = 0,
+      bankBalances = {},
+      vendorDues = {},
+      remarks = '',
+    } = req.body;
+
+    const openingDetails = JSON.stringify({ bankBalances, vendorDues });
+
+    const updated = await prisma.financialYear.update({
+      where: { id },
+      data: {
+        openingCashBalance: parseFloat(openingCashBalance) || 0,
+        openingBankBalance: parseFloat(openingBankBalance) || 0,
+        openingPayables: parseFloat(openingPayables) || 0,
+        openingReceivables: parseFloat(openingReceivables) || 0,
+        openingDetails,
+        remarks,
+      },
+    });
+
+    // Also update opening balances in individual bank accounts if provided
+    if (bankBalances && typeof bankBalances === 'object') {
+      for (const [accIdStr, bAmount] of Object.entries(bankBalances)) {
+        const accId = parseInt(accIdStr);
+        if (!isNaN(accId)) {
+          await prisma.bankAccount.update({
+            where: { id: accId },
+            data: { openingBalance: parseFloat(bAmount) || 0 }
+          }).catch(() => {});
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: updated,
+      message: `प्रारम्भिक मौज्दात तथा बाँकी हिसाब (Opening Balances) सफलतापूर्वक अद्यावधिक भयो!`,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -652,18 +757,41 @@ router.get('/report/:id', authenticate, async (req, res) => {
       paymentMediumSummary.BANK_TRANSFER.expense += totalPayroll;
     }
 
+    const openingCash = fy.openingCashBalance || 0;
+    const openingBank = fy.openingBankBalance || 0;
+    const totalOpeningBalance = openingCash + openingBank;
+    const openingPayables = fy.openingPayables || 0;
+    const openingReceivables = fy.openingReceivables || 0;
+    const totalAvailableFunds = totalIncome + totalOpeningBalance;
+    const closingLiquidBalance = totalAvailableFunds - totalExpenses;
+
     return res.json({
       success: true,
       data: {
         financialYear: fy,
+        openingBalances: {
+          openingCashBalance: openingCash,
+          openingBankBalance: openingBank,
+          totalOpeningBalance,
+          openingPayables,
+          openingReceivables,
+          openingDetails: fy.openingDetails ? (typeof fy.openingDetails === 'string' ? JSON.parse(fy.openingDetails || '{}') : fy.openingDetails) : {},
+        },
         totals: {
+          openingCashBalance: openingCash,
+          openingBankBalance: openingBank,
+          totalOpeningBalance,
+          openingPayables,
+          openingReceivables,
           totalGeneralIncome,
           totalFeeCollections,
           totalIncome,
+          totalAvailableFunds,
           totalGeneralExpenses,
           totalPayroll,
           totalExpenses,
           netSurplus,
+          closingLiquidBalance,
           incomeVouchersCount: incomeEntries.length + feeCollections.length,
           expenseVouchersCount: expenseEntries.length + payrolls.length,
         },

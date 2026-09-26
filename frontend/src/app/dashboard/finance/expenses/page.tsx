@@ -1259,9 +1259,10 @@ export default function ExpensesPage() {
       billNo: billNo.trim(),
       partyId: billPartyId ? parseInt(billPartyId) : null,
       paidTo: partyObj ? partyObj.name : 'Vendor / Supplier',
-      paymentMedium: initialPaidNum > 0 ? billPaymentMedium : 'CASH',
+      paymentMedium: initialPaidNum > 0 ? billPaymentMedium : 'UNPAID_BILL',
+      paidFromAccount: initialPaidNum > 0 ? undefined : 'भुक्तानी हुन बाँकी दायित्व (Accounts Payable / Due)',
       description: `${billDescription || 'Vendor Purchase Bill'} [Total Bill: Rs. ${totalBillNum.toLocaleString()}]`,
-      remarks: initialPaidNum > 0 ? `Initial installment of Rs. ${initialPaidNum.toLocaleString()}` : 'Bill registered pending payment',
+      remarks: initialPaidNum > 0 ? `Initial installment of Rs. ${initialPaidNum.toLocaleString()}` : 'Bill registered pending payment (भुक्तानी हुन बाँकी दायित्व)',
       approvedBy: 'Principal (प्रधानाध्यापक)',
     };
 
@@ -1284,6 +1285,9 @@ export default function ExpensesPage() {
           payload.chequePayeeName = partyObj ? partyObj.name : null;
         }
       }
+    } else {
+      payload.bankAccountId = null;
+      payload.paidFromAccount = 'भुक्तानी हुन बाँकी दायित्व (Accounts Payable / Due)';
     }
 
     addExpenseMutation.mutate(payload, {
@@ -1894,11 +1898,17 @@ export default function ExpensesPage() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1">
                             <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                              entry.paymentMedium === 'CHEQUE' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
-                              entry.paymentMedium === 'BANK_TRANSFER' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                              'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              entry.paymentMedium === 'UNPAID_BILL' || (entry.amount === 0 && entry.billNo)
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs font-extrabold'
+                                : entry.paymentMedium === 'CHEQUE'
+                                ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                : entry.paymentMedium === 'BANK_TRANSFER'
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                             }`}>
-                              {entry.paymentMedium || 'CASH'}
+                              {entry.paymentMedium === 'UNPAID_BILL' || (entry.amount === 0 && entry.billNo)
+                                ? '⏳ भुक्तानी बाँकी (DUE BILL)'
+                                : (entry.paymentMedium || 'CASH')}
                             </span>
                             {entry.chequeNo && (
                               <span className="font-mono text-[10px] font-bold text-purple-900">
@@ -1907,11 +1917,24 @@ export default function ExpensesPage() {
                             )}
                           </div>
                           <span className="text-[10px] text-gray-500 block truncate max-w-xs mt-0.5">
-                            {entry.paidFromAccount || 'School Operational Account'}
+                            {entry.paidFromAccount || (entry.amount === 0 ? 'भुक्तानी हुन बाँकी दायित्व' : 'School Operational Account')}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-right font-mono font-black text-rose-700 text-sm whitespace-nowrap">
-                          रू {(entry.amount || 0).toLocaleString()}
+                        <td className="py-3 px-4 text-right font-mono font-black text-sm whitespace-nowrap">
+                          {entry.amount === 0 || entry.paymentMedium === 'UNPAID_BILL' ? (
+                            <div>
+                              <span className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-bold inline-block">
+                                भुक्तानी हुन बाँकी
+                              </span>
+                              {entry.description?.match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,]+)\]/i)?.[1] && (
+                                <span className="block text-[10px] text-gray-600 font-mono mt-0.5 font-bold">
+                                  बिल: रू {entry.description.match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,]+)\]/i)[1]}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-rose-700">रू {(entry.amount || 0).toLocaleString()}</span>
+                          )}
                         </td>
                         <td className="py-3 px-4 font-semibold text-gray-600">
                           {entry.approvedBy || 'Principal'}

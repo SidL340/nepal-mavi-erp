@@ -429,6 +429,263 @@ router.get('/balance-sheet', authenticate, async (req, res) => {
         isBalanced: Math.abs(grandTotalAssets - grandTotalLiabilitiesAndEquity) < 1,
       }
     });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: 'Server error: ' + error.message });
+  }
+});
+
+// GET /api/finance-reports/audit-statement — comprehensive audit-ready formal statement
+router.get('/audit-statement', authenticate, async (req, res) => {
+  try {
+    const { financialYearId } = req.query;
+    let fy = null;
+    if (financialYearId) {
+      fy = await prisma.financialYear.findUnique({ where: { id: parseInt(financialYearId) } });
+    }
+    if (!fy) {
+      fy = await prisma.financialYear.findFirst({ where: { isActive: true } });
+    }
+    if (!fy) {
+      fy = await prisma.financialYear.findFirst({ orderBy: { startDateBs: 'desc' } });
+    }
+
+    const fyId = fy ? fy.id : null;
+    const fyFilter = fyId ? { financialYearId: fyId } : {};
+
+    // 1. Opening Balances
+    const openingCash = fy?.openingCashBalance || 0;
+    const openingBank = fy?.openingBankBalance || 0;
+    const openingPayables = fy?.openingPayables || 0;
+    const openingReceivables = fy?.openingReceivables || 0;
+    const totalOpeningFunds = openingCash + openingBank;
+
+    let parsedOpeningDetails = { bankBalances: {}, vendorDues: {} };
+    if (fy?.openingDetails) {
+      try {
+        parsedOpeningDetails = typeof fy.openingDetails === 'string' ? JSON.parse(fy.openingDetails) : fy.openingDetails;
+      } catch (e) {}
+    }
+
+    // 2. Incomes & Grants (Schedule 1)
+    const incomeEntries = await prisma.incomeEntry.findMany({
+      where: fyFilter,
+      include: { head: { include: { category: true } }, party: true },
+      orderBy: { receivedDateBs: 'asc' },
+    });
+    const feeCollections = await prisma.feeCollection.findMany({
+      where: fyFilter,
+      include: { feeHead: true, student: true },
+      orderBy: { paidDateBs: 'asc' },
+    });
+
+    const totalGeneralIncome = incomeEntries.reduce((sum, i) => sum + (i.amount || 0), 0);
+    const totalFeeIncome = feeCollections.reduce((sum, f) => sum + (f.amount || 0), 0);
+    const totalCurrentIncome = totalGeneralIncome + totalFeeIncome;
+    const totalAvailableFunds = totalCurrentIncome + totalOpeningFunds;
+
+    // 3. Expenses & Payroll (Schedule 2)
+    const expenseEntries = await prisma.expenseEntry.findMany({
+      where: fyFilter,
+      include: { head: { include: { category: true } }, party: true },
+      orderBy: { expenseDateBs: 'asc' },
+    });
+    const payrollEntries = await prisma.payroll.findMany({
+      where: {
+        ...(fyId ? { financialYearId: fyId } : {}),
+        status: 'PAID',
+      },
+      include: { teacher: true },
+    });
+
+    const totalGeneralExpenses = expenseEntries.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalPayrollExpenses = payrollEntries.reduce((sum, p) => sum + (p.khudPaaunuParne || p.kulRakam || 0), 0);
+    const totalCurrentExpenses = totalGeneralExpenses + totalPayrollExpenses;
+
+    const netSurplusOrDeficit = Math.round((totalCurrentIncome - totalCurrentExpenses) * 100) / 100;
+    const closingLiquidBalance = Math.round((totalAvailableFunds - totalCurrentExpenses) * 100) / 100;
+
+    // 4. Accounts Payable & Vendor Dues (Schedule 4)
+    const allBilledExpenses = await prisma.expenseEntry.findMany({
+      where: { billNo: { not: null } },
+      include: { party: true, head: true, financialYear: true },
+    });
+
+    const vendorDuesMap = new Map();
+    for (const e of allBilledExpenses) {
+      if (!e.billNo || !e.billNo.trim()) continue;
+      const cleanBill = e.billNo.trim();
+      const pKey = `${e.partyId || 'direct'}_${cleanBill}`;
+      if (!vendorDuesMap.has(pKey)) {
+        let parsedTotal = e.amount || 0;
+        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
+        if (match) parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+
+        vendorDuesMap.set(pKey, {
+          billNo: cleanBill,
+          partyId: e.partyId,
+          partyName: e.party?.name || e.paidTo || 'Vendor',
+          panNo: e.party?.panNo || '',
+          headName: e.head?.name || 'General Expense',
+          totalBillAmount: parsedTotal,
+          totalPaidAmount: 0,
+          remainingDue: 0,
+          billDateBs: e.expenseDateBs,
+          financialYearId: e.financialYearId,
+          financialYear: e.financialYear?.year || '',
+        });
+      }
+      const b = vendorDuesMap.get(pKey);
+      b.totalPaidAmount += (e.amount || 0);
+    }
+
+    const payablesList = Array.from(vendorDuesMap.values()).map(b => {
+      const remainingDue = Math.max(0, b.totalBillAmount - b.totalPaidAmount);
+      return {
+        ...b,
+        remainingDue,
+        status: remainingDue === 0 ? 'FULLY_PAID' : b.totalPaidAmount > 0 ? 'PARTIAL' : 'UNPAID',
+      };
+    });
+
+    const totalOutstandingVendorDues = Math.round(payablesList.reduce((sum, b) => sum + b.remainingDue, 0) * 100) / 100;
+    const totalLiabilities = Math.round((totalOutstandingVendorDues + openingPayables) * 100) / 100;
+
+    // 5. Bank Accounts Balances
+    const bankAccounts = await prisma.bankAccount.findMany({ where: { isActive: true } });
+    const bankIncomes = await prisma.incomeEntry.groupBy({
+      by: ['bankAccountId'],
+      where: { bankAccountId: { not: null }, ...fyFilter },
+      _sum: { amount: true },
+    });
+    const bankExpenses = await prisma.expenseEntry.groupBy({
+      by: ['bankAccountId'],
+      where: { bankAccountId: { not: null }, ...fyFilter },
+      _sum: { amount: true },
+    });
+    const bIncMap = new Map(bankIncomes.map(i => [i.bankAccountId, i._sum.amount || 0]));
+    const bExpMap = new Map(bankExpenses.map(e => [e.bankAccountId, e._sum.amount || 0]));
+
+    let totalBankCurrentBalance = 0;
+    const bankAccountsSummary = bankAccounts.map(b => {
+      const openAmt = parsedOpeningDetails.bankBalances?.[b.id] || b.openingBalance || 0;
+      const inc = bIncMap.get(b.id) || 0;
+      const exp = bExpMap.get(b.id) || 0;
+      const currBal = Math.round((openAmt + inc - exp) * 100) / 100;
+      totalBankCurrentBalance += currBal;
+      return {
+        id: b.id,
+        accountName: b.accountName,
+        accountNo: b.accountNo,
+        bankName: b.bankName,
+        branch: b.branch,
+        openingBalance: openAmt,
+        totalIncome: inc,
+        totalExpense: exp,
+        currentBalance: currBal,
+      };
+    });
+
+    // Cash Balance
+    const [cashInc, cashFees, cashExp] = await Promise.all([
+      prisma.incomeEntry.aggregate({ where: { paymentMedium: 'CASH', ...fyFilter }, _sum: { amount: true } }),
+      prisma.feeCollection.aggregate({ where: { paymentMedium: 'CASH', ...fyFilter }, _sum: { amount: true } }),
+      prisma.expenseEntry.aggregate({ where: { paymentMedium: 'CASH', ...fyFilter }, _sum: { amount: true } }),
+    ]);
+    const totalCashOnHand = Math.round(
+      (openingCash + (cashInc._sum.amount || 0) + (cashFees._sum.amount || 0) - (cashExp._sum.amount || 0)) * 100
+    ) / 100;
+
+    // 6. Category-Wise Aggregations
+    const expCategories = await prisma.expenseCategory.findMany({
+      where: { isActive: true },
+      include: { expenseHeads: true },
+    });
+
+    const categorySummaryList = expCategories.map(cat => {
+      const headIds = cat.expenseHeads.map(h => h.id);
+      const catExpenses = expenseEntries.filter(e => headIds.includes(e.headId));
+      const totalAmount = catExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+      // Remaining dues in this category
+      const catDues = payablesList
+        .filter(b => cat.expenseHeads.some(h => h.name === b.headName || h.id === b.headId))
+        .reduce((sum, b) => sum + b.remainingDue, 0);
+
+      return {
+        categoryId: cat.id,
+        categoryName: cat.name,
+        categoryNameNepali: cat.nameNepali || cat.name,
+        headsCount: cat.expenseHeads.length,
+        totalPaidExpense: totalAmount,
+        totalDueRemaining: catDues,
+        totalBilledCommitment: totalAmount + catDues,
+      };
+    });
+
+    // 7. Trial Balance (सन्तुलन परीक्षण)
+    const trialBalanceItems = [
+      { code: '101', name: 'प्रारम्भिक नगद तथा बैंक मौज्दात (Opening Liquid Funds)', debit: totalOpeningFunds, credit: 0 },
+      { code: '102', name: 'बैंक मौज्दातहरू (Closing Bank Balances)', debit: totalBankCurrentBalance, credit: 0 },
+      { code: '103', name: 'नगद मौज्दात (Closing Cash in Hand)', debit: Math.max(0, totalCashOnHand), credit: 0 },
+      { code: '201', name: 'सरकारी अनुदान तथा साधारण आम्दानी (Government Grants & Income)', debit: 0, credit: totalGeneralIncome },
+      { code: '202', name: 'विद्यार्थी शुल्क आम्दानी (Student Fees Collection)', debit: 0, credit: totalFeeIncome },
+      { code: '301', name: 'शिक्षक तथा कर्मचारी पारिश्रमिक खर्च (Teacher & Staff Payroll)', debit: totalPayrollExpenses, credit: 0 },
+      { code: '302', name: 'शैक्षिक, प्रशासनिक तथा संचालन खर्च (Operational & Capital Expenses)', debit: totalGeneralExpenses, credit: 0 },
+      { code: '401', name: 'पार्टी/भेन्डर तिर्न बाँकी बक्यौता दायित्व (Accounts Payable Liabilities)', debit: 0, credit: totalOutstandingVendorDues },
+    ];
+
+    const totalDebit = trialBalanceItems.reduce((sum, t) => sum + t.debit, 0);
+    const totalCredit = trialBalanceItems.reduce((sum, t) => sum + t.credit, 0);
+
+    return res.json({
+      success: true,
+      data: {
+        financialYear: fy,
+        openingBalances: {
+          openingCashBalance: openingCash,
+          openingBankBalance: openingBank,
+          totalOpeningFunds,
+          openingPayables,
+          openingReceivables,
+          details: parsedOpeningDetails,
+        },
+        revenueSummary: {
+          grantsAndGeneral: totalGeneralIncome,
+          studentFees: totalFeeIncome,
+          totalCurrentIncome,
+          totalAvailableFunds,
+        },
+        expenditureSummary: {
+          payroll: totalPayrollExpenses,
+          generalExpenses: totalGeneralExpenses,
+          totalCurrentExpenses,
+          netSurplusOrDeficit,
+          closingLiquidBalance,
+        },
+        payablesSummary: {
+          totalBillsCount: payablesList.length,
+          totalOutstandingVendorDues,
+          openingCarryforwardPayables: openingPayables,
+          totalLiabilities,
+          pendingBills: payablesList.filter(b => b.remainingDue > 0),
+          allBills: payablesList,
+        },
+        bankAndCash: {
+          cashOnHand: totalCashOnHand,
+          bankAccounts: bankAccountsSummary,
+          totalBankBalance: totalBankCurrentBalance,
+          totalClosingLiquid: totalBankCurrentBalance + totalCashOnHand,
+        },
+        categorySummary: categorySummaryList,
+        trialBalance: {
+          items: trialBalanceItems,
+          totalDebit,
+          totalCredit,
+          isBalanced: Math.abs(totalDebit - totalCredit) < 1,
+        },
+      }
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });

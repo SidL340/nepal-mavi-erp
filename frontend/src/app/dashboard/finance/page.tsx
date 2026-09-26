@@ -50,7 +50,16 @@ export default function UnifiedFinanceHubPage() {
   // Modals for Parties & Bank Accounts
   const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
+  const [isOpeningBalanceModalOpen, setIsOpeningBalanceModalOpen] = useState(false);
   const [inspectPartyId, setInspectPartyId] = useState<number | null>(null);
+
+  // Opening Balance Form States
+  const [openingFYId, setOpeningFYId] = useState<string>('');
+  const [openingCash, setOpeningCash] = useState<string>('0');
+  const [openingBank, setOpeningBank] = useState<string>('0');
+  const [openingPayables, setOpeningPayables] = useState<string>('0');
+  const [openingReceivables, setOpeningReceivables] = useState<string>('0');
+  const [openingRemarks, setOpeningRemarks] = useState<string>('');
 
   // Form states for Party
   const [partyName, setPartyName] = useState('');
@@ -240,9 +249,58 @@ export default function UnifiedFinanceHubPage() {
     },
   });
 
+  const updateOpeningBalancesMutation = useMutation({
+    mutationFn: async ({ fyId, data }: { fyId: number; data: any }) => {
+      const res = await api.put(`/financial-years/${fyId}/opening-balances`, data);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('प्रारम्भिक मौज्दात तथा अघिल्लो वर्षको बाँकी हिसाब सुरक्षित भयो!');
+      setIsOpeningBalanceModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['financial-years-all'] });
+      queryClient.invalidateQueries({ queryKey: ['financial-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['annual-financial-report'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update opening balances.')
+  });
+
+  const handleOpenOpeningBalanceModal = (fy?: any) => {
+    const targetFY = fy || (effectiveFYId ? financialYearsData?.find((f: any) => String(f.id) === String(effectiveFYId)) : activeFinancialYear) || financialYearsData?.[0];
+    if (!targetFY) {
+      toast.error('No financial year available');
+      return;
+    }
+    setOpeningFYId(String(targetFY.id));
+    setOpeningCash(String(targetFY.openingCashBalance ?? 0));
+    setOpeningBank(String(targetFY.openingBankBalance ?? 0));
+    setOpeningPayables(String(targetFY.openingPayables ?? 0));
+    setOpeningReceivables(String(targetFY.openingReceivables ?? 0));
+    setOpeningRemarks(targetFY.remarks || '');
+    setIsOpeningBalanceModalOpen(true);
+  };
+
+  const handleSaveOpeningBalances = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!openingFYId) return;
+    updateOpeningBalancesMutation.mutate({
+      fyId: parseInt(openingFYId),
+      data: {
+        openingCashBalance: parseFloat(openingCash || '0'),
+        openingBankBalance: parseFloat(openingBank || '0'),
+        openingPayables: parseFloat(openingPayables || '0'),
+        openingReceivables: parseFloat(openingReceivables || '0'),
+        remarks: openingRemarks || null,
+      },
+    });
+  };
+
+  const currentSelectedFY = (effectiveFYId ? financialYearsData?.find((f: any) => String(f.id) === String(effectiveFYId)) : activeFinancialYear) || financialYearsData?.[0];
+  const openingFunds = (currentSelectedFY?.openingCashBalance || 0) + (currentSelectedFY?.openingBankBalance || 0);
   const totalIncome = summaryData?.totalIncome || 0;
   const totalExpense = summaryData?.totalExpense || 0;
   const netBalance = summaryData?.balance || 0;
+  const totalAvailableFunds = openingFunds + totalIncome;
+  const totalClosingFunds = openingFunds + netBalance;
 
   return (
     <div className="space-y-6 pb-16">
@@ -291,6 +349,15 @@ export default function UnifiedFinanceHubPage() {
             </div>
 
             <button
+              onClick={() => handleOpenOpeningBalanceModal()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#1e3a5f] px-3.5 py-2 text-xs font-black shadow-2xs transition"
+              title="Set Opening Cash, Bank Balances & Carryforward Liabilities"
+            >
+              <Wallet size={14} />
+              <span>+ Opening Balances (प्रारम्भिक मौज्दात)</span>
+            </button>
+
+            <button
               onClick={() => {
                 setSelectedReportFYId(effectiveFYId || (activeFinancialYear?.id ? String(activeFinancialYear.id) : ''));
                 setIsAnnualReportOpen(true);
@@ -311,7 +378,7 @@ export default function UnifiedFinanceHubPage() {
             </button>
             <button
               onClick={() => setIsBankModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-xs font-bold text-[#1e3a5f] hover:bg-amber-400 transition shadow-2xs"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-blue-400 transition shadow-2xs"
             >
               <CreditCard size={14} />
               <span>+ Add Bank A/C (बैंक खाता)</span>
@@ -319,45 +386,70 @@ export default function UnifiedFinanceHubPage() {
           </div>
         </div>
 
-        {/* Top KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 mt-6">
+        {/* Top KPI Cards (Audit & Accounting Standard) */}
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mt-6">
           <div className="rounded-xl bg-white/10 p-3.5 border border-white/10 backdrop-blur-xs">
-            <div className="flex items-center justify-between text-xs text-slate-300 font-bold uppercase">
-              <span>Total Income (आम्दानी)</span>
+            <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold uppercase">
+              <span>Opening Funds (प्रारम्भिक मौज्दात)</span>
+              <Wallet className="h-4 w-4 text-amber-300" />
+            </div>
+            <p className="text-lg font-black text-amber-300 font-mono mt-1">
+              रू {openingFunds.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-slate-300 mt-0.5 font-nepali">
+              नगद: रू {(currentSelectedFY?.openingCashBalance || 0).toLocaleString()} | बैंक: रू {(currentSelectedFY?.openingBankBalance || 0).toLocaleString()}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-white/10 p-3.5 border border-white/10 backdrop-blur-xs">
+            <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold uppercase">
+              <span>Total Income (चालु आम्दानी)</span>
               <ArrowDownLeft className="h-4 w-4 text-emerald-400" />
             </div>
-            <p className="text-xl font-black text-emerald-300 font-mono mt-1">
+            <p className="text-lg font-black text-emerald-300 font-mono mt-1">
               रू {totalIncome.toLocaleString()}
             </p>
+            <p className="text-[10px] text-slate-300 mt-0.5 font-nepali">
+              कुल उपलब्ध कोष: रू {totalAvailableFunds.toLocaleString()}
+            </p>
           </div>
 
           <div className="rounded-xl bg-white/10 p-3.5 border border-white/10 backdrop-blur-xs">
-            <div className="flex items-center justify-between text-xs text-slate-300 font-bold uppercase">
-              <span>Total Expenses (खर्च)</span>
+            <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold uppercase">
+              <span>Total Expenses (चालु खर्च)</span>
               <ArrowUpRight className="h-4 w-4 text-rose-400" />
             </div>
-            <p className="text-xl font-black text-rose-300 font-mono mt-1">
+            <p className="text-lg font-black text-rose-300 font-mono mt-1">
               रू {totalExpense.toLocaleString()}
             </p>
-          </div>
-
-          <div className="rounded-xl bg-white/10 p-3.5 border border-white/10 backdrop-blur-xs">
-            <div className="flex items-center justify-between text-xs text-slate-300 font-bold uppercase">
-              <span>Net Fund Balance (मौज्दात)</span>
-              <Wallet className="h-4 w-4 text-amber-400" />
-            </div>
-            <p className={`text-xl font-black font-mono mt-1 ${netBalance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-              रू {netBalance.toLocaleString()}
+            <p className="text-[10px] text-slate-300 mt-0.5 font-nepali">
+              तलब, मर्मत तथा संचालन खर्च
             </p>
           </div>
 
           <div className="rounded-xl bg-white/10 p-3.5 border border-white/10 backdrop-blur-xs">
-            <div className="flex items-center justify-between text-xs text-slate-300 font-bold uppercase">
-              <span>Bank Accounts / Parties</span>
-              <Building2 className="h-4 w-4 text-blue-300" />
+            <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold uppercase">
+              <span>Closing Liquid (अन्तिम मौज्दात)</span>
+              <CheckCircle2 className="h-4 w-4 text-teal-300" />
             </div>
-            <p className="text-xl font-black text-white font-mono mt-1">
-              {bankAccountsData?.length || 0} A/C • {partiesData?.length || 0} Parties
+            <p className={`text-lg font-black font-mono mt-1 ${totalClosingFunds >= 0 ? 'text-teal-200' : 'text-rose-300'}`}>
+              रू {totalClosingFunds.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-slate-300 mt-0.5 font-nepali">
+              बचत/घाटा: रू {netBalance.toLocaleString()}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-white/10 p-3.5 border border-white/10 backdrop-blur-xs">
+            <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold uppercase">
+              <span>Past Liabilities (तिर्न बाँकी)</span>
+              <AlertCircle className="h-4 w-4 text-rose-300" />
+            </div>
+            <p className="text-lg font-black text-rose-200 font-mono mt-1">
+              रू {(currentSelectedFY?.openingPayables || 0).toLocaleString()}
+            </p>
+            <p className="text-[10px] text-slate-300 mt-0.5 font-nepali">
+              अघिल्लो आ.व. बाट जिम्मेवारी सरेको
             </p>
           </div>
         </div>
@@ -2141,6 +2233,176 @@ export default function UnifiedFinanceHubPage() {
                 बन्द गर्नुहोस् (Close)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── OPENING BALANCES MODAL (प्रारम्भिक मौज्दात तथा अघिल्लो वर्षको बाँकी हिसाब) ─── */}
+      {isOpeningBalanceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
+                  <Wallet size={18} className="text-amber-500" />
+                  <span>Opening Balances & Carryforward Setup (प्रारम्भिक मौज्दात)</span>
+                </h2>
+                <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
+                  आर्थिक वर्षको सुरुको नगद, बैंक मौज्दात तथा अघिल्लो आ.व. बाट जिम्मेवारी सरेको तिर्न बाँकी दायित्व प्रविष्टि
+                </p>
+              </div>
+              <button
+                onClick={() => setIsOpeningBalanceModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveOpeningBalances} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-extrabold text-gray-800 mb-1">
+                  आर्थिक वर्ष (Financial Year) *
+                </label>
+                <select
+                  value={openingFYId}
+                  onChange={(e) => {
+                    const selId = e.target.value;
+                    setOpeningFYId(selId);
+                    const fy = financialYearsData?.find((f: any) => String(f.id) === selId);
+                    if (fy) {
+                      setOpeningCash(String(fy.openingCashBalance ?? 0));
+                      setOpeningBank(String(fy.openingBankBalance ?? 0));
+                      setOpeningPayables(String(fy.openingPayables ?? 0));
+                      setOpeningReceivables(String(fy.openingReceivables ?? 0));
+                      setOpeningRemarks(fy.remarks || '');
+                    }
+                  }}
+                  className="erp-input font-bold text-[#1e3a5f]"
+                  required
+                >
+                  {financialYearsData?.map((fy: any) => (
+                    <option key={fy.id} value={fy.id}>
+                      आ.व. {fy.year} {fy.isActive ? '(चालु आ.व.)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Liquid Funds Group */}
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-3">
+                <div className="flex items-center justify-between font-extrabold text-emerald-950 text-xs">
+                  <span>१. प्रारम्भिक तरल कोष (Opening Liquid Funds)</span>
+                  <span className="font-mono text-emerald-800">
+                    रू {((parseFloat(openingCash || '0') + parseFloat(openingBank || '0')) || 0).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      सुरुको नगद मौज्दात (Opening Cash) रू
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={openingCash}
+                      onChange={(e) => setOpeningCash(e.target.value)}
+                      placeholder="0.00"
+                      className="erp-input font-mono font-bold"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      सुरुको बैंक मौज्दात (Opening Bank) रू
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={openingBank}
+                      onChange={(e) => setOpeningBank(e.target.value)}
+                      placeholder="0.00"
+                      className="erp-input font-mono font-bold"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Liabilities & Receivables Group */}
+              <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3.5 space-y-3">
+                <div className="font-extrabold text-rose-950 text-xs">
+                  २. अघिल्लो वर्षबाट सरेका दायित्व तथा असुली (Past Carryforward Accounts)
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-rose-900 mb-1">
+                      तिर्न बाँकी दायित्व (Opening Payables / Dues) रू
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={openingPayables}
+                      onChange={(e) => setOpeningPayables(e.target.value)}
+                      placeholder="0.00"
+                      className="erp-input font-mono font-bold text-rose-800 border-rose-300"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-0.5">अघिल्लो आ.व. को तिर्न बाँकी बिल/पार्टी दायित्व</p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-blue-900 mb-1">
+                      उठ्न बाँकी रकम (Opening Receivables) रू
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={openingReceivables}
+                      onChange={(e) => setOpeningReceivables(e.target.value)}
+                      placeholder="0.00"
+                      className="erp-input font-mono font-bold text-blue-800 border-blue-300"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-0.5">अघिल्लो आ.व. बाट प्राप्त हुन बाँकी अनुदान/शुल्क</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">
+                  कैफियत / टिप्पणी (Remarks / Narration)
+                </label>
+                <input
+                  type="text"
+                  value={openingRemarks}
+                  onChange={(e) => setOpeningRemarks(e.target.value)}
+                  placeholder="उदा: आ.व. २०८२/८३ को अन्तिम अडिटबाट सरेको मौज्दात..."
+                  className="erp-input"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsOpeningBalanceModalOpen(false)}
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-slate-50 transition"
+                >
+                  रद्द गर्नुहोस् (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateOpeningBalancesMutation.isPending}
+                  className="rounded-xl bg-[#1e3a5f] text-white px-5 py-2 text-xs font-black shadow-xs hover:bg-[#2a5280] transition disabled:opacity-50"
+                >
+                  {updateOpeningBalancesMutation.isPending ? 'सुरक्षित गर्दै...' : 'सुरक्षित गर्नुहोस् (Save Opening Balances)'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

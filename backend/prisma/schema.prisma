@@ -51,12 +51,18 @@ model AcademicYear {
 }
 
 model FinancialYear {
-  id          Int      @id @default(autoincrement())
-  year        String   // e.g. "2083/84"
-  startDateBs String   // e.g. "2083-04-01"
-  endDateBs   String   // e.g. "2084-03-31"
-  isActive    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id                    Int      @id @default(autoincrement())
+  year                  String   // e.g. "2083/84"
+  startDateBs           String   // e.g. "2083-04-01"
+  endDateBs             String   // e.g. "2084-03-31"
+  isActive              Boolean  @default(false)
+  openingCashBalance    Float    @default(0) // प्रारम्भिक नगद मौज्दात (Opening Cash on Hand)
+  openingBankBalance    Float    @default(0) // प्रारम्भिक बैंक मौज्दात (Opening Bank Balances)
+  openingPayables       Float    @default(0) // अघिल्लो आ.व. बाट जिम्मेवारी सरेको तिर्न बाँकी दायित्व (Opening Accounts Payable / Vendor Liabilities)
+  openingReceivables    Float    @default(0) // अघिल्लो आ.व. को उठ्न बाँकी रकम (Opening Receivables)
+  openingDetails        String?  // JSON detail: { bankBalances: { [id]: amount }, vendorDues: { [partyId]: amount } }
+  remarks               String?
+  createdAt             DateTime @default(now())
 
   incomeEntries   IncomeEntry[]
   expenseEntries  ExpenseEntry[]
@@ -743,6 +749,7 @@ model BankAccount {
   bankName      String
   branch        String?
   type          String?  // "Current", "Savings"
+  openingBalance Float   @default(0)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 }

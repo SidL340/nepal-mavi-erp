@@ -250,10 +250,21 @@ router.post('/entries', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNT
       dateBs: rest.expenseDateBs,
     });
 
+    const parsedAmt = parseFloat(amount) || 0;
+    let finalPaymentMedium = rest.paymentMedium || 'CASH';
+    let finalPaidFromAccount = rest.paidFromAccount;
+
+    if (parsedAmt === 0) {
+      finalPaymentMedium = rest.paymentMedium && rest.paymentMedium !== 'CASH' ? rest.paymentMedium : 'UNPAID_BILL';
+      finalPaidFromAccount = finalPaidFromAccount || 'भुक्तानी हुन बाँकी दायित्व (Accounts Payable / Due)';
+    }
+
     const entry = await prisma.expenseEntry.create({
       data: {
         ...rest,
-        amount: parseFloat(amount),
+        amount: parsedAmt,
+        paymentMedium: finalPaymentMedium,
+        paidFromAccount: finalPaidFromAccount,
         expenseDateAd: expenseDateAd ? new Date(expenseDateAd) : new Date(),
         headId: parseInt(headId),
         academicYearId: resolvedAyId,

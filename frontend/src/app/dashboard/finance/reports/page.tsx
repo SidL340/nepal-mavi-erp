@@ -24,8 +24,9 @@ import {
 import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function FinancialReportsPage() {
-  const [activeTab, setActiveTab] = useState<'trial_balance' | 'income_expense' | 'balance_sheet' | 'ledger' | 'party_ledger'>('trial_balance');
+  const [activeTab, setActiveTab] = useState<'audit_statement' | 'payables_dues' | 'trial_balance' | 'income_expense' | 'balance_sheet' | 'ledger' | 'party_ledger'>('audit_statement');
   const [selectedYearFilter, setSelectedYearFilter] = useState<string>('ACTIVE');
+  const [payablePartyFilter, setPayablePartyFilter] = useState<string>('ALL');
 
   // Ledger Tab State
   const [ledgerType, setLedgerType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
@@ -149,6 +150,17 @@ export default function FinancialReportsPage() {
       if (effectiveFYId) params.append('financialYearId', effectiveFYId);
       params.append('todayBs', todayBS());
       const res = await api.get(`/finance-reports/balance-sheet?${params.toString()}`);
+      return res.data?.data || null;
+    },
+  });
+
+  // Fetch Comprehensive Audit-Ready Statement (8 Schedules & Opening Carryforwards)
+  const { data: auditStatementData, isLoading: isAuditStatementLoading } = useQuery({
+    queryKey: ['audit-statement-report', effectiveFYId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (effectiveFYId) params.append('financialYearId', effectiveFYId);
+      const res = await api.get(`/finance-reports/audit-statement?${params.toString()}`);
       return res.data?.data || null;
     },
   });
@@ -376,6 +388,30 @@ export default function FinancialReportsPage() {
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 text-xs font-bold no-print">
         <button
+          onClick={() => setActiveTab('audit_statement')}
+          className={`border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${
+            activeTab === 'audit_statement'
+              ? 'border-amber-600 text-amber-900 font-black'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <FileText size={14} className="text-amber-600" />
+          <span>१. लेखापरीक्षण प्रतिवेदन (Audit Report & 8 Schedules)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('payables_dues')}
+          className={`border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${
+            activeTab === 'payables_dues'
+              ? 'border-rose-600 text-rose-900 font-black'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Receipt size={14} className="text-rose-600" />
+          <span>२. तिर्न बाँकी दायित्व लगत (Accounts Payable & Dues)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('trial_balance')}
           className={`border-b-2 px-4 py-2.5 transition flex items-center gap-2 ${
             activeTab === 'trial_balance'
@@ -384,7 +420,7 @@ export default function FinancialReportsPage() {
           }`}
         >
           <Scale size={14} />
-          <span>1. Trial Balance (दोहोरो लेखा परीक्षण)</span>
+          <span>३. Trial Balance (दोहोरो लेखा परीक्षण)</span>
         </button>
 
         <button
@@ -396,7 +432,7 @@ export default function FinancialReportsPage() {
           }`}
         >
           <TrendingUp size={14} />
-          <span>2. Income & Expenditure Statement (आय-व्यय विवरण)</span>
+          <span>४. Income & Expenditure Statement (आय-व्यय विवरण)</span>
         </button>
 
         <button
@@ -408,7 +444,7 @@ export default function FinancialReportsPage() {
           }`}
         >
           <Landmark size={14} />
-          <span>3. Balance Sheet (वासलात)</span>
+          <span>५. Balance Sheet (वासलात)</span>
         </button>
 
         <button
@@ -420,7 +456,7 @@ export default function FinancialReportsPage() {
           }`}
         >
           <Layers size={14} />
-          <span>4. Account Head Ledger (खातागत लेजर)</span>
+          <span>६. Account Head Ledger (खातागत लेजर)</span>
         </button>
 
         <button
@@ -432,19 +468,21 @@ export default function FinancialReportsPage() {
           }`}
         >
           <Users size={14} />
-          <span>5. Party / Vendor Ledger (पार्टी/सप्लायर खाता)</span>
+          <span>७. Party / Vendor Ledger (पार्टी/सप्लायर खाता)</span>
         </button>
       </div>
 
       {/* ─── PRINT LETTERHEAD HEADER ────────────────────────────────────────── */}
       <div className="hidden print:block text-center border-b-2 border-[#1e3a5f] pb-3 mb-4">
         <h2 className="text-xl font-black text-[#1e3a5f]">
-          {school?.nameNepali || 'श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट'}
+          {school?.nameNepali || school?.schoolNameNepali || school?.name || 'श्री नेपाल माध्यमिक विद्यालय, विश्रामपुर, रौतहट'}
         </h2>
         <p className="text-xs font-bold text-gray-700">
-          {school?.name || 'Shree Nepal Secondary School'} • {school?.address || 'Bishrampur, Rautahat'} (IEMIS: {school?.emisCode || '320160005'})
+          {school?.name || school?.schoolName || 'Shree Nepal Secondary School'} • {school?.address || 'Bishrampur, Rautahat'} (IEMIS: {school?.emisCode || '320160005'})
         </p>
         <div className="mt-2 inline-block bg-slate-100 border border-slate-300 px-3 py-0.5 rounded text-xs font-extrabold uppercase text-[#1e3a5f]">
+          {activeTab === 'audit_statement' && 'OFFICIAL AUDIT REPORT & 8-SCHEDULE STATEMENT (लेखापरीक्षण प्रतिवेदन)'}
+          {activeTab === 'payables_dues' && 'ACCOUNTS PAYABLE & VENDOR DUES LEDGER (पार्टीगत तिर्न बाँकी दायित्व लगत)'}
           {activeTab === 'trial_balance' && 'TRIAL BALANCE STATEMENT (दोहोरो लेखा परीक्षण विवरण)'}
           {activeTab === 'income_expense' && 'INCOME & EXPENDITURE STATEMENT (आय-व्यय विवरण)'}
           {activeTab === 'balance_sheet' && 'BALANCE SHEET STATEMENT (वासलात विवरण)'}
@@ -456,7 +494,656 @@ export default function FinancialReportsPage() {
         </p>
       </div>
 
-      {/* ────────────────── TAB 1: TRIAL BALANCE ─────────────────────────── */}
+      {/* ────────────────── TAB: AUDIT STATEMENT (लेखापरीक्षण / अडिट प्रतिवेदन) ─────────── */}
+      {activeTab === 'audit_statement' && (
+        <div className="space-y-6">
+          {isAuditStatementLoading ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-500 font-nepali">
+              लेखापरीक्षण विवरण लोड हुँदैछ...
+            </div>
+          ) : !auditStatementData ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-500 font-nepali">
+              कुनै वित्तीय विवरण भेटिएन।
+            </div>
+          ) : (
+            <>
+              {/* Top Executive Audit Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 no-print">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5 shadow-2xs">
+                  <span className="text-[10.5px] font-extrabold uppercase text-amber-900 block">
+                    १. प्रारम्भिक कोष (Opening)
+                  </span>
+                  <p className="text-lg font-black text-amber-950 font-mono mt-1">
+                    रू {(auditStatementData.openingBalances?.totalOpeningFunds || 0).toLocaleString()}
+                  </p>
+                  <span className="text-[9.5px] text-amber-800 block mt-0.5">
+                    नगद + बैंक मौज्दात
+                  </span>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5 shadow-2xs">
+                  <span className="text-[10.5px] font-extrabold uppercase text-emerald-900 block">
+                    २. कुल आम्दानी (Inflows)
+                  </span>
+                  <p className="text-lg font-black text-emerald-950 font-mono mt-1">
+                    रू {(auditStatementData.revenueSummary?.totalCurrentIncome || 0).toLocaleString()}
+                  </p>
+                  <span className="text-[9.5px] text-emerald-800 block mt-0.5">
+                    अनुदान + शुल्क
+                  </span>
+                </div>
+
+                <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-3.5 shadow-2xs">
+                  <span className="text-[10.5px] font-extrabold uppercase text-blue-900 block">
+                    ३. कुल उपलब्ध कोष
+                  </span>
+                  <p className="text-lg font-black text-[#1e3a5f] font-mono mt-1">
+                    रू {(auditStatementData.revenueSummary?.totalAvailableFunds || 0).toLocaleString()}
+                  </p>
+                  <span className="text-[9.5px] text-blue-800 block mt-0.5">
+                    सुरु मौज्दात + आम्दानी
+                  </span>
+                </div>
+
+                <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-3.5 shadow-2xs">
+                  <span className="text-[10.5px] font-extrabold uppercase text-rose-900 block">
+                    ४. कुल खर्च (Outflows)
+                  </span>
+                  <p className="text-lg font-black text-rose-950 font-mono mt-1">
+                    रू {(auditStatementData.expenditureSummary?.totalCurrentExpenses || 0).toLocaleString()}
+                  </p>
+                  <span className="text-[9.5px] text-rose-800 block mt-0.5">
+                    खर्च + तलबी भरपाई
+                  </span>
+                </div>
+
+                <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3.5 shadow-2xs">
+                  <span className="text-[10.5px] font-extrabold uppercase text-teal-900 block">
+                    ५. अन्तिम मौज्दात (Closing)
+                  </span>
+                  <p className="text-lg font-black text-teal-950 font-mono mt-1">
+                    रू {(auditStatementData.bankAndCash?.totalClosingLiquid || 0).toLocaleString()}
+                  </p>
+                  <span className="text-[9.5px] text-teal-800 block mt-0.5">
+                    नगद + बैंक मौज्दात
+                  </span>
+                </div>
+
+                <div className="rounded-2xl border border-purple-200 bg-purple-50/70 p-3.5 shadow-2xs">
+                  <span className="text-[10.5px] font-extrabold uppercase text-purple-900 block">
+                    ६. तिर्न बाँकी दायित्व
+                  </span>
+                  <p className="text-lg font-black text-purple-950 font-mono mt-1">
+                    रू {(auditStatementData.payablesSummary?.totalLiabilities || 0).toLocaleString()}
+                  </p>
+                  <span className="text-[9.5px] text-purple-800 block mt-0.5">
+                    पार्टी बक्यौता लगत
+                  </span>
+                </div>
+              </div>
+
+              {/* ── 8 OFFICIAL AUDIT SCHEDULES CONTAINER ── */}
+              <div className="rounded-2xl border border-[#1e3a5f]/20 bg-white shadow-sm overflow-hidden p-6 space-y-6">
+                
+                {/* SCHEDULE 3: OPENING BALANCES & AVAILABLE FUNDS */}
+                <div>
+                  <div className="bg-[#1e3a5f] text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
+                    <span>अनुसूची ३: प्रारम्भिक मौज्दात तथा कुल उपलब्ध कोष लगत (Opening Funds & Total Liquid Assets)</span>
+                    <span className="font-mono text-amber-300">
+                      रू {(auditStatementData.revenueSummary?.totalAvailableFunds || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs border border-gray-200">
+                    <thead className="bg-slate-100 text-gray-800 font-extrabold text-[10.5px]">
+                      <tr>
+                        <th className="p-2.5 w-12 text-center">क्र.सं.</th>
+                        <th className="p-2.5">विवरण (Particulars)</th>
+                        <th className="p-2.5">खाता / माध्यम</th>
+                        <th className="p-2.5 text-right w-48">रकम (रू)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">१</td>
+                        <td className="p-2.5 font-bold">प्रारम्भिक नगद मौज्दात (Opening Cash on Hand)</td>
+                        <td className="p-2.5 text-gray-500">विद्यालय नगदी खाता</td>
+                        <td className="p-2.5 text-right font-mono font-bold">
+                          रू {(auditStatementData.openingBalances?.openingCashBalance || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">२</td>
+                        <td className="p-2.5 font-bold">प्रारम्भिक बैंक मौज्दात (Opening Bank Balances)</td>
+                        <td className="p-2.5 text-gray-500">विद्यालयका बैंक खाताहरू</td>
+                        <td className="p-2.5 text-right font-mono font-bold">
+                          रू {(auditStatementData.openingBalances?.openingBankBalance || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr className="bg-amber-50/60 font-extrabold text-amber-950">
+                        <td colSpan={3} className="p-2.5 text-right">कुल सुरु मौज्दात (Total Opening Liquid Funds) [A]:</td>
+                        <td className="p-2.5 text-right font-mono text-amber-900">
+                          रू {(auditStatementData.openingBalances?.totalOpeningFunds || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">३</td>
+                        <td className="p-2.5 font-bold">चालु आर्थिक वर्षको कुल आम्दानी (Current Year Revenue Inflows)</td>
+                        <td className="p-2.5 text-gray-500">सरकारी अनुदान, शुल्क तथा विविध</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
+                          रू {(auditStatementData.revenueSummary?.totalCurrentIncome || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr className="bg-blue-50 font-black text-[#1e3a5f]">
+                        <td colSpan={3} className="p-2.5 text-right uppercase">
+                          कुल जम्मा उपलब्ध कोष (TOTAL AVAILABLE LIQUID FUNDS) [A + B]:
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-sm text-[#1e3a5f]">
+                          रू {(auditStatementData.revenueSummary?.totalAvailableFunds || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SCHEDULE 1: REVENUES & GRANTS */}
+                <div>
+                  <div className="bg-emerald-800 text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
+                    <span>अनुसूची १: सरकारी अनुदान तथा आम्दानी लगत (Statement of Incomes & Grants)</span>
+                    <span className="font-mono text-emerald-200">
+                      रू {(auditStatementData.revenueSummary?.totalCurrentIncome || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs border border-gray-200">
+                    <thead className="bg-slate-100 text-gray-800 font-extrabold text-[10.5px]">
+                      <tr>
+                        <th className="p-2.5 w-12 text-center">क्र.सं.</th>
+                        <th className="p-2.5">आम्दानीको शीर्षक (Revenue Head)</th>
+                        <th className="p-2.5">स्रोत / वर्ग</th>
+                        <th className="p-2.5 text-right w-48">रकम (रू)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">१</td>
+                        <td className="p-2.5 font-bold">सरकारी तथा स्थानीय तह अनुदान एवं विविध आम्दानी</td>
+                        <td className="p-2.5 text-gray-500">Government & General Grants</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
+                          रू {(auditStatementData.revenueSummary?.grantsAndGeneral || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">२</td>
+                        <td className="p-2.5 font-bold">विद्यार्थी शुल्क तथा भर्ना रसिद संकलन</td>
+                        <td className="p-2.5 text-gray-500">Student Tuition & Exam Fees</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
+                          रू {(auditStatementData.revenueSummary?.studentFees || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr className="bg-emerald-50 font-black text-emerald-950">
+                        <td colSpan={3} className="p-2.5 text-right uppercase">
+                          कुल आम्दानी जम्मा (TOTAL REVENUE & GRANTS) [B]:
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-sm text-emerald-800">
+                          रू {(auditStatementData.revenueSummary?.totalCurrentIncome || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SCHEDULE 2: EXPENSES & PAYROLL */}
+                <div>
+                  <div className="bg-rose-800 text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
+                    <span>अनुसूची २: खर्च तथा तलबी भरपाई लगत (Statement of Operating Expenses & Payroll)</span>
+                    <span className="font-mono text-rose-200">
+                      रू {(auditStatementData.expenditureSummary?.totalCurrentExpenses || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs border border-gray-200">
+                    <thead className="bg-slate-100 text-gray-800 font-extrabold text-[10.5px]">
+                      <tr>
+                        <th className="p-2.5 w-12 text-center">क्र.सं.</th>
+                        <th className="p-2.5">खर्चको शीर्षक (Expenditure Head)</th>
+                        <th className="p-2.5">खर्च प्रकार</th>
+                        <th className="p-2.5 text-right w-48">रकम (रू)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">१</td>
+                        <td className="p-2.5 font-bold">शिक्षक तथा कर्मचारी तलब तथा भत्ता भुक्तानी</td>
+                        <td className="p-2.5 text-gray-500">Staff Payroll & Compensation</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                          रू {(auditStatementData.expenditureSummary?.payroll || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">२</td>
+                        <td className="p-2.5 font-bold">शैक्षिक, प्रशासनिक, मर्मत तथा संचालन खर्चहरू</td>
+                        <td className="p-2.5 text-gray-500">Administrative & Operating Costs</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                          रू {(auditStatementData.expenditureSummary?.generalExpenses || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      <tr className="bg-rose-50 font-black text-rose-950">
+                        <td colSpan={3} className="p-2.5 text-right uppercase">
+                          कुल खर्च जम्मा (TOTAL EXPENDITURES) [C]:
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-sm text-rose-800">
+                          रू {(auditStatementData.expenditureSummary?.totalCurrentExpenses || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SCHEDULE 4: ACCOUNTS PAYABLE & VENDOR DUES WITH REMAINING DUE */}
+                <div>
+                  <div className="bg-purple-900 text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
+                    <span>अनुसूची ४: पार्टीगत तिर्न बाँकी दायित्व तथा बक्यौता लगत (Accounts Payable & Vendor Dues)</span>
+                    <span className="font-mono text-amber-300">
+                      तिर्न बाँकी बक्यौता: रू {(auditStatementData.payablesSummary?.totalLiabilities || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs border border-gray-200">
+                    <thead className="bg-slate-100 text-gray-800 font-extrabold text-[10.5px]">
+                      <tr>
+                        <th className="p-2 w-10 text-center">#</th>
+                        <th className="p-2 w-28">बिल नं. र मिति</th>
+                        <th className="p-2">पार्टी / आपूर्तिकर्ता (Vendor)</th>
+                        <th className="p-2">खर्च शीर्षक</th>
+                        <th className="p-2 text-right w-28">कुल बिल (रू)</th>
+                        <th className="p-2 text-right w-28">भुक्तान (रू)</th>
+                        <th className="p-2 text-right w-32">तिर्न बाँकी (रू)</th>
+                        <th className="p-2 text-center w-24">स्थिति</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      {(auditStatementData.payablesSummary?.allBills || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="p-6 text-center text-gray-400">
+                            कुनै तिर्न बाँकी बिल वा बक्यौता दायित्व भेटिएन।
+                          </td>
+                        </tr>
+                      ) : (
+                        (auditStatementData.payablesSummary?.allBills || []).map((bill: any, idx: number) => (
+                          <tr key={idx} className={bill.remainingDue > 0 ? 'bg-rose-50/30' : 'hover:bg-slate-50'}>
+                            <td className="p-2 text-center font-mono text-gray-400">{idx + 1}</td>
+                            <td className="p-2">
+                              <strong className="font-mono text-[#1e3a5f]">{bill.billNo}</strong>
+                              <span className="block text-[10px] text-gray-500">{bill.billDateBs}</span>
+                            </td>
+                            <td className="p-2">
+                              <strong>{bill.partyName}</strong>
+                              {bill.panNo && <span className="block text-[10px] text-gray-500 font-mono">PAN: {bill.panNo}</span>}
+                            </td>
+                            <td className="p-2 text-gray-600">{bill.headName}</td>
+                            <td className="p-2 text-right font-mono font-bold">
+                              रू {(bill.totalBillAmount || 0).toLocaleString()}
+                            </td>
+                            <td className="p-2 text-right font-mono font-bold text-emerald-700">
+                              रू {(bill.totalPaidAmount || 0).toLocaleString()}
+                            </td>
+                            <td className="p-2 text-right font-mono font-black text-rose-700">
+                              रू {(bill.remainingDue || 0).toLocaleString()}
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                bill.status === 'FULLY_PAID'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : bill.status === 'PARTIAL'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                {bill.status === 'FULLY_PAID' ? 'चुक्ता' : bill.status === 'PARTIAL' ? 'आंशिक' : 'बाँकी'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                      <tr className="bg-purple-50 font-black text-purple-950">
+                        <td colSpan={4} className="p-2.5 text-right uppercase">
+                          कुल पार्टी तिर्न बाँकी बक्यौता दायित्व (TOTAL ACCOUNTS PAYABLE):
+                        </td>
+                        <td className="p-2.5 text-right font-mono">
+                          रू {(auditStatementData.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0).toLocaleString()}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-emerald-700">
+                          रू {(auditStatementData.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0).toLocaleString()}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-sm text-rose-700">
+                          रू {(auditStatementData.payablesSummary?.totalOutstandingVendorDues || 0).toLocaleString()}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SCHEDULE 6: BANK & CASH CLOSING RECONCILIATION */}
+                <div>
+                  <div className="bg-teal-800 text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
+                    <span>अनुसूची ६: बैंक तथा नगद हिसाब मिलान विवरण (Bank Accounts & Cash in Hand Balances)</span>
+                    <span className="font-mono text-teal-200">
+                      कुल अन्तिम तरल मौज्दात: रू {(auditStatementData.bankAndCash?.totalClosingLiquid || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs border border-gray-200">
+                    <thead className="bg-slate-100 text-gray-800 font-extrabold text-[10.5px]">
+                      <tr>
+                        <th className="p-2.5 w-12 text-center">क्र.सं.</th>
+                        <th className="p-2.5">बैंकको नाम तथा खाता विवरण</th>
+                        <th className="p-2.5 w-36 font-mono">खाता नं.</th>
+                        <th className="p-2.5 text-right w-32">सुरु मौज्दात</th>
+                        <th className="p-2.5 text-right w-32">जम्मा आम्दानी</th>
+                        <th className="p-2.5 text-right w-32">जम्मा खर्च</th>
+                        <th className="p-2.5 text-right w-36">अन्तिम मौज्दात (रू)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      <tr>
+                        <td className="p-2.5 text-center font-mono">१</td>
+                        <td className="p-2.5 font-bold">विद्यालय नगदी मौज्दात (Cash on Hand)</td>
+                        <td className="p-2.5 font-mono text-gray-500">CASH-ACC</td>
+                        <td className="p-2.5 text-right font-mono">
+                          रू {(auditStatementData.openingBalances?.openingCashBalance || 0).toLocaleString()}
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-emerald-700">—</td>
+                        <td className="p-2.5 text-right font-mono text-rose-700">—</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-teal-800">
+                          रू {(auditStatementData.bankAndCash?.cashOnHand || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                      {(auditStatementData.bankAndCash?.bankAccounts || []).map((b: any, bIdx: number) => (
+                        <tr key={b.id}>
+                          <td className="p-2.5 text-center font-mono">{bIdx + 2}</td>
+                          <td className="p-2.5">
+                            <strong>{b.bankName}</strong> ({b.accountName})
+                            <span className="block text-[10px] text-gray-500">Branch: {b.branch || 'Head Office'}</span>
+                          </td>
+                          <td className="p-2.5 font-mono text-gray-700">{b.accountNo}</td>
+                          <td className="p-2.5 text-right font-mono">रू {(b.openingBalance || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-emerald-700">रू {(b.totalIncome || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-rose-700">रू {(b.totalExpense || 0).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono font-bold text-teal-800">
+                            रू {(b.currentBalance || 0).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-teal-50 font-black text-teal-950">
+                        <td colSpan={6} className="p-2.5 text-right uppercase">
+                          कुल अन्तिम मौज्दात (TOTAL CLOSING LIQUID FUNDS):
+                        </td>
+                        <td className="p-2.5 text-right font-mono text-sm text-teal-900">
+                          रू {(auditStatementData.bankAndCash?.totalClosingLiquid || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SCHEDULE 7: TRIAL BALANCE DR VS CR */}
+                <div>
+                  <div className="bg-[#1e3a5f] text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
+                    <span>अनुसूची ७: दोहोरो लेखा सन्तुलन परीक्षण (Double Entry Trial Balance Verification)</span>
+                    <span className="font-mono text-emerald-300">
+                      {auditStatementData.trialBalance?.isBalanced ? '✓ दोहोरो लेखा पूर्ण सन्तुलित (BALANCED)' : 'UNBALANCED'}
+                    </span>
+                  </div>
+                  <table className="w-full text-left text-xs border border-gray-200">
+                    <thead className="bg-slate-100 text-gray-800 font-extrabold text-[10.5px]">
+                      <tr>
+                        <th className="p-2.5 w-12 text-center">क्र.सं.</th>
+                        <th className="p-2.5 w-20 font-mono">लेखा कोड</th>
+                        <th className="p-2.5">खाता शीर्षक तथा विवरण (Account Particulars)</th>
+                        <th className="p-2.5 text-right w-44">डेबिट रकम (Debit Dr. रू)</th>
+                        <th className="p-2.5 text-right w-44">क्रेडिट रकम (Credit Cr. रू)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-gray-700">
+                      {(auditStatementData.trialBalance?.items || []).map((t: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-2.5 text-center font-mono text-gray-400">{idx + 1}</td>
+                          <td className="p-2.5 font-mono font-bold text-gray-700">{t.code}</td>
+                          <td className="p-2.5 font-bold text-gray-900">{t.name}</td>
+                          <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                            {t.debit > 0 ? `रू ${t.debit.toLocaleString()}` : '—'}
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
+                            {t.credit > 0 ? `रू ${t.credit.toLocaleString()}` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-[#1e3a5f] text-white font-black text-sm">
+                        <td colSpan={3} className="p-3 text-right uppercase">
+                          कुल सन्तुलन योगफल (GRAND BALANCING TOTAL):
+                        </td>
+                        <td className="p-3 text-right font-mono text-rose-300">
+                          Dr. रू {(auditStatementData.trialBalance?.totalDebit || 0).toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right font-mono text-emerald-300">
+                          Cr. रू {(auditStatementData.trialBalance?.totalCredit || 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SCHEDULE 8: AUDIT SUMMARY & OFFICIAL 4 SIGNATURES */}
+                <div className="pt-4 border-t-2 border-gray-200 space-y-4">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2">
+                    <h4 className="font-extrabold text-[#1e3a5f] uppercase tracking-wide">
+                      अनुसूची ८: लेखापरीक्षण टिप्पणी तथा प्रमाणीकरण (Auditor Conclusion & Certification):
+                    </h4>
+                    <p className="text-gray-700 leading-relaxed font-nepali">
+                      यस विद्यालयको प्रस्तुत आर्थिक वर्षको आय–व्यय, प्रारम्भिक मौज्दात, खर्च, तलबी भरपाई, बैंक मौज्दात तथा तिर्न बाँकी दायित्व सम्बन्धी हिसाब-किताब प्रचलित कानुन, स्थानीय तह विद्यालय आर्थिक नियमावली तथा दोहोरो लेखा प्रणाली बमोजिम परीक्षण गरियो। परीक्षणबाट प्राप्त विवरण अनुसार आय-व्यय तथा मौज्दात यथार्थ र सन्तुलित पाइएको छ।
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-4 pt-10 text-center text-xs font-bold text-gray-800">
+                    <div className="border-t-2 border-gray-800 pt-2">
+                      <span>तयार गर्ने (लेखापाल)</span>
+                      <span className="block text-[10px] text-gray-500 mt-1">Accountant</span>
+                    </div>
+                    <div className="border-t-2 border-gray-800 pt-2">
+                      <span>जाँच गर्ने (लेखा समिति / आन्तरिक परीक्षक)</span>
+                      <span className="block text-[10px] text-gray-500 mt-1">Internal Auditor</span>
+                    </div>
+                    <div className="border-t-2 border-gray-800 pt-2">
+                      <span>स्वीकृत गर्ने (प्रधानाध्यापक)</span>
+                      <span className="block text-[10px] text-gray-500 mt-1">Principal</span>
+                    </div>
+                    <div className="border-t-2 border-gray-800 pt-2">
+                      <span>प्रमाणित गर्ने (वि.व्य.स. अध्यक्ष)</span>
+                      <span className="block text-[10px] text-gray-500 mt-1">SMC Chairperson</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ────────────────── TAB: ACCOUNTS PAYABLE & VENDOR DUES (तिर्न बाँकी दायित्व लगत) ── */}
+      {activeTab === 'payables_dues' && (
+        <div className="space-y-6">
+          {/* Top Payables Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 no-print">
+            <div className="rounded-2xl border border-purple-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-purple-900">कुल दर्ता बिल रकम</span>
+              <p className="text-2xl font-black text-[#1e3a5f] font-mono mt-1">
+                रू {(auditStatementData?.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">दर्ता भएका कुल आपूर्तिकर्ता बिलहरू</p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-emerald-900">हालसम्म भुक्तान रकम</span>
+              <p className="text-2xl font-black text-emerald-700 font-mono mt-1">
+                रू {(auditStatementData?.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">विभिन्न किस्तामा चुक्ता भएको रकम</p>
+            </div>
+
+            <div className="rounded-2xl border border-rose-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-rose-900">तिर्न बाँकी कुल बक्यौता</span>
+              <p className="text-2xl font-black text-rose-700 font-mono mt-1">
+                रू {(auditStatementData?.payablesSummary?.totalOutstandingVendorDues || 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">बाँकी तिर्नुपर्ने दायित्व</p>
+            </div>
+
+            <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-2xs">
+              <span className="text-xs font-bold uppercase text-blue-900">अघिल्लो वर्षको सरेको दायित्व</span>
+              <p className="text-2xl font-black text-blue-900 font-mono mt-1">
+                रू {(auditStatementData?.openingBalances?.openingPayables || 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Opening Carryforward Payables</p>
+            </div>
+          </div>
+
+          {/* Party Filter Selector */}
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs no-print flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="w-full sm:w-80">
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Filter by Party / Vendor (पार्टी अनुसार हेर्नुहोस्):
+              </label>
+              <select
+                value={payablePartyFilter}
+                onChange={(e) => setPayablePartyFilter(e.target.value)}
+                className="erp-input font-bold"
+              >
+                <option value="ALL">सबै पार्टी तथा विक्रेताहरू (All Parties)</option>
+                {parties.map((p: any) => (
+                  <option key={p.id} value={p.id.toString()}>
+                    {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-purple-900 hover:bg-purple-800 text-white px-4 py-2 text-xs font-bold transition shadow-2xs"
+            >
+              <Printer size={14} />
+              <span>Print Payables Statement (दायित्व लगत प्रिन्ट)</span>
+            </button>
+          </div>
+
+          {/* Payables Register Table */}
+          <div className="rounded-2xl border border-purple-200 bg-white shadow-2xs overflow-hidden">
+            <div className="bg-purple-950 px-4 py-3 text-white flex items-center justify-between">
+              <h3 className="font-extrabold text-sm flex items-center gap-2">
+                <Receipt size={16} className="text-amber-400" />
+                <span>Accounts Payable Register & Remaining Dues (पार्टीगत तिर्न बाँकी लगत)</span>
+              </h3>
+              <span className="text-xs text-purple-200 font-mono">आर्थिक वर्ष: {currentFYName}</span>
+            </div>
+
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-100 text-gray-800 font-extrabold border-b border-gray-200 text-[10.5px]">
+                <tr>
+                  <th className="p-3 w-12 text-center">क्र.सं.</th>
+                  <th className="p-3 w-32">बिल नं. र मिति</th>
+                  <th className="p-3">पार्टी / आपूर्तिकर्ता (Vendor)</th>
+                  <th className="p-3">खर्च शीर्षक (Expense Head)</th>
+                  <th className="p-3 text-right w-36">कुल बिल रकम (रू)</th>
+                  <th className="p-3 text-right w-36">हालसम्म भुक्तान (रू)</th>
+                  <th className="p-3 text-right w-36">तिर्न बाँकी बक्यौता (रू)</th>
+                  <th className="p-3 text-center w-28">स्थिति</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(() => {
+                  const allBills = auditStatementData?.payablesSummary?.allBills || [];
+                  const filteredBills = payablePartyFilter === 'ALL'
+                    ? allBills
+                    : allBills.filter((b: any) => String(b.partyId) === String(payablePartyFilter));
+
+                  if (filteredBills.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={8} className="p-10 text-center text-gray-400 font-nepali">
+                          कुनै तिर्न बाँकी बिल वा दायित्व भेटिएन।
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filteredBills.map((bill: any, idx: number) => (
+                    <tr key={idx} className={bill.remainingDue > 0 ? 'bg-rose-50/20 hover:bg-rose-50/40' : 'hover:bg-slate-50'}>
+                      <td className="p-3 text-center font-mono text-gray-400">{idx + 1}</td>
+                      <td className="p-3">
+                        <strong className="font-mono text-[#1e3a5f] block text-sm">{bill.billNo}</strong>
+                        <span className="text-[10.5px] font-mono text-gray-500 font-bold block">{bill.billDateBs}</span>
+                        {bill.financialYear && (
+                          <span className="inline-block rounded bg-purple-100 text-purple-900 font-bold px-1.5 py-0.5 text-[9px] mt-0.5">
+                            आ.व. {bill.financialYear}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <strong className="text-gray-900 block text-sm">{bill.partyName}</strong>
+                        {bill.panNo && <span className="text-[10px] text-gray-500 font-mono block">PAN: {bill.panNo}</span>}
+                      </td>
+                      <td className="p-3 text-gray-700 font-medium">{bill.headName}</td>
+                      <td className="p-3 text-right font-mono font-bold text-gray-900">
+                        रू {(bill.totalBillAmount || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-700">
+                        रू {(bill.totalPaidAmount || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono font-black text-rose-700 text-sm">
+                        रू {(bill.remainingDue || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${
+                          bill.status === 'FULLY_PAID'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : bill.status === 'PARTIAL'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                        }`}>
+                          {bill.status === 'FULLY_PAID' ? '✓ चुक्ता भएको' : bill.status === 'PARTIAL' ? '⚡ आंशिक किस्ता' : '⏳ बाँकी दायित्व'}
+                        </span>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+              <tfoot className="bg-purple-950 text-white font-extrabold">
+                {(() => {
+                  const allBills = auditStatementData?.payablesSummary?.allBills || [];
+                  const filteredBills = payablePartyFilter === 'ALL'
+                    ? allBills
+                    : allBills.filter((b: any) => String(b.partyId) === String(payablePartyFilter));
+
+                  const totBill = filteredBills.reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0);
+                  const totPaid = filteredBills.reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0);
+                  const totDue = filteredBills.reduce((s: number, b: any) => s + (b.remainingDue || 0), 0);
+
+                  return (
+                    <tr>
+                      <td colSpan={4} className="p-3 text-right uppercase tracking-wider text-xs">
+                        जम्मा कुल दायित्व लगत (Total Payable Balance):
+                      </td>
+                      <td className="p-3 text-right font-mono text-sm">रू {totBill.toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono text-emerald-300 text-sm">रू {totPaid.toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono text-rose-300 text-base">रू {totDue.toLocaleString()}</td>
+                      <td></td>
+                    </tr>
+                  );
+                })()}
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────── TAB 3: TRIAL BALANCE ─────────────────────────── */}
       {activeTab === 'trial_balance' && (
         <div className="space-y-4">
           {/* Summary Cards */}
