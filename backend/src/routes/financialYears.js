@@ -291,24 +291,36 @@ router.get('/:id/opening-balances', authenticate, async (req, res) => {
 router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const fy = await prisma.financialYear.findUnique({ where: { id } });
+    if (!fy) return res.status(404).json({ success: false, message: 'Financial Year not found' });
+
     const {
       openingCashBalance = 0,
       openingBankBalance = 0,
       openingPayables = 0,
       openingReceivables = 0,
       bankBalances = {},
-      vendorDues = {},
+      carryforwardPayablesList = [],
       remarks = '',
     } = req.body;
 
-    const openingDetails = JSON.stringify({ bankBalances, vendorDues });
+    let computedPayables = parseFloat(openingPayables) || 0;
+    if (Array.isArray(carryforwardPayablesList) && carryforwardPayablesList.length > 0) {
+      const sumItems = carryforwardPayablesList.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+      if (sumItems > 0) computedPayables = sumItems;
+    }
+
+    const openingDetails = JSON.stringify({
+      bankBalances,
+      carryforwardPayablesList,
+    });
 
     const updated = await prisma.financialYear.update({
       where: { id },
       data: {
         openingCashBalance: parseFloat(openingCashBalance) || 0,
         openingBankBalance: parseFloat(openingBankBalance) || 0,
-        openingPayables: parseFloat(openingPayables) || 0,
+        openingPayables: computedPayables,
         openingReceivables: parseFloat(openingReceivables) || 0,
         openingDetails,
         remarks,
@@ -328,10 +340,61 @@ router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMI
       }
     }
 
+    // Process carryforward payable items to create/register due bills
+    if (Array.isArray(carryforwardPayablesList) && carryforwardPayablesList.length > 0) {
+      const academicYearId = await resolveAcademicYearForFinance({ financialYearId: id, dateBs: fy.startDateBs });
+      const defaultHead = await prisma.expenseHead.findFirst();
+
+      for (const item of carryforwardPayablesList) {
+        const itemAmt = parseFloat(item.amount) || 0;
+        if (itemAmt <= 0) continue;
+
+        const cleanBillNo = (item.billNo || `OPENING-DUE-${Date.now()}`).trim();
+        const pId = item.partyId ? parseInt(item.partyId) : null;
+        let pName = item.paidTo || 'Vendor';
+        if (pId) {
+          const pObj = await prisma.party.findUnique({ where: { id: pId } });
+          if (pObj) pName = pObj.name;
+        }
+
+        const hId = item.headId ? parseInt(item.headId) : (defaultHead?.id || 1);
+
+        // Check if existing opening bill exists
+        const existing = await prisma.expenseEntry.findFirst({
+          where: {
+            financialYearId: id,
+            billNo: cleanBillNo,
+            ...(pId ? { partyId: pId } : {}),
+          },
+        });
+
+        if (!existing) {
+          await prisma.expenseEntry.create({
+            data: {
+              academicYearId,
+              financialYearId: id,
+              headId: hId,
+              partyId: pId,
+              paidTo: pName,
+              billNo: cleanBillNo,
+              amount: 0,
+              expenseDateBs: fy.startDateBs || '2081-04-01',
+              expenseDateAd: new Date(),
+              paymentMedium: 'UNPAID_BILL',
+              paidFromAccount: 'अघिल्लो आ.व. बाट सरेको दायित्व (Opening Carryforward Payable)',
+              description: `${item.description || 'अघिल्लो आ.व. बाट जिम्मेवारी सरेको तिर्न बाँकी दायित्व'} [Total Bill: Rs. ${itemAmt.toLocaleString()}]`,
+              remarks: `Opening Carryforward Payable (विगत आ.व. को बक्यौता): Rs. ${itemAmt.toLocaleString()}`,
+              approvedBy: 'Principal (प्रधानाध्यापक)',
+            },
+          });
+        }
+      }
+    }
+
     return res.json({
       success: true,
       data: updated,
-      message: `प्रारम्भिक मौज्दात तथा बाँकी हिसाब (Opening Balances) सफलतापूर्वक अद्यावधिक भयो!`,
+      message: `प्रारम्भिक मौज्दात, बैंक हिसाब तथा शीर्षकगत/पार्टीगत तिर्न बाँकी दायित्व सफलतापूर्वक दर्ता भयो!`,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

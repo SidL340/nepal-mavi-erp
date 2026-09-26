@@ -60,6 +60,14 @@ export default function UnifiedFinanceHubPage() {
   const [openingPayables, setOpeningPayables] = useState<string>('0');
   const [openingReceivables, setOpeningReceivables] = useState<string>('0');
   const [openingRemarks, setOpeningRemarks] = useState<string>('');
+  const [openingBankBalancesMap, setOpeningBankBalancesMap] = useState<{ [id: string]: string }>({});
+  const [carryforwardPayablesList, setCarryforwardPayablesList] = useState<Array<{
+    partyId: string;
+    headId: string;
+    billNo: string;
+    amount: string;
+    description: string;
+  }>>([]);
 
   // Form states for Party
   const [partyName, setPartyName] = useState('');
@@ -249,6 +257,14 @@ export default function UnifiedFinanceHubPage() {
     },
   });
 
+  const { data: expenseHeadsData } = useQuery({
+    queryKey: ['expense-heads-all-page'],
+    queryFn: async () => {
+      const res = await api.get('/expense/heads');
+      return res.data?.data || [];
+    },
+  });
+
   const updateOpeningBalancesMutation = useMutation({
     mutationFn: async ({ fyId, data }: { fyId: number; data: any }) => {
       const res = await api.put(`/financial-years/${fyId}/opening-balances`, data);
@@ -260,9 +276,49 @@ export default function UnifiedFinanceHubPage() {
       queryClient.invalidateQueries({ queryKey: ['financial-years-all'] });
       queryClient.invalidateQueries({ queryKey: ['financial-summary'] });
       queryClient.invalidateQueries({ queryKey: ['annual-financial-report'] });
+      queryClient.invalidateQueries({ queryKey: ['payables-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['audit-statement-report'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update opening balances.')
   });
+
+  const populateOpeningModalForFY = (targetFY: any) => {
+    if (!targetFY) return;
+    setOpeningFYId(String(targetFY.id));
+    setOpeningCash(String(targetFY.openingCashBalance ?? 0));
+    setOpeningBank(String(targetFY.openingBankBalance ?? 0));
+    setOpeningPayables(String(targetFY.openingPayables ?? 0));
+    setOpeningReceivables(String(targetFY.openingReceivables ?? 0));
+    setOpeningRemarks(targetFY.remarks || '');
+
+    // Parse opening details
+    let parsed: any = {};
+    if (targetFY.openingDetails) {
+      try {
+        parsed = typeof targetFY.openingDetails === 'string' ? JSON.parse(targetFY.openingDetails) : targetFY.openingDetails;
+      } catch (e) {}
+    }
+
+    if (parsed.bankBalances && Object.keys(parsed.bankBalances).length > 0) {
+      const bMap: any = {};
+      Object.entries(parsed.bankBalances).forEach(([k, v]) => {
+        bMap[k] = String(v ?? 0);
+      });
+      setOpeningBankBalancesMap(bMap);
+    } else {
+      const bMap: any = {};
+      bankAccountsData?.forEach((b: any) => {
+        bMap[b.id] = String(b.openingBalance ?? 0);
+      });
+      setOpeningBankBalancesMap(bMap);
+    }
+
+    if (Array.isArray(parsed.carryforwardPayablesList) && parsed.carryforwardPayablesList.length > 0) {
+      setCarryforwardPayablesList(parsed.carryforwardPayablesList);
+    } else {
+      setCarryforwardPayablesList([]);
+    }
+  };
 
   const handleOpenOpeningBalanceModal = (fy?: any) => {
     const targetFY = fy || (effectiveFYId ? financialYearsData?.find((f: any) => String(f.id) === String(effectiveFYId)) : activeFinancialYear) || financialYearsData?.[0];
@@ -270,25 +326,56 @@ export default function UnifiedFinanceHubPage() {
       toast.error('No financial year available');
       return;
     }
-    setOpeningFYId(String(targetFY.id));
-    setOpeningCash(String(targetFY.openingCashBalance ?? 0));
-    setOpeningBank(String(targetFY.openingBankBalance ?? 0));
-    setOpeningPayables(String(targetFY.openingPayables ?? 0));
-    setOpeningReceivables(String(targetFY.openingReceivables ?? 0));
-    setOpeningRemarks(targetFY.remarks || '');
+    populateOpeningModalForFY(targetFY);
     setIsOpeningBalanceModalOpen(true);
+  };
+
+  const handleAddCarryforwardItem = () => {
+    setCarryforwardPayablesList(prev => [
+      ...prev,
+      {
+        partyId: partiesData?.[0]?.id ? String(partiesData[0].id) : '',
+        headId: expenseHeadsData?.[0]?.id ? String(expenseHeadsData[0].id) : '',
+        billNo: '',
+        amount: '',
+        description: '',
+      }
+    ]);
+  };
+
+  const handleRemoveCarryforwardItem = (index: number) => {
+    setCarryforwardPayablesList(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateCarryforwardItem = (index: number, field: string, value: string) => {
+    setCarryforwardPayablesList(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
   };
 
   const handleSaveOpeningBalances = (e: React.FormEvent) => {
     e.preventDefault();
     if (!openingFYId) return;
+
+    // Calculate total bank balances from map if any bank account present
+    const bankVals = Object.values(openingBankBalancesMap).map(v => parseFloat(v || '0'));
+    const totalBankFromMap = bankVals.length > 0 ? bankVals.reduce((s, v) => s + v, 0) : parseFloat(openingBank || '0');
+
+    // Calculate total carryforward dues from list if present
+    const sumDuesFromList = carryforwardPayablesList.reduce((s, item) => s + (parseFloat(item.amount || '0') || 0), 0);
+    const totalPayablesToSave = carryforwardPayablesList.length > 0 ? sumDuesFromList : parseFloat(openingPayables || '0');
+
     updateOpeningBalancesMutation.mutate({
       fyId: parseInt(openingFYId),
       data: {
         openingCashBalance: parseFloat(openingCash || '0'),
-        openingBankBalance: parseFloat(openingBank || '0'),
-        openingPayables: parseFloat(openingPayables || '0'),
+        openingBankBalance: totalBankFromMap,
+        openingPayables: totalPayablesToSave,
         openingReceivables: parseFloat(openingReceivables || '0'),
+        bankBalances: openingBankBalancesMap,
+        carryforwardPayablesList,
         remarks: openingRemarks || null,
       },
     });
@@ -2240,26 +2327,27 @@ export default function UnifiedFinanceHubPage() {
       {/* ─── OPENING BALANCES MODAL (प्रारम्भिक मौज्दात तथा अघिल्लो वर्षको बाँकी हिसाब) ─── */}
       {isOpeningBalanceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <h2 className="text-base font-extrabold text-[#1e3a5f] flex items-center gap-2">
                   <Wallet size={18} className="text-amber-500" />
-                  <span>Opening Balances & Carryforward Setup (प्रारम्भिक मौज्दात)</span>
+                  <span>Opening Balances & Carryforward Setup (प्रारम्भिक मौज्दात तथा अघिल्लो वर्षको बाँकी दायित्व)</span>
                 </h2>
                 <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
-                  आर्थिक वर्षको सुरुको नगद, बैंक मौज्दात तथा अघिल्लो आ.व. बाट जिम्मेवारी सरेको तिर्न बाँकी दायित्व प्रविष्टि
+                  आर्थिक वर्षको सुरुको नगद, बैंक खाता अनुसारको मौज्दात तथा अघिल्लो आ.व. बाट जिम्मेवारी सरेको शीर्षकगत र पार्टीगत दायित्व
                 </p>
               </div>
               <button
                 onClick={() => setIsOpeningBalanceModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
               >
                 <X size={18} />
               </button>
             </div>
 
             <form onSubmit={handleSaveOpeningBalances} className="space-y-4 text-xs">
+              {/* Financial Year Selection */}
               <div>
                 <label className="block font-extrabold text-gray-800 mb-1">
                   आर्थिक वर्ष (Financial Year) *
@@ -2268,14 +2356,11 @@ export default function UnifiedFinanceHubPage() {
                   value={openingFYId}
                   onChange={(e) => {
                     const selId = e.target.value;
-                    setOpeningFYId(selId);
                     const fy = financialYearsData?.find((f: any) => String(f.id) === selId);
                     if (fy) {
-                      setOpeningCash(String(fy.openingCashBalance ?? 0));
-                      setOpeningBank(String(fy.openingBankBalance ?? 0));
-                      setOpeningPayables(String(fy.openingPayables ?? 0));
-                      setOpeningReceivables(String(fy.openingReceivables ?? 0));
-                      setOpeningRemarks(fy.remarks || '');
+                      populateOpeningModalForFY(fy);
+                    } else {
+                      setOpeningFYId(selId);
                     }
                   }}
                   className="erp-input font-bold text-[#1e3a5f]"
@@ -2289,19 +2374,24 @@ export default function UnifiedFinanceHubPage() {
                 </select>
               </div>
 
-              {/* Liquid Funds Group */}
+              {/* Section 1: Liquid Funds Group */}
               <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-3">
                 <div className="flex items-center justify-between font-extrabold text-emerald-950 text-xs">
                   <span>१. प्रारम्भिक तरल कोष (Opening Liquid Funds)</span>
-                  <span className="font-mono text-emerald-800">
-                    रू {((parseFloat(openingCash || '0') + parseFloat(openingBank || '0')) || 0).toLocaleString()}
+                  <span className="font-mono text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-md text-[11px]">
+                    कुल तरल मौज्दात: रू {(() => {
+                      const c = parseFloat(openingCash || '0') || 0;
+                      const bVals = Object.values(openingBankBalancesMap).map(v => parseFloat(v || '0') || 0);
+                      const bTotal = bVals.length > 0 ? bVals.reduce((s, v) => s + v, 0) : (parseFloat(openingBank || '0') || 0);
+                      return (c + bTotal).toLocaleString();
+                    })()}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-gray-700 mb-1">
-                      सुरुको नगद मौज्दात (Opening Cash) रू
+                      सुरुको नगद मौज्दात (Opening Cash on Hand) रू
                     </label>
                     <input
                       type="number"
@@ -2313,48 +2403,240 @@ export default function UnifiedFinanceHubPage() {
                       className="erp-input font-mono font-bold"
                       required
                     />
+                    <p className="text-[10px] text-gray-500 mt-0.5">विद्यालयको ढुकुटी/सेफमा रहेको प्रारम्भिक नगद मौज्दात</p>
                   </div>
+
                   <div>
                     <label className="block font-bold text-gray-700 mb-1">
-                      सुरुको बैंक मौज्दात (Opening Bank) रू
+                      सुरुको कुल बैंक मौज्दात (Opening Bank Balance) रू
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={openingBank}
-                      onChange={(e) => setOpeningBank(e.target.value)}
+                      value={(() => {
+                        const bVals = Object.values(openingBankBalancesMap).map(v => parseFloat(v || '0') || 0);
+                        return bVals.length > 0 ? bVals.reduce((s, v) => s + v, 0) : (openingBank || '0');
+                      })()}
+                      onChange={(e) => {
+                        setOpeningBank(e.target.value);
+                      }}
                       placeholder="0.00"
-                      className="erp-input font-mono font-bold"
-                      required
+                      className="erp-input font-mono font-bold bg-gray-50"
+                      readOnly={bankAccountsData && bankAccountsData.length > 0}
                     />
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {bankAccountsData && bankAccountsData.length > 0
+                        ? 'तल दर्ता भएका बैंक खाताहरूको मौज्दातबाट स्वतः जोडिनेछ'
+                        : 'बैंक खाता दर्ता नभएको अवस्थामा सिधै रकम प्रविष्ट गर्नुहोस्'}
+                    </p>
                   </div>
                 </div>
+
+                {/* Per Bank Account Breakdown */}
+                {bankAccountsData && bankAccountsData.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-emerald-200/60 space-y-2">
+                    <div className="text-[11px] font-bold text-emerald-900">
+                      बैंक खाता अनुसारको सुरु मौज्दात (Per-Account Opening Balance):
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {bankAccountsData.map((b: any) => (
+                        <div key={b.id} className="flex items-center justify-between gap-2 p-2 bg-white rounded-lg border border-emerald-100 shadow-2xs">
+                          <div className="min-w-0">
+                            <div className="font-bold text-gray-800 text-[11px] truncate">
+                              {b.bankName} {b.accountName ? `(${b.accountName})` : ''}
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-mono">
+                              खाता नं: {b.accountNo} {b.branch ? `• ${b.branch}` : ''}
+                            </div>
+                          </div>
+                          <div className="w-28 shrink-0">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={openingBankBalancesMap[b.id] ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setOpeningBankBalancesMap(prev => ({
+                                  ...prev,
+                                  [b.id]: val
+                                }));
+                              }}
+                              placeholder="0.00"
+                              className="erp-input text-right font-mono font-bold py-1 px-2 text-[11px]"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Liabilities & Receivables Group */}
+              {/* Section 2: Topic & Party-wise Carryforward Liabilities */}
               <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3.5 space-y-3">
-                <div className="font-extrabold text-rose-950 text-xs">
-                  २. अघिल्लो वर्षबाट सरेका दायित्व तथा असुली (Past Carryforward Accounts)
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="font-extrabold text-rose-950 text-xs">
+                      २. अघिल्लो आ.व. बाट जिम्मेवारी सरेको शीर्षकगत तथा पार्टीगत तिर्न बाँकी दायित्व (Opening Carryforward Payables / Dues)
+                    </div>
+                    <p className="text-[10px] text-rose-700 mt-0.5">
+                      कुन खर्च शीर्षकमा, कुन पार्टी/विक्रेतालाई, कुन बिल नं. को कति तिर्न बाँकी छ प्रविष्टि गर्नुहोस्। यी दायित्वहरू नयाँ आ.व. को खर्च तथा दायित्व लगतमा स्वतः दर्ज हुनेछन्।
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="font-mono font-black text-rose-800 bg-rose-100/90 px-2.5 py-1 rounded-md text-[11px]">
+                      कुल बाँकी दायित्व: रू {(() => {
+                        const sum = carryforwardPayablesList.reduce((s, it) => s + (parseFloat(it.amount || '0') || 0), 0);
+                        return (carryforwardPayablesList.length > 0 ? sum : (parseFloat(openingPayables || '0') || 0)).toLocaleString();
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Carryforward Payables Table / Repeater */}
+                {carryforwardPayablesList.length > 0 ? (
+                  <div className="space-y-2 overflow-x-auto">
+                    <table className="w-full text-[11px] text-left border-collapse">
+                      <thead>
+                        <tr className="bg-rose-100/80 text-rose-950 font-bold border-b border-rose-200">
+                          <th className="p-1.5 rounded-l-lg">पार्टी / आपूर्तिकर्ता (Party / Vendor)</th>
+                          <th className="p-1.5">खर्च शीर्षक (Topic / Head)</th>
+                          <th className="p-1.5 w-24">बिल/सन्दर्भ नं.</th>
+                          <th className="p-1.5 w-28 text-right">बाँकी रकम (रू)</th>
+                          <th className="p-1.5">कैफियत / विवरण</th>
+                          <th className="p-1.5 w-8 rounded-r-lg text-center">हटाउने</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-rose-100 bg-white">
+                        {carryforwardPayablesList.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-rose-50/50">
+                            <td className="p-1.5">
+                              <select
+                                value={item.partyId}
+                                onChange={(e) => handleUpdateCarryforwardItem(idx, 'partyId', e.target.value)}
+                                className="erp-input py-1 px-1.5 text-[11px] font-bold text-gray-800"
+                              >
+                                <option value="">-- पार्टी चयन गर्नुहोस् --</option>
+                                {partiesData?.map((p: any) => (
+                                  <option key={p.id} value={String(p.id)}>
+                                    {p.nameNepali ? `${p.nameNepali} (${p.name})` : p.name} {p.panNo ? `[PAN: ${p.panNo}]` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="p-1.5">
+                              <select
+                                value={item.headId}
+                                onChange={(e) => handleUpdateCarryforwardItem(idx, 'headId', e.target.value)}
+                                className="erp-input py-1 px-1.5 text-[11px] font-bold text-gray-800"
+                              >
+                                <option value="">-- खर्च शीर्षक चयन गर्नुहोस् --</option>
+                                {expenseHeadsData?.map((h: any) => (
+                                  <option key={h.id} value={String(h.id)}>
+                                    {h.code ? `[${h.code}] ` : ''}{h.nameNepali || h.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="p-1.5">
+                              <input
+                                type="text"
+                                value={item.billNo}
+                                onChange={(e) => handleUpdateCarryforwardItem(idx, 'billNo', e.target.value)}
+                                placeholder="उदा: Bill-104"
+                                className="erp-input py-1 px-1.5 text-[11px]"
+                              />
+                            </td>
+                            <td className="p-1.5">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={item.amount}
+                                onChange={(e) => handleUpdateCarryforwardItem(idx, 'amount', e.target.value)}
+                                placeholder="0.00"
+                                className="erp-input py-1 px-1.5 text-[11px] text-right font-mono font-bold text-rose-700"
+                                required
+                              />
+                            </td>
+                            <td className="p-1.5">
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(e) => handleUpdateCarryforwardItem(idx, 'description', e.target.value)}
+                                placeholder="विवरण..."
+                                className="erp-input py-1 px-1.5 text-[11px]"
+                              />
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCarryforwardItem(idx)}
+                                className="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-100 rounded"
+                                title="यो लाइन हटाउनुहोस्"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="bg-white/80 rounded-xl p-3 border border-dashed border-rose-300 text-center space-y-2">
+                    <p className="text-gray-500 text-[11px]">
+                      अघिल्लो आ.व. बाट सरेको पार्टीगत तथा शीर्षकगत तिर्न बाँकी दायित्व प्रविष्टि गरिएको छैन।
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleAddCarryforwardItem}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-bold text-xs shadow-2xs transition"
+                      >
+                        <Plus size={13} />
+                        <span>+ शीर्षक तथा पार्टीगत दायित्व थप्नुहोस् (Add Due Item)</span>
+                      </button>
+                      <span className="text-gray-400 text-xs">वा एकमुष्ट दायित्व:</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={openingPayables}
+                        onChange={(e) => setOpeningPayables(e.target.value)}
+                        placeholder="एकमुष्ट रू 0.00"
+                        className="erp-input w-36 font-mono font-bold text-rose-800 py-1 text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {carryforwardPayablesList.length > 0 && (
+                  <div className="flex justify-between items-center pt-1">
+                    <button
+                      type="button"
+                      onClick={handleAddCarryforwardItem}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 hover:text-rose-950 bg-rose-100 hover:bg-rose-200 px-2.5 py-1 rounded-lg transition"
+                    >
+                      <Plus size={12} />
+                      <span>+ थप पार्टी/शीर्षकको बाँकी दायित्व थप्नुहोस्</span>
+                    </button>
+                    <span className="text-[10px] text-gray-500">
+                      कुल {carryforwardPayablesList.length} वटा दायित्व प्रविष्टि
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Opening Receivables & Remarks */}
+              <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 space-y-3">
+                <div className="font-extrabold text-blue-950 text-xs">
+                  ३. अघिल्लो वर्षबाट उठ्न बाँकी आम्दानी / अनुदान (Opening Receivables)
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-rose-900 mb-1">
-                      तिर्न बाँकी दायित्व (Opening Payables / Dues) रू
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={openingPayables}
-                      onChange={(e) => setOpeningPayables(e.target.value)}
-                      placeholder="0.00"
-                      className="erp-input font-mono font-bold text-rose-800 border-rose-300"
-                    />
-                    <p className="text-[10px] text-gray-500 mt-0.5">अघिल्लो आ.व. को तिर्न बाँकी बिल/पार्टी दायित्व</p>
-                  </div>
-
                   <div>
                     <label className="block font-bold text-blue-900 mb-1">
                       उठ्न बाँकी रकम (Opening Receivables) रू
@@ -2368,22 +2650,27 @@ export default function UnifiedFinanceHubPage() {
                       placeholder="0.00"
                       className="erp-input font-mono font-bold text-blue-800 border-blue-300"
                     />
-                    <p className="text-[10px] text-gray-500 mt-0.5">अघिल्लो आ.व. बाट प्राप्त हुन बाँकी अनुदान/शुल्क</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      अघिल्लो आ.व. बाट प्राप्त हुन बाँकी सरकारी अनुदान, छात्रवृत्ति वा अन्य शुल्क
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      कैफियत / टिप्पणी (Remarks / Audit Reference)
+                    </label>
+                    <input
+                      type="text"
+                      value={openingRemarks}
+                      onChange={(e) => setOpeningRemarks(e.target.value)}
+                      placeholder="उदा: आ.व. २०८२/८३ को अन्तिम लेखापरीक्षण प्रतिवेदन अनुसार..."
+                      className="erp-input"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      लेखापरीक्षण वा विद्यालय व्यवस्थापन समिति निर्णय सन्दर्भ
+                    </p>
                   </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  कैफियत / टिप्पणी (Remarks / Narration)
-                </label>
-                <input
-                  type="text"
-                  value={openingRemarks}
-                  onChange={(e) => setOpeningRemarks(e.target.value)}
-                  placeholder="उदा: आ.व. २०८२/८३ को अन्तिम अडिटबाट सरेको मौज्दात..."
-                  className="erp-input"
-                />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
@@ -2397,9 +2684,12 @@ export default function UnifiedFinanceHubPage() {
                 <button
                   type="submit"
                   disabled={updateOpeningBalancesMutation.isPending}
-                  className="rounded-xl bg-[#1e3a5f] text-white px-5 py-2 text-xs font-black shadow-xs hover:bg-[#2a5280] transition disabled:opacity-50"
+                  className="rounded-xl bg-[#1e3a5f] text-white px-5 py-2 text-xs font-black shadow-xs hover:bg-[#2a5280] transition disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {updateOpeningBalancesMutation.isPending ? 'सुरक्षित गर्दै...' : 'सुरक्षित गर्नुहोस् (Save Opening Balances)'}
+                  <Wallet size={14} />
+                  <span>
+                    {updateOpeningBalancesMutation.isPending ? 'सुरक्षित गर्दै...' : 'सुरक्षित गर्नुहोस् (Save Opening Balances)'}
+                  </span>
                 </button>
               </div>
             </form>
