@@ -492,6 +492,38 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
       return false;
     }
 
+    function getForbiddenClasses(matrix, r, c, spb, numRows) {
+      const forbidden = new Set();
+      
+      // 1. Horizontal neighbors on same bench (Left and Right)
+      if (c > 0 && matrix[r][c - 1]) {
+        forbidden.add(matrix[r][c - 1].classId);
+      }
+      if (c < spb - 1 && matrix[r][c + 1]) {
+        forbidden.add(matrix[r][c + 1].classId);
+      }
+
+      // 2. Diagonals:
+      // Top-Left Diagonal
+      if (r > 0 && c > 0 && matrix[r - 1][c - 1]) {
+        forbidden.add(matrix[r - 1][c - 1].classId);
+      }
+      // Top-Right Diagonal
+      if (r > 0 && c < spb - 1 && matrix[r - 1][c + 1]) {
+        forbidden.add(matrix[r - 1][c + 1].classId);
+      }
+      // Bottom-Left Diagonal (if already filled)
+      if (r < numRows - 1 && c > 0 && matrix[r + 1][c - 1]) {
+        forbidden.add(matrix[r + 1][c - 1].classId);
+      }
+      // Bottom-Right Diagonal (if already filled)
+      if (r < numRows - 1 && c < spb - 1 && matrix[r + 1][c + 1]) {
+        forbidden.add(matrix[r + 1][c + 1].classId);
+      }
+
+      return Array.from(forbidden);
+    }
+
     const newSeatPlans = [];
     let lastAssignedClassIdAcrossRooms = null;
 
@@ -538,37 +570,70 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
         for (let posIdx = 0; posIdx < spb; posIdx++) {
           if (!hasRemainingStudents()) break;
 
-          // Determine avoid classes for this vertical seat track
-          const avoidClasses = [];
-          if (posIdx > 0 && colMatrix[0][posIdx - 1]) {
-            avoidClasses.push(colMatrix[0][posIdx - 1].classId);
-          } else if (posIdx === 0 && lastAssignedClassIdAcrossRooms && studentsByClass.length > 1) {
-            avoidClasses.push(lastAssignedClassIdAcrossRooms);
-          }
-
           // Fill this vertical track from Row 0 to Row numRows-1 (Front to Back in sequential roll order)
           for (let rIdx = 0; rIdx < numRows; rIdx++) {
             if (!hasRemainingStudents()) break;
 
+            const forbidden = getForbiddenClasses(colMatrix, rIdx, posIdx, spb, numRows);
+            if (posIdx === 0 && rIdx === 0 && lastAssignedClassIdAcrossRooms && studentsByClass.length > 1) {
+              if (!forbidden.includes(lastAssignedClassIdAcrossRooms)) {
+                forbidden.push(lastAssignedClassIdAcrossRooms);
+              }
+            }
+
             let student = null;
             const preferredClassId = rIdx > 0 && colMatrix[rIdx - 1][posIdx] ? colMatrix[rIdx - 1][posIdx].classId : null;
 
-            // If same class has more students, continue the track with next roll number!
-            if (preferredClassId) {
+            // If same class has more students AND is not forbidden by diagonal/horizontal neighbors, continue the track with next roll number!
+            if (preferredClassId && !forbidden.includes(preferredClassId)) {
               student = getStudentFromClass(preferredClassId);
             }
 
-            // If preferred class queue is empty or starting a new track, pick next class avoiding left neighbor
+            // If preferred class cannot be used or has no more students, pick next class strictly avoiding all forbidden (diagonal & horizontal) neighbors
             if (!student) {
-              const leftNeighborClass = posIdx > 0 && colMatrix[rIdx][posIdx - 1] ? colMatrix[rIdx][posIdx - 1].classId : null;
-              const trackAvoid = leftNeighborClass ? [leftNeighborClass] : avoidClasses;
-              student = getNextStudentAvoiding(trackAvoid);
+              student = getNextStudentAvoiding(forbidden);
             }
 
             if (!student) break;
 
             colMatrix[rIdx][posIdx] = student;
             lastAssignedClassIdAcrossRooms = student.classId;
+          }
+        }
+
+        // Post-allocation conflict resolution solver: Ensure 0 diagonal and 0 horizontal collisions
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < spb; c++) {
+            const student = colMatrix[r][c];
+            if (!student) continue;
+
+            const forbidden = getForbiddenClasses(colMatrix, r, c, spb, numRows);
+            if (forbidden.includes(student.classId)) {
+              // Conflict detected! Find another cell (r2, c2) in this column to swap with
+              let swapped = false;
+              for (let r2 = 0; r2 < numRows && !swapped; r2++) {
+                for (let c2 = 0; c2 < spb && !swapped; c2++) {
+                  if (r === r2 && c === c2) continue;
+                  const candidate = colMatrix[r2][c2];
+                  if (!candidate || candidate.classId === student.classId) continue;
+
+                  // Temporarily swap
+                  colMatrix[r][c] = candidate;
+                  colMatrix[r2][c2] = student;
+
+                  const forbiddenAfterAtRC = getForbiddenClasses(colMatrix, r, c, spb, numRows);
+                  const forbiddenAfterAtR2C2 = getForbiddenClasses(colMatrix, r2, c2, spb, numRows);
+
+                  if (!forbiddenAfterAtRC.includes(candidate.classId) && !forbiddenAfterAtR2C2.includes(student.classId)) {
+                    swapped = true;
+                  } else {
+                    // Revert swap
+                    colMatrix[r][c] = student;
+                    colMatrix[r2][c2] = candidate;
+                  }
+                }
+              }
+            }
           }
         }
 
