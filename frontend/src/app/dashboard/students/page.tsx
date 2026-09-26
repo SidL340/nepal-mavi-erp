@@ -356,9 +356,10 @@ export default function StudentsPage() {
     },
     onSuccess: (data) => {
       const { created, upgradedOrEnrolled, updated, transferred, skipped, academicYear, errors } = data.results || {};
+      const totalSuccess = (created || 0) + (upgradedOrEnrolled || 0) + (updated || 0) + (transferred || 0);
       toast.success(
-        `आयात सफल! सत्र: ${academicYear || ''} | नयाँ: ${created || 0} | स्तरोन्नति/कक्षा इतिहास: ${upgradedOrEnrolled || updated || 0} | सरुवा अभिलेख: ${transferred || 0}`,
-        { duration: 7000 }
+        `आयात सफल! सत्र: ${academicYear || ''} (जम्मा ${totalSuccess}) | नयाँ: ${created || 0} | कक्षा इतिहास/अद्यावधिक: ${(upgradedOrEnrolled || 0) + (updated || 0)} | सरुवा अभिलेख: ${transferred || 0}`,
+        { duration: 8000 }
       );
       if (errors?.length > 0) {
         toast.error(`${errors.length} पंक्तिका विवरण आयात हुन सकेन।`);
@@ -847,72 +848,99 @@ export default function StudentsPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-gray-700">
-                  <thead className="bg-[#1e3a5f] text-white">
-                    <tr>
-                      <th className="px-3 py-3.5 font-bold uppercase text-center w-14">Roll</th>
-                      <th className="px-4 py-3.5 font-bold uppercase">Student Details</th>
-                      <th className="px-4 py-3.5 font-bold uppercase">IEMIS ID</th>
-                      <th className="px-4 py-3.5 font-bold uppercase">Class & Sec</th>
-                      <th className="px-4 py-3.5 font-bold uppercase">Parent / Contact</th>
-                      <th className="px-4 py-3.5 font-bold uppercase text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={6} className="py-12 text-center text-gray-400">
-                          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
-                          <p className="mt-2 text-xs">विद्यार्थी विवरण खोज्दै...</p>
-                        </td>
-                      </tr>
-                    ) : students.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-12 text-center text-gray-400">
-                          <Users size={32} className="mx-auto text-gray-300 mb-2" />
-                          <p className="text-sm font-semibold text-gray-600">छनोट गरिएको फिल्टर अनुसार कुनै विद्यार्थी फेला परेन</p>
-                          <p className="text-xs text-gray-400">कृपया अन्य कक्षा, सत्र वा खोज शब्द प्रयोग गर्नुहोस्।</p>
-                        </td>
-                      </tr>
-                    ) : (
-                      students.map((student: any) => {
-                        const enrollment = student.classEnrollment?.[0];
-                        return (
-                          <tr key={student.id} className="hover:bg-blue-50/40 transition">
-                            <td className="px-3 py-3 text-center">
-                              {enrollment?.rollNo ? (
-                                <span className="inline-flex min-w-[24px] h-6 px-1.5 items-center justify-center rounded-lg bg-indigo-50 font-bold text-[11px] text-indigo-700 border border-indigo-100 shadow-2xs">
-                                  {enrollment.rollNo}
-                                </span>
-                              ) : (
-                                <span className="text-gray-300 font-mono">—</span>
-                              )}
-                            </td>
+            <div className="space-y-3">
+              {/* Past Academic Year Notification Alert */}
+              {selectedYear && selectedYear !== 'all' && academicYearsData?.find((y: any) => String(y.id) === String(selectedYear) && !y.isActive) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-3.5 flex items-center justify-between text-xs text-amber-900 shadow-2xs">
+                  <div className="flex items-center gap-2.5 font-medium">
+                    <span className="p-1.5 rounded-lg bg-amber-200 text-amber-900 font-bold text-xs">📂 विगत सत्र</span>
+                    <span>
+                      तपाईं <strong>शैक्षिक सत्र {academicYearsData?.find((y: any) => String(y.id) === String(selectedYear))?.year}</strong> को विद्यार्थी ऐतिहासिक अभिलेख हेर्दै हुनुहुन्छ। यस सत्रका सम्पूर्ण विद्यार्थी तथा सरुवा भइसकेका विद्यार्थीहरूलाई स्पष्ट ब्याज सहित देखाइएको छ।
+                    </span>
+                  </div>
+                </div>
+              )}
 
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-800 font-bold text-xs">
-                                  {student.fullName.slice(0, 2).toUpperCase()}
-                                </div>
-                                <div>
-                                  <p className="font-bold text-gray-900">{student.fullName}</p>
-                                  {student.fullNameNepali && (
-                                    <p className="text-[10px] text-gray-500 font-nepali">{student.fullNameNepali}</p>
-                                  )}
-                                  <span className="text-[10px] text-gray-400">
-                                    DOB: {student.dateOfBirthBs || 'N/A'} ({student.gender || 'N/A'})
+              <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-gray-700">
+                    <thead className="bg-[#1e3a5f] text-white">
+                      <tr>
+                        <th className="px-3 py-3.5 font-bold uppercase text-center w-14">Roll</th>
+                        <th className="px-4 py-3.5 font-bold uppercase">Student Details</th>
+                        <th className="px-4 py-3.5 font-bold uppercase">IEMIS ID</th>
+                        <th className="px-4 py-3.5 font-bold uppercase">Class & Sec</th>
+                        <th className="px-4 py-3.5 font-bold uppercase">Parent / Contact</th>
+                        <th className="px-4 py-3.5 font-bold uppercase text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-gray-400">
+                            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
+                            <p className="mt-2 text-xs">विद्यार्थी विवरण खोज्दै...</p>
+                          </td>
+                        </tr>
+                      ) : students.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-gray-400">
+                            <Users size={32} className="mx-auto text-gray-300 mb-2" />
+                            <p className="text-sm font-semibold text-gray-600">छनोट गरिएको फिल्टर अनुसार कुनै विद्यार्थी फेला परेन</p>
+                            <p className="text-xs text-gray-400">कृपया अन्य कक्षा, सत्र वा खोज शब्द प्रयोग गर्नुहोस्।</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        students.map((student: any) => {
+                          const enrollment = student.classEnrollment?.[0];
+                          const isTransferred = student.status === 'TRANSFERRED' || !student.isActive;
+                          return (
+                            <tr key={student.id} className="hover:bg-blue-50/40 transition">
+                              <td className="px-3 py-3 text-center">
+                                {enrollment?.rollNo ? (
+                                  <span className="inline-flex min-w-[24px] h-6 px-1.5 items-center justify-center rounded-lg bg-indigo-50 font-bold text-[11px] text-indigo-700 border border-indigo-100 shadow-2xs">
+                                    {enrollment.rollNo}
                                   </span>
-                                </div>
-                              </div>
-                            </td>
+                                ) : (
+                                  <span className="text-gray-300 font-mono">—</span>
+                                )}
+                              </td>
 
-                            <td className="px-4 py-3">
-                              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-800">
-                                {student.studentId}
-                              </span>
-                            </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${
+                                    isTransferred ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {student.fullName.slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-bold text-gray-900">{student.fullName}</p>
+                                      {isTransferred ? (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                          सरुवा (Transferred)
+                                        </span>
+                                      ) : student.status === 'GRADUATED' ? (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                          उत्तीर्ण (Graduated)
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    {student.fullNameNepali && (
+                                      <p className="text-[10px] text-gray-500 font-nepali">{student.fullNameNepali}</p>
+                                    )}
+                                    <span className="text-[10px] text-gray-400">
+                                      DOB: {student.dateOfBirthBs || 'N/A'} ({student.gender || 'N/A'})
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-slate-800">
+                                  {student.studentId}
+                                </span>
+                              </td>
 
                           <td className="px-4 py-3">
                             {enrollment?.class ? (
@@ -996,9 +1024,10 @@ export default function StudentsPage() {
               <span className="text-[11px] text-gray-400 font-medium">Nepal Secondary School ERP Record</span>
             </div>
           </div>
-          )}
         </div>
       )}
+    </div>
+  )}
 
       {/* ════════════════════ TAB 2: ADMISSION PORTAL ════════════════════ */}
       {activeTab === 'admission' && (

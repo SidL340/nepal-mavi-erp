@@ -15,10 +15,25 @@ function generatePassword(length = 8) {
 }
 
 // GET /api/students — list all with filters
+// GET /api/students — list all with filters
 router.get('/', authenticate, async (req, res) => {
   try {
     const { academicYearId, classId, className, section, search, page, limit } = req.query;
-    const where = { isActive: true };
+
+    const activeAy = await prisma.academicYear.findFirst({ where: { isActive: true } });
+    const selectedAyId = academicYearId && academicYearId !== 'all' ? parseInt(academicYearId) : null;
+    const isViewingActiveYear = !selectedAyId || (activeAy && selectedAyId === activeAy.id);
+
+    const where = {};
+
+    if (isViewingActiveYear) {
+      // For active/current academic year: ONLY show students who are ACTIVE and NOT TRANSFERRED
+      where.isActive = true;
+      where.status = { not: 'TRANSFERRED' };
+    } else {
+      // For past academic year: show all students enrolled in that past year (even if transferred later)
+    }
+
     if (search && search.trim()) {
       const q = search.trim();
       where.OR = [
@@ -34,10 +49,13 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     const enrollmentFilter = {};
-    if (academicYearId) {
-      enrollmentFilter.class = { academicYearId: parseInt(academicYearId) };
+    if (selectedAyId) {
+      enrollmentFilter.class = { academicYearId: selectedAyId };
+    } else if (activeAy) {
+      enrollmentFilter.class = { academicYearId: activeAy.id };
     }
-    if (classId) {
+
+    if (classId && classId !== 'all') {
       enrollmentFilter.classId = parseInt(classId);
     }
     if (className) {
@@ -56,9 +74,9 @@ router.get('/', authenticate, async (req, res) => {
     const parsedPage = page ? parseInt(page) : 1;
     const skip = isAll ? 0 : (parsedPage - 1) * parsedLimit;
 
-    const enrollmentIncludeWhere = academicYearId
-      ? { class: { academicYearId: parseInt(academicYearId) } }
-      : { isActive: true };
+    const enrollmentIncludeWhere = selectedAyId
+      ? { class: { academicYearId: selectedAyId } }
+      : (activeAy ? { class: { academicYearId: activeAy.id } } : { isActive: true });
 
     const [students, total] = await Promise.all([
       prisma.student.findMany({
