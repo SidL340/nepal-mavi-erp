@@ -256,43 +256,44 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
     const newSeatPlans = [];
 
     for (const room of rooms) {
-      const spb = room.seatsPerBench || 2;
+      const spb = Math.max(1, parseInt(room.seatsPerBench) || 2);
       for (let bench = 1; bench <= room.totalBenches; bench++) {
         let prevBenchClassId = null;
 
-        // Position 1: LEFT
-        const sLeft = getNextStudent(prevBenchClassId);
-        if (sLeft) {
-          prevBenchClassId = sLeft.classId;
+        for (let posIdx = 1; posIdx <= spb; posIdx++) {
+          const student = getNextStudent(prevBenchClassId);
+          if (!student) break;
+
+          prevBenchClassId = student.classId;
+
+          let positionLabel = `SEAT-${posIdx}`;
+          let posCode = `P${posIdx}`;
+
+          if (spb === 1) {
+            positionLabel = 'SINGLE';
+            posCode = 'S';
+          } else if (spb === 2) {
+            positionLabel = posIdx === 1 ? 'LEFT' : 'RIGHT';
+            posCode = posIdx === 1 ? 'L' : 'R';
+          } else if (spb === 3) {
+            positionLabel = posIdx === 1 ? 'LEFT' : posIdx === 2 ? 'MIDDLE' : 'RIGHT';
+            posCode = posIdx === 1 ? 'L' : posIdx === 2 ? 'M' : 'R';
+          } else {
+            positionLabel = posIdx === 1 ? 'LEFT' : posIdx === spb ? 'RIGHT' : `MID-${posIdx - 1}`;
+            posCode = `S${posIdx}`;
+          }
+
           newSeatPlans.push({
             examId: exId,
             shift: shiftName,
             roomId: room.id,
             benchNo: bench,
-            seatPosition: 'LEFT',
-            studentId: sLeft.studentId,
-            classId: sLeft.classId,
-            rollNo: sLeft.rollNo,
-            seatNo: `${room.roomNo}-B${bench}-L`,
+            seatPosition: positionLabel,
+            studentId: student.studentId,
+            classId: student.classId,
+            rollNo: student.rollNo,
+            seatNo: `${room.roomNo}-B${bench}-${posCode}`,
           });
-        }
-
-        // Position 2: RIGHT (anti-cheat: avoid same class as sLeft)
-        if (spb >= 2) {
-          const sRight = getNextStudent(prevBenchClassId);
-          if (sRight) {
-            newSeatPlans.push({
-              examId: exId,
-              shift: shiftName,
-              roomId: room.id,
-              benchNo: bench,
-              seatPosition: 'RIGHT',
-              studentId: sRight.studentId,
-              classId: sRight.classId,
-              rollNo: sRight.rollNo,
-              seatNo: `${room.roomNo}-B${bench}-R`,
-            });
-          }
         }
       }
     }

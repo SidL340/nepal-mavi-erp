@@ -1130,8 +1130,6 @@ export default function ExamSeatPlanningPage() {
                       <div className="space-y-2.5">
                         {leftBenchKeys.map((bNo) => {
                           const bSeats = benches[bNo] || [];
-                          const leftSeat = bSeats.find((s: any) => s.seatPosition === 'LEFT');
-                          const rightSeat = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
 
                           return (
                             <div
@@ -1147,66 +1145,43 @@ export default function ExamSeatPlanningPage() {
                                 </span>
                               </div>
 
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                {/* Left Seat */}
-                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9.5px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
-                                      LEFT
-                                    </span>
-                                    {leftSeat?.rollNo && (
-                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
-                                        Roll: {leftSeat.rollNo}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {leftSeat ? (
-                                    <>
+                              {/* Dynamic Seats on this bench */}
+                              <div className={`grid ${bSeats.length <= 1 ? 'grid-cols-1' : bSeats.length === 2 ? 'grid-cols-2' : bSeats.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'} gap-2 text-xs`}>
+                                {bSeats.length > 0 ? (
+                                  bSeats.map((seat: any, sIdx: number) => (
+                                    <div key={sIdx} className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
+                                          seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100' :
+                                          seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100' :
+                                          seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100' :
+                                          'text-amber-700 bg-amber-100'
+                                        }`}>
+                                          {seat.seatPosition}
+                                        </span>
+                                        {seat?.rollNo && (
+                                          <span className="text-[10px] font-bold text-gray-600 font-mono">
+                                            Roll: {seat.rollNo}
+                                          </span>
+                                        )}
+                                      </div>
                                       <p className="font-bold text-gray-900 text-xs truncate">
-                                        {leftSeat.student?.fullName}
+                                        {seat.student?.fullName}
                                       </p>
                                       <span
                                         className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
-                                          leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                          seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
                                         )}`}
                                       >
-                                        {leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                        {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
                                       </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
-                                  )}
-                                </div>
-
-                                {/* Right Seat */}
-                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9.5px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
-                                      RIGHT
-                                    </span>
-                                    {rightSeat?.rollNo && (
-                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
-                                        Roll: {rightSeat.rollNo}
-                                      </span>
-                                    )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="col-span-full rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-2 text-center text-gray-400 italic text-[11px]">
+                                    Empty Bench
                                   </div>
-                                  {rightSeat ? (
-                                    <>
-                                      <p className="font-bold text-gray-900 text-xs truncate">
-                                        {rightSeat.student?.fullName}
-                                      </p>
-                                      <span
-                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
-                                          rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
-                                        )}`}
-                                      >
-                                        {rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
-                                  )}
-                                </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1226,8 +1201,6 @@ export default function ExamSeatPlanningPage() {
                       <div className="space-y-2.5">
                         {rightBenchKeys.map((bNo) => {
                           const bSeats = benches[bNo] || [];
-                          const leftSeat = bSeats.find((s: any) => s.seatPosition === 'LEFT');
-                          const rightSeat = bSeats.find((s: any) => s.seatPosition === 'RIGHT');
 
                           return (
                             <div
@@ -1243,66 +1216,43 @@ export default function ExamSeatPlanningPage() {
                                 </span>
                               </div>
 
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                {/* Left Seat */}
-                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9.5px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
-                                      LEFT
-                                    </span>
-                                    {leftSeat?.rollNo && (
-                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
-                                        Roll: {leftSeat.rollNo}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {leftSeat ? (
-                                    <>
+                              {/* Dynamic Seats on this bench */}
+                              <div className={`grid ${bSeats.length <= 1 ? 'grid-cols-1' : bSeats.length === 2 ? 'grid-cols-2' : bSeats.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'} gap-2 text-xs`}>
+                                {bSeats.length > 0 ? (
+                                  bSeats.map((seat: any, sIdx: number) => (
+                                    <div key={sIdx} className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
+                                          seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100' :
+                                          seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100' :
+                                          seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100' :
+                                          'text-amber-700 bg-amber-100'
+                                        }`}>
+                                          {seat.seatPosition}
+                                        </span>
+                                        {seat?.rollNo && (
+                                          <span className="text-[10px] font-bold text-gray-600 font-mono">
+                                            Roll: {seat.rollNo}
+                                          </span>
+                                        )}
+                                      </div>
                                       <p className="font-bold text-gray-900 text-xs truncate">
-                                        {leftSeat.student?.fullName}
+                                        {seat.student?.fullName}
                                       </p>
                                       <span
                                         className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
-                                          leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                          seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
                                         )}`}
                                       >
-                                        {leftSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                        {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
                                       </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
-                                  )}
-                                </div>
-
-                                {/* Right Seat */}
-                                <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-0.5">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[9.5px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
-                                      RIGHT
-                                    </span>
-                                    {rightSeat?.rollNo && (
-                                      <span className="text-[10px] font-bold text-gray-600 font-mono">
-                                        Roll: {rightSeat.rollNo}
-                                      </span>
-                                    )}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="col-span-full rounded-lg border border-dashed border-slate-200 bg-slate-50/50 p-2 text-center text-gray-400 italic text-[11px]">
+                                    Empty Bench
                                   </div>
-                                  {rightSeat ? (
-                                    <>
-                                      <p className="font-bold text-gray-900 text-xs truncate">
-                                        {rightSeat.student?.fullName}
-                                      </p>
-                                      <span
-                                        className={`inline-block text-[10px] font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
-                                          rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'
-                                        )}`}
-                                      >
-                                        {rightSeat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[11px] text-gray-400 italic">Empty Seat</span>
-                                  )}
-                                </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1406,17 +1356,35 @@ export default function ExamSeatPlanningPage() {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk *</label>
-                    <select
-                      value={seatsPerBench}
-                      onChange={(e) => setSeatsPerBench(e.target.value)}
-                      className="erp-input font-bold"
-                    >
-                      <option value="1">1 Student / Desk</option>
-                      <option value="2">2 Students / Desk (Standard L & R)</option>
-                      <option value="3">3 Students / Desk</option>
-                    </select>
-                    <span className="text-[10px] text-gray-500">प्रति बेन्च सिट</span>
+                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk (सिट सङ्ख्या) *</label>
+                    <div className="space-y-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        required
+                        value={seatsPerBench}
+                        onChange={(e) => setSeatsPerBench(e.target.value)}
+                        className="erp-input font-mono font-bold"
+                        placeholder="e.g. 2"
+                      />
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {[1, 2, 3, 4].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setSeatsPerBench(String(num))}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                              seatsPerBench === String(num)
+                                ? 'bg-[#1e3a5f] text-white'
+                                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                            }`}
+                          >
+                            {num === 1 ? '1' : num === 2 ? '2 (L&R)' : num === 3 ? '3' : `${num}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1541,17 +1509,35 @@ export default function ExamSeatPlanningPage() {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk *</label>
-                    <select
-                      value={editSeatsPerBench}
-                      onChange={(e) => setEditSeatsPerBench(e.target.value)}
-                      className="erp-input font-bold"
-                    >
-                      <option value="1">1 Student / Desk</option>
-                      <option value="2">2 Students / Desk (Standard L & R)</option>
-                      <option value="3">3 Students / Desk</option>
-                    </select>
-                    <span className="text-[10px] text-gray-500">प्रति बेन्च सिट</span>
+                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk (सिट सङ्ख्या) *</label>
+                    <div className="space-y-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        required
+                        value={editSeatsPerBench}
+                        onChange={(e) => setEditSeatsPerBench(e.target.value)}
+                        className="erp-input font-mono font-bold"
+                        placeholder="e.g. 2"
+                      />
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {[1, 2, 3, 4].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setEditSeatsPerBench(String(num))}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                              editSeatsPerBench === String(num)
+                                ? 'bg-blue-700 text-white'
+                                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                            }`}
+                          >
+                            {num === 1 ? '1' : num === 2 ? '2 (L&R)' : num === 3 ? '3' : `${num}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
