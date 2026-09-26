@@ -4,6 +4,51 @@ const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Helper to parse room layout config (columns, separate left & right benches and seats per desk)
+function parseRoomLayout(room) {
+  let layoutConfig = {
+    columnLayout: '2_COLUMNS',
+    leftBenches: Math.ceil((room.totalBenches || 16) / 2),
+    leftSeatsPerBench: room.seatsPerBench || 2,
+    rightBenches: (room.totalBenches || 16) - Math.ceil((room.totalBenches || 16) / 2),
+    rightSeatsPerBench: room.seatsPerBench || 2,
+    middleBenches: 0,
+    middleSeatsPerBench: 2,
+  };
+  let cleanBuilding = room.building || 'Main Block';
+
+  if (room.building && room.building.includes(' | {')) {
+    const parts = room.building.split(' | ');
+    cleanBuilding = parts[0];
+    try {
+      const parsed = JSON.parse(parts.slice(1).join(' | '));
+      layoutConfig = {
+        columnLayout: parsed.columnLayout || '2_COLUMNS',
+        leftBenches: parseInt(parsed.leftBenches) || Math.ceil((room.totalBenches || 16) / 2),
+        leftSeatsPerBench: parseInt(parsed.leftSeatsPerBench) || room.seatsPerBench || 2,
+        rightBenches: parseInt(parsed.rightBenches) || ((room.totalBenches || 16) - Math.ceil((room.totalBenches || 16) / 2)),
+        rightSeatsPerBench: parseInt(parsed.rightSeatsPerBench) || room.seatsPerBench || 2,
+        middleBenches: parseInt(parsed.middleBenches) || 0,
+        middleSeatsPerBench: parseInt(parsed.middleSeatsPerBench) || 2,
+      };
+    } catch (e) {}
+  }
+
+  const leftCap = layoutConfig.leftBenches * layoutConfig.leftSeatsPerBench;
+  const rightCap = layoutConfig.rightBenches * layoutConfig.rightSeatsPerBench;
+  const middleCap = layoutConfig.middleBenches * layoutConfig.middleSeatsPerBench;
+  const totalCap = leftCap + rightCap + middleCap || (room.totalBenches * (room.seatsPerBench || 2));
+  const totalBenches = layoutConfig.leftBenches + layoutConfig.rightBenches + layoutConfig.middleBenches || room.totalBenches;
+
+  return {
+    ...room,
+    building: cleanBuilding,
+    layoutConfig,
+    totalBenches,
+    totalCapacity: totalCap,
+  };
+}
+
 // ── EXAM ROOMS ─────────────────────────────────────────────────────────────
 
 // GET /api/seat-plans/rooms — list exam rooms
@@ -16,35 +61,70 @@ router.get('/rooms', authenticate, async (req, res) => {
       },
       orderBy: { roomNo: 'asc' },
     });
-    return res.json({ success: true, data: rooms });
+    const parsedRooms = rooms.map(parseRoomLayout);
+    return res.json({ success: true, data: parsedRooms });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
   }
 });
 
-// POST /api/seat-plans/rooms — create exam room
+// POST /api/seat-plans/rooms — create exam room with separate left & right desk setups
 router.post('/rooms', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
-    const { roomNo, building, totalBenches, seatsPerBench } = req.body;
-    if (!roomNo || !totalBenches) {
-      return res.status(400).json({ success: false, message: 'Room No and total benches are required.' });
+    const {
+      roomNo,
+      building,
+      columnLayout,
+      leftBenches,
+      leftSeatsPerBench,
+      rightBenches,
+      rightSeatsPerBench,
+      middleBenches,
+      middleSeatsPerBench,
+      totalBenches,
+      seatsPerBench,
+    } = req.body;
+
+    if (!roomNo || (!totalBenches && !leftBenches && !rightBenches)) {
+      return res.status(400).json({ success: false, message: 'Room No and bench details are required.' });
     }
 
-    const benches = parseInt(totalBenches);
-    const spb = parseInt(seatsPerBench) || 2;
+    const lBenches = parseInt(leftBenches) || 0;
+    const lSpb = parseInt(leftSeatsPerBench) || parseInt(seatsPerBench) || 2;
+    const rBenches = parseInt(rightBenches) || 0;
+    const rSpb = parseInt(rightSeatsPerBench) || parseInt(seatsPerBench) || 2;
+    const mBenches = columnLayout === '3_COLUMNS' ? (parseInt(middleBenches) || 0) : 0;
+    const mSpb = parseInt(middleSeatsPerBench) || parseInt(seatsPerBench) || 2;
+
+    const computedTotalBenches = (lBenches + rBenches + mBenches) || parseInt(totalBenches) || 16;
+    const computedTotalCapacity = (lBenches * lSpb) + (rBenches * rSpb) + (mBenches * mSpb) || (computedTotalBenches * 2);
+    const maxSpb = Math.max(lSpb, rSpb, mSpb, parseInt(seatsPerBench) || 2);
+
+    const baseBuilding = building ? String(building).split(' | ')[0].trim() : 'Main Block';
+    const layoutMeta = JSON.stringify({
+      columnLayout: columnLayout || (mBenches > 0 ? '3_COLUMNS' : '2_COLUMNS'),
+      leftBenches: lBenches || Math.ceil(computedTotalBenches / 2),
+      leftSeatsPerBench: lSpb,
+      rightBenches: rBenches || (computedTotalBenches - Math.ceil(computedTotalBenches / 2)),
+      rightSeatsPerBench: rSpb,
+      middleBenches: mBenches,
+      middleSeatsPerBench: mSpb,
+    });
+
+    const buildingString = `${baseBuilding} | ${layoutMeta}`;
 
     const room = await prisma.examRoom.create({
       data: {
         roomNo: String(roomNo).trim(),
-        building: building ? String(building).trim() : null,
-        totalBenches: benches,
-        seatsPerBench: spb,
-        totalCapacity: benches * spb,
+        building: buildingString,
+        totalBenches: computedTotalBenches,
+        seatsPerBench: maxSpb,
+        totalCapacity: computedTotalCapacity,
       },
     });
 
-    return res.status(201).json({ success: true, data: room, message: 'परीक्षा कोठा (Exam Room) सफलतापूर्वक थपियो!' });
+    return res.status(201).json({ success: true, data: parseRoomLayout(room), message: 'परीक्षा कोठा (Exam Room) सफलतापूर्वक थपियो!' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
@@ -58,20 +138,37 @@ router.post('/rooms/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN
     const existingNames = new Set(existing.map(r => r.roomNo));
 
     const defaultRooms = [
-      { roomNo: 'Room 101', building: 'Main Building', totalBenches: 15, seatsPerBench: 2 },
-      { roomNo: 'Room 102', building: 'Main Building', totalBenches: 15, seatsPerBench: 2 },
-      { roomNo: 'Room 103', building: 'Main Building', totalBenches: 15, seatsPerBench: 2 },
-      { roomNo: 'Room 201', building: 'Secondary Wing', totalBenches: 18, seatsPerBench: 2 },
-      { roomNo: 'Room 202', building: 'Secondary Wing', totalBenches: 18, seatsPerBench: 2 },
-      { roomNo: 'Main Exam Hall', building: 'Auditorium Block', totalBenches: 30, seatsPerBench: 2 },
+      {
+        roomNo: 'Room 101',
+        building: `Main Building | ${JSON.stringify({ columnLayout: '2_COLUMNS', leftBenches: 8, leftSeatsPerBench: 2, rightBenches: 7, rightSeatsPerBench: 2, middleBenches: 0, middleSeatsPerBench: 2 })}`,
+        totalBenches: 15,
+        seatsPerBench: 2,
+        totalCapacity: 30,
+      },
+      {
+        roomNo: 'Room 102',
+        building: `Main Building | ${JSON.stringify({ columnLayout: '2_COLUMNS', leftBenches: 8, leftSeatsPerBench: 2, rightBenches: 7, rightSeatsPerBench: 2, middleBenches: 0, middleSeatsPerBench: 2 })}`,
+        totalBenches: 15,
+        seatsPerBench: 2,
+        totalCapacity: 30,
+      },
+      {
+        roomNo: 'Room 201',
+        building: `Secondary Wing | ${JSON.stringify({ columnLayout: '2_COLUMNS', leftBenches: 9, leftSeatsPerBench: 2, rightBenches: 9, rightSeatsPerBench: 2, middleBenches: 0, middleSeatsPerBench: 2 })}`,
+        totalBenches: 18,
+        seatsPerBench: 2,
+        totalCapacity: 36,
+      },
+      {
+        roomNo: 'Main Exam Hall',
+        building: `Auditorium Block | ${JSON.stringify({ columnLayout: '3_COLUMNS', leftBenches: 10, leftSeatsPerBench: 2, rightBenches: 10, rightSeatsPerBench: 2, middleBenches: 10, middleSeatsPerBench: 2 })}`,
+        totalBenches: 30,
+        seatsPerBench: 2,
+        totalCapacity: 60,
+      },
     ];
 
-    const toCreate = defaultRooms
-      .filter(r => !existingNames.has(r.roomNo))
-      .map(r => ({
-        ...r,
-        totalCapacity: r.totalBenches * r.seatsPerBench,
-      }));
+    const toCreate = defaultRooms.filter(r => !existingNames.has(r.roomNo));
 
     if (toCreate.length > 0) {
       await prisma.examRoom.createMany({ data: toCreate });
@@ -84,7 +181,7 @@ router.post('/rooms/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN
 
     return res.status(201).json({
       success: true,
-      data: allRooms,
+      data: allRooms.map(parseRoomLayout),
       message: `${toCreate.length} वटा मानक परीक्षा कोठाहरू स्वतः थपिए!`,
     });
   } catch (err) {
@@ -93,30 +190,64 @@ router.post('/rooms/seed-default', authenticate, authorize('SUPER_ADMIN', 'ADMIN
   }
 });
 
-// PUT /api/seat-plans/rooms/:id — update exam room
+// PUT /api/seat-plans/rooms/:id — update exam room with separate left & right desk setups
 router.put('/rooms/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
     const roomId = parseInt(req.params.id);
-    const { roomNo, building, totalBenches, seatsPerBench } = req.body;
-    if (!roomNo || !totalBenches) {
-      return res.status(400).json({ success: false, message: 'Room No and total benches are required.' });
+    const {
+      roomNo,
+      building,
+      columnLayout,
+      leftBenches,
+      leftSeatsPerBench,
+      rightBenches,
+      rightSeatsPerBench,
+      middleBenches,
+      middleSeatsPerBench,
+      totalBenches,
+      seatsPerBench,
+    } = req.body;
+
+    if (!roomNo) {
+      return res.status(400).json({ success: false, message: 'Room No is required.' });
     }
 
-    const benches = parseInt(totalBenches);
-    const spb = parseInt(seatsPerBench) || 2;
+    const lBenches = parseInt(leftBenches) || 0;
+    const lSpb = parseInt(leftSeatsPerBench) || parseInt(seatsPerBench) || 2;
+    const rBenches = parseInt(rightBenches) || 0;
+    const rSpb = parseInt(rightSeatsPerBench) || parseInt(seatsPerBench) || 2;
+    const mBenches = columnLayout === '3_COLUMNS' ? (parseInt(middleBenches) || 0) : 0;
+    const mSpb = parseInt(middleSeatsPerBench) || parseInt(seatsPerBench) || 2;
+
+    const computedTotalBenches = (lBenches + rBenches + mBenches) || parseInt(totalBenches) || 16;
+    const computedTotalCapacity = (lBenches * lSpb) + (rBenches * rSpb) + (mBenches * mSpb) || (computedTotalBenches * 2);
+    const maxSpb = Math.max(lSpb, rSpb, mSpb, parseInt(seatsPerBench) || 2);
+
+    const baseBuilding = building ? String(building).split(' | ')[0].trim() : 'Main Block';
+    const layoutMeta = JSON.stringify({
+      columnLayout: columnLayout || (mBenches > 0 ? '3_COLUMNS' : '2_COLUMNS'),
+      leftBenches: lBenches || Math.ceil(computedTotalBenches / 2),
+      leftSeatsPerBench: lSpb,
+      rightBenches: rBenches || (computedTotalBenches - Math.ceil(computedTotalBenches / 2)),
+      rightSeatsPerBench: rSpb,
+      middleBenches: mBenches,
+      middleSeatsPerBench: mSpb,
+    });
+
+    const buildingString = `${baseBuilding} | ${layoutMeta}`;
 
     const updated = await prisma.examRoom.update({
       where: { id: roomId },
       data: {
         roomNo: String(roomNo).trim(),
-        building: building ? String(building).trim() : null,
-        totalBenches: benches,
-        seatsPerBench: spb,
-        totalCapacity: benches * spb,
+        building: buildingString,
+        totalBenches: computedTotalBenches,
+        seatsPerBench: maxSpb,
+        totalCapacity: computedTotalCapacity,
       },
     });
 
-    return res.json({ success: true, data: updated, message: 'परीक्षा कोठा विवरण सफलतापूर्वक परिमार्जन गरियो!' });
+    return res.json({ success: true, data: parseRoomLayout(updated), message: 'परीक्षा कोठा विवरण सफलतापूर्वक परिमार्जन गरियो!' });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
@@ -239,15 +370,17 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
     const parsedClassIds = classIds.map(id => parseInt(id));
     const excludedIdsSet = new Set(Array.isArray(excludedStudentIds) ? excludedStudentIds.map(Number) : []);
 
-    // 1. Fetch available rooms
-    const rooms = await prisma.examRoom.findMany({
+    // 1. Fetch available rooms and parse their column layout configurations
+    const rawRooms = await prisma.examRoom.findMany({
       where: { id: { in: parsedRoomIds }, isActive: true },
       orderBy: { roomNo: 'asc' },
     });
 
-    if (rooms.length === 0) {
+    if (rawRooms.length === 0) {
       return res.status(400).json({ success: false, message: 'No valid rooms selected.' });
     }
+
+    const rooms = rawRooms.map(parseRoomLayout);
 
     // 2. Fetch all active students for selected classes, excluding any unselected/low-attendance students
     const studentsByClass = [];
@@ -278,7 +411,7 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
     }
 
     const totalStudentsToSeat = studentsByClass.reduce((sum, c) => sum + c.students.length, 0);
-    const totalRoomCapacity = rooms.reduce((sum, r) => sum + (r.totalBenches * Math.max(1, r.seatsPerBench || 2)), 0);
+    const totalRoomCapacity = rooms.reduce((sum, r) => sum + r.totalCapacity, 0);
 
     if (totalStudentsToSeat === 0) {
       return res.status(400).json({
@@ -299,87 +432,199 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
       where: { examId: exId, shift: shiftName, roomId: { in: parsedRoomIds } },
     });
 
-    // 4. Stricter anti-cheating interleaving:
-    // When multiple seats are on the same bench (e.g. 2, 3, 4 seats), NO two students on the same bench should share the same class.
-    const classQueues = studentsByClass.map(c => [...c.students]);
-    let currentClassQueueIndex = 0;
+    // 4. Anti-cheating Column-Track Interleaving Allocator:
+    // Rules:
+    // a. Left-Right adjacent seats on a bench MUST NOT share the same class.
+    // b. Diagonal adjacent seats (Row r Col c vs Row r+1 Col c±1) MUST NOT share the same class.
+    // c. Front-to-Back (Row r Col c vs Row r+1 Col c) IS the same class, with students advancing in ascending roll sequence.
+    // d. Supports independent Left vs Right vs Middle seats-per-desk settings.
 
-    function getNextStudent(avoidClassIds = []) {
-      const activeQueues = classQueues.filter(q => q.length > 0);
-      if (activeQueues.length === 0) return null;
+    // Queues per class
+    const classMap = new Map();
+    studentsByClass.forEach(c => {
+      classMap.set(c.classId, [...c.students]);
+    });
 
-      // Try finding a class queue NOT in avoidClassIds
-      for (let attempt = 0; attempt < classQueues.length; attempt++) {
-        const idx = (currentClassQueueIndex + attempt) % classQueues.length;
-        const q = classQueues[idx];
-        const clsId = studentsByClass[idx].classId;
-
-        if (q.length > 0 && (!avoidClassIds.includes(clsId) || activeQueues.length <= avoidClassIds.length)) {
-          currentClassQueueIndex = (idx + 1) % classQueues.length;
-          return q.shift();
-        }
-      }
-
-      // Fallback: pick from any remaining queue
-      for (let attempt = 0; attempt < classQueues.length; attempt++) {
-        const idx = (currentClassQueueIndex + attempt) % classQueues.length;
-        const q = classQueues[idx];
-        if (q.length > 0) {
-          currentClassQueueIndex = (idx + 1) % classQueues.length;
-          return q.shift();
-        }
+    // Helper to get next student from a specific class
+    function getStudentFromClass(cId) {
+      const q = classMap.get(cId);
+      if (q && q.length > 0) {
+        return q.shift();
       }
       return null;
     }
 
+    // Helper to get next available student avoiding specified class IDs
+    let roundRobinIdx = 0;
+    function getNextStudentAvoiding(avoidClassIds = []) {
+      const classIdList = studentsByClass.map(c => c.classId);
+      if (classIdList.length === 0) return null;
+
+      // 1. Try finding a class not in avoidClassIds
+      for (let i = 0; i < classIdList.length; i++) {
+        const idx = (roundRobinIdx + i) % classIdList.length;
+        const cId = classIdList[idx];
+        const q = classMap.get(cId);
+        if (q && q.length > 0 && !avoidClassIds.includes(cId)) {
+          roundRobinIdx = (idx + 1) % classIdList.length;
+          return q.shift();
+        }
+      }
+
+      // 2. Fallback: take from any class with remaining students
+      for (let i = 0; i < classIdList.length; i++) {
+        const idx = (roundRobinIdx + i) % classIdList.length;
+        const cId = classIdList[idx];
+        const q = classMap.get(cId);
+        if (q && q.length > 0) {
+          roundRobinIdx = (idx + 1) % classIdList.length;
+          return q.shift();
+        }
+      }
+
+      return null;
+    }
+
+    function hasRemainingStudents() {
+      for (const q of classMap.values()) {
+        if (q.length > 0) return true;
+      }
+      return false;
+    }
+
     const newSeatPlans = [];
+    let lastAssignedClassIdAcrossRooms = null;
 
     for (const room of rooms) {
-      const spb = Math.max(1, parseInt(room.seatsPerBench) || 2);
+      if (!hasRemainingStudents()) break;
+
+      const { layoutConfig } = room;
       let roomSeatCounter = 1;
+      let globalBenchNumber = 1;
 
-      for (let bench = 1; bench <= room.totalBenches; bench++) {
-        const benchUsedClassIds = [];
+      // Build physical columns in this room
+      const roomColumns = [];
+      if (layoutConfig.leftBenches > 0) {
+        roomColumns.push({
+          colType: 'LEFT',
+          benchesCount: layoutConfig.leftBenches,
+          seatsPerBench: layoutConfig.leftSeatsPerBench || 2,
+        });
+      }
+      if (layoutConfig.columnLayout === '3_COLUMNS' && layoutConfig.middleBenches > 0) {
+        roomColumns.push({
+          colType: 'MIDDLE',
+          benchesCount: layoutConfig.middleBenches,
+          seatsPerBench: layoutConfig.middleSeatsPerBench || 2,
+        });
+      }
+      if (layoutConfig.rightBenches > 0) {
+        roomColumns.push({
+          colType: 'RIGHT',
+          benchesCount: layoutConfig.rightBenches,
+          seatsPerBench: layoutConfig.rightSeatsPerBench || 2,
+        });
+      }
 
-        for (let posIdx = 1; posIdx <= spb; posIdx++) {
-          const student = getNextStudent(benchUsedClassIds);
-          if (!student) break;
+      for (const col of roomColumns) {
+        if (!hasRemainingStudents()) break;
 
-          benchUsedClassIds.push(student.classId);
+        const numRows = col.benchesCount;
+        const spb = col.seatsPerBench;
 
-          let positionLabel = `SEAT-${posIdx}`;
-          let posCode = `P${posIdx}`;
+        // Matrix [rowIdx][posIdx] for this desk column
+        const colMatrix = Array.from({ length: numRows }, () => Array(spb).fill(null));
 
-          if (spb === 1) {
-            positionLabel = 'SINGLE';
-            posCode = 'S';
-          } else if (spb === 2) {
-            positionLabel = posIdx === 1 ? 'LEFT' : 'RIGHT';
-            posCode = posIdx === 1 ? 'L' : 'R';
-          } else if (spb === 3) {
-            positionLabel = posIdx === 1 ? 'LEFT' : posIdx === 2 ? 'MIDDLE' : 'RIGHT';
-            posCode = posIdx === 1 ? 'L' : posIdx === 2 ? 'M' : 'R';
-          } else if (spb === 4) {
-            positionLabel = posIdx === 1 ? 'LEFT' : posIdx === 2 ? 'MID-L' : posIdx === 3 ? 'MID-R' : 'RIGHT';
-            posCode = posIdx === 1 ? 'L' : posIdx === 2 ? 'ML' : posIdx === 3 ? 'MR' : 'R';
-          } else {
-            positionLabel = posIdx === 1 ? 'LEFT' : posIdx === spb ? 'RIGHT' : `SEAT-${posIdx}`;
-            posCode = `S${posIdx}`;
+        for (let posIdx = 0; posIdx < spb; posIdx++) {
+          if (!hasRemainingStudents()) break;
+
+          // Determine avoid classes for this vertical seat track
+          const avoidClasses = [];
+          if (posIdx > 0 && colMatrix[0][posIdx - 1]) {
+            avoidClasses.push(colMatrix[0][posIdx - 1].classId);
+          } else if (posIdx === 0 && lastAssignedClassIdAcrossRooms && studentsByClass.length > 1) {
+            avoidClasses.push(lastAssignedClassIdAcrossRooms);
           }
 
-          const formattedSeatNo = `Seat ${String(roomSeatCounter).padStart(2, '0')}`;
+          // Fill this vertical track from Row 0 to Row numRows-1 (Front to Back in sequential roll order)
+          for (let rIdx = 0; rIdx < numRows; rIdx++) {
+            if (!hasRemainingStudents()) break;
 
-          newSeatPlans.push({
-            examId: exId,
-            shift: shiftName,
-            roomId: room.id,
-            benchNo: bench,
-            seatPosition: positionLabel,
-            studentId: student.studentId,
-            classId: student.classId,
-            rollNo: student.rollNo,
-            seatNo: formattedSeatNo,
-          });
+            let student = null;
+            const preferredClassId = rIdx > 0 && colMatrix[rIdx - 1][posIdx] ? colMatrix[rIdx - 1][posIdx].classId : null;
+
+            // If same class has more students, continue the track with next roll number!
+            if (preferredClassId) {
+              student = getStudentFromClass(preferredClassId);
+            }
+
+            // If preferred class queue is empty or starting a new track, pick next class avoiding left neighbor
+            if (!student) {
+              const leftNeighborClass = posIdx > 0 && colMatrix[rIdx][posIdx - 1] ? colMatrix[rIdx][posIdx - 1].classId : null;
+              const trackAvoid = leftNeighborClass ? [leftNeighborClass] : avoidClasses;
+              student = getNextStudentAvoiding(trackAvoid);
+            }
+
+            if (!student) break;
+
+            colMatrix[rIdx][posIdx] = student;
+            lastAssignedClassIdAcrossRooms = student.classId;
+          }
+        }
+
+        // Convert matrix to actual seat plan entries with sequential seat numbering
+        for (let rIdx = 0; rIdx < numRows; rIdx++) {
+          const benchNo = globalBenchNumber++;
+
+          for (let posIdx = 0; posIdx < spb; posIdx++) {
+            const student = colMatrix[rIdx][posIdx];
+            if (!student) continue;
+
+            let positionLabel = `SEAT-${posIdx + 1}`;
+            if (spb === 1) {
+              positionLabel = 'SINGLE';
+            } else if (spb === 2) {
+              positionLabel = posIdx === 0 ? 'LEFT' : 'RIGHT';
+            } else if (spb === 3) {
+              positionLabel = posIdx === 0 ? 'LEFT' : posIdx === 1 ? 'MIDDLE' : 'RIGHT';
+            } else if (spb === 4) {
+              positionLabel = posIdx === 0 ? 'LEFT' : posIdx === 1 ? 'MID-L' : posIdx === 2 ? 'MID-R' : 'RIGHT';
+            }
+
+            const formattedSeatNo = `Seat ${String(roomSeatCounter).padStart(2, '0')}`;
+
+            newSeatPlans.push({
+              examId: exId,
+              shift: shiftName,
+              roomId: room.id,
+              benchNo: benchNo,
+              seatPosition: positionLabel,
+              studentId: student.studentId,
+              classId: student.classId,
+              rollNo: student.rollNo,
+              seatNo: formattedSeatNo,
+            });
+
+            roomSeatCounter++;
+          }
+        }
+      }
+    }
+
+    if (newSeatPlans.length > 0) {
+      await prisma.examSeatPlan.createMany({ data: newSeatPlans });
+    }
+
+    return res.json({
+      success: true,
+      message: `सिट प्लानिङ [${shiftName}] सफलतापूर्वक तयार भयो! कुल ${newSeatPlans.length} जना विद्यार्थीहरूलाई ${rooms.length} वटा कोठामा सिट नं. (Seat 01, 02...) सहित व्यवस्थित गरियो। (बहिष्कृत: ${excludedIdsSet.size} जना)`,
+      data: { totalSeated: newSeatPlans.length, excludedCount: excludedIdsSet.size, shift: shiftName },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
 
           roomSeatCounter++;
         }

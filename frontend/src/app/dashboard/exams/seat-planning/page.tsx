@@ -70,8 +70,11 @@ export default function ExamSeatPlanningPage() {
   const [building, setBuilding] = useState('Main Block');
   const [columnLayout, setColumnLayout] = useState<'2_COLUMNS' | '3_COLUMNS' | '1_COLUMN'>('2_COLUMNS');
   const [leftBenches, setLeftBenches] = useState('8');
+  const [leftSeatsPerBench, setLeftSeatsPerBench] = useState('2');
   const [rightBenches, setRightBenches] = useState('8');
+  const [rightSeatsPerBench, setRightSeatsPerBench] = useState('2');
   const [middleBenches, setMiddleBenches] = useState('0');
+  const [middleSeatsPerBench, setMiddleSeatsPerBench] = useState('2');
   const [seatsPerBench, setSeatsPerBench] = useState('2');
 
   // Edit Room Modal & Form
@@ -81,8 +84,11 @@ export default function ExamSeatPlanningPage() {
   const [editBuilding, setEditBuilding] = useState('');
   const [editColumnLayout, setEditColumnLayout] = useState<'2_COLUMNS' | '3_COLUMNS' | '1_COLUMN'>('2_COLUMNS');
   const [editLeftBenches, setEditLeftBenches] = useState('8');
+  const [editLeftSeatsPerBench, setEditLeftSeatsPerBench] = useState('2');
   const [editRightBenches, setEditRightBenches] = useState('8');
+  const [editRightSeatsPerBench, setEditRightSeatsPerBench] = useState('2');
   const [editMiddleBenches, setEditMiddleBenches] = useState('0');
+  const [editMiddleSeatsPerBench, setEditMiddleSeatsPerBench] = useState('2');
   const [editSeatsPerBench, setEditSeatsPerBench] = useState('2');
 
   // Fetch Exams
@@ -271,14 +277,28 @@ export default function ExamSeatPlanningPage() {
 
   // Helper to parse room column configuration
   const getRoomLayoutBreakdown = (r: any) => {
+    if (r.layoutConfig) {
+      return {
+        columnLayout: r.layoutConfig.columnLayout || '2_COLUMNS',
+        leftBenches: r.layoutConfig.leftBenches || 8,
+        leftSeatsPerBench: r.layoutConfig.leftSeatsPerBench || 2,
+        rightBenches: r.layoutConfig.rightBenches || 8,
+        rightSeatsPerBench: r.layoutConfig.rightSeatsPerBench || 2,
+        middleBenches: r.layoutConfig.middleBenches || 0,
+        middleSeatsPerBench: r.layoutConfig.middleSeatsPerBench || 2,
+      };
+    }
     const total = r.totalBenches || 16;
     const l = Math.ceil(total / 2);
     const right = total - l;
     return {
+      columnLayout: '2_COLUMNS',
       leftBenches: l,
+      leftSeatsPerBench: r.seatsPerBench || 2,
       rightBenches: right,
+      rightSeatsPerBench: r.seatsPerBench || 2,
       middleBenches: 0,
-      seatsPerBench: r.seatsPerBench || 2,
+      middleSeatsPerBench: 2,
     };
   };
 
@@ -287,16 +307,24 @@ export default function ExamSeatPlanningPage() {
     mutationFn: async () => {
       if (!roomNo.trim()) throw new Error('Please enter Room Number/Name.');
       const l = parseInt(leftBenches) || 0;
+      const lSpb = parseInt(leftSeatsPerBench) || 2;
       const r = parseInt(rightBenches) || 0;
+      const rSpb = parseInt(rightSeatsPerBench) || 2;
       const m = columnLayout === '3_COLUMNS' ? parseInt(middleBenches) || 0 : 0;
+      const mSpb = parseInt(middleSeatsPerBench) || 2;
       const computedTotalBenches = l + r + m || 16;
-      const spb = parseInt(seatsPerBench) || 2;
 
       const res = await api.post('/seat-plans/rooms', {
         roomNo: roomNo.trim(),
         building: building.trim(),
+        columnLayout,
+        leftBenches: l,
+        leftSeatsPerBench: lSpb,
+        rightBenches: r,
+        rightSeatsPerBench: rSpb,
+        middleBenches: m,
+        middleSeatsPerBench: mSpb,
         totalBenches: computedTotalBenches,
-        seatsPerBench: spb,
       });
       return res.data;
     },
@@ -317,16 +345,24 @@ export default function ExamSeatPlanningPage() {
       if (!editingRoom) return;
       if (!editRoomNo.trim()) throw new Error('Please enter Room Number/Name.');
       const l = parseInt(editLeftBenches) || 0;
+      const lSpb = parseInt(editLeftSeatsPerBench) || 2;
       const r = parseInt(editRightBenches) || 0;
+      const rSpb = parseInt(editRightSeatsPerBench) || 2;
       const m = editColumnLayout === '3_COLUMNS' ? parseInt(editMiddleBenches) || 0 : 0;
+      const mSpb = parseInt(editMiddleSeatsPerBench) || 2;
       const computedTotalBenches = l + r + m || 16;
-      const spb = parseInt(editSeatsPerBench) || 2;
 
       const res = await api.put(`/seat-plans/rooms/${editingRoom.id}`, {
         roomNo: editRoomNo.trim(),
         building: editBuilding.trim(),
+        columnLayout: editColumnLayout,
+        leftBenches: l,
+        leftSeatsPerBench: lSpb,
+        rightBenches: r,
+        rightSeatsPerBench: rSpb,
+        middleBenches: m,
+        middleSeatsPerBench: mSpb,
         totalBenches: computedTotalBenches,
-        seatsPerBench: spb,
       });
       return res.data;
     },
@@ -348,10 +384,12 @@ export default function ExamSeatPlanningPage() {
     setEditBuilding(r.building || '');
     const breakdown = getRoomLayoutBreakdown(r);
     setEditLeftBenches(String(breakdown.leftBenches));
+    setEditLeftSeatsPerBench(String(breakdown.leftSeatsPerBench || 2));
     setEditRightBenches(String(breakdown.rightBenches));
-    setEditMiddleBenches('0');
-    setEditColumnLayout('2_COLUMNS');
-    setEditSeatsPerBench(String(r.seatsPerBench || 2));
+    setEditRightSeatsPerBench(String(breakdown.rightSeatsPerBench || 2));
+    setEditMiddleBenches(String(breakdown.middleBenches || 0));
+    setEditMiddleSeatsPerBench(String(breakdown.middleSeatsPerBench || 2));
+    setEditColumnLayout(breakdown.columnLayout || '2_COLUMNS');
     setIsEditRoomModalOpen(true);
   };
 
@@ -505,6 +543,14 @@ export default function ExamSeatPlanningPage() {
     setSelectedRoomIdsForAllocation((prev) =>
       prev.includes(rid) ? prev.filter((id) => id !== rid) : [...prev, rid]
     );
+  };
+
+  const handleSelectAllRooms = () => {
+    if (selectedRoomIdsForAllocation.length === rooms.length) {
+      setSelectedRoomIdsForAllocation([]);
+    } else {
+      setSelectedRoomIdsForAllocation(rooms.map((r: any) => r.id));
+    }
   };
 
   // Group seat plans by room for physical classroom view
@@ -1276,6 +1322,138 @@ export default function ExamSeatPlanningPage() {
           </div>
         )}
 
+        {/* ─── Choose Exam Rooms / Halls for Allocation (Multi-Select Checkboxes) ─── */}
+        <div className="space-y-3 pt-3 border-t border-purple-100 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <label className="font-extrabold text-gray-800 text-xs flex items-center gap-1.5">
+                <Building size={15} className="text-purple-700" />
+                <span>Select Exam Rooms / Halls for Allocation (सिट निर्धारणका लागि प्रयोग हुने कोठा/हलहरू):</span>
+              </label>
+              <span className="text-[11px] text-gray-500 font-normal">
+                छानिएका कोठाहरूमा मात्र यस सत्रका विद्यार्थीहरूको सिट बाँडफाँड गरिनेछ।
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-purple-900 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">
+                {selectedRoomIdsForAllocation.length} / {rooms.length} Rooms Selected
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectAllRooms}
+                className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                {selectedRoomIdsForAllocation.length === rooms.length ? 'Deselect All' : 'Select All Rooms'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {rooms.map((r: any) => {
+              const breakdown = getRoomLayoutBreakdown(r);
+              const isSelected = selectedRoomIdsForAllocation.includes(r.id);
+
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => handleToggleRoomForAllocation(r.id)}
+                  className={`flex flex-col justify-between p-3 rounded-2xl border text-left transition ${
+                    isSelected
+                      ? 'border-purple-600 bg-purple-50/70 text-purple-950 shadow-2xs ring-1 ring-purple-400'
+                      : 'border-gray-200 bg-slate-50/50 text-gray-600 hover:bg-slate-100/80 opacity-75'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 w-full">
+                    <div className="flex items-center gap-2">
+                      {isSelected ? (
+                        <CheckSquare size={16} className="text-purple-700 shrink-0 mt-0.5" />
+                      ) : (
+                        <Square size={16} className="text-gray-400 shrink-0 mt-0.5" />
+                      )}
+                      <div>
+                        <strong className="font-extrabold text-sm block text-gray-900">
+                          {r.roomNo}
+                        </strong>
+                        <span className="text-[10px] text-gray-500 font-medium block">
+                          {r.building || 'Main Block'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="font-mono font-bold text-[10.5px] px-1.5 py-0.5 rounded-md bg-white border border-purple-200 text-purple-900 shadow-2xs">
+                      {r.totalCapacity || r.totalBenches * 2} सिट
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t border-purple-200/50 w-full space-y-1 text-[10px] font-mono">
+                    <div className="flex items-center justify-between text-gray-600">
+                      <span>⬅️ Left:</span>
+                      <span className="font-bold text-gray-800">
+                        {breakdown.leftBenches} benches ({breakdown.leftSeatsPerBench}/desk)
+                      </span>
+                    </div>
+                    {breakdown.columnLayout === '3_COLUMNS' && breakdown.middleBenches > 0 && (
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>↔️ Middle:</span>
+                        <span className="font-bold text-gray-800">
+                          {breakdown.middleBenches} benches ({breakdown.middleSeatsPerBench}/desk)
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-gray-600">
+                      <span>➡️ Right:</span>
+                      <span className="font-bold text-gray-800">
+                        {breakdown.rightBenches} benches ({breakdown.rightSeatsPerBench}/desk)
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Capacity Validation & Live Stats */}
+          {rooms.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="font-bold text-gray-700">
+                  कुल छानिएका कोठाहरूको सिट क्षमता (Total Available Seats):{' '}
+                  <strong className="text-purple-900 font-mono text-sm font-black">
+                    {rooms
+                      .filter((r: any) => selectedRoomIdsForAllocation.includes(r.id))
+                      .reduce((sum: number, r: any) => sum + (r.totalCapacity || r.totalBenches * 2), 0)}{' '}
+                    Seats
+                  </strong>
+                </div>
+                <div className="font-bold text-gray-700">
+                  सिट आवश्यक पर्ने कुल विद्यार्थी (Students to Seat):{' '}
+                  <strong className="text-blue-900 font-mono text-sm font-black">
+                    {studentsEligibility.length - excludedStudentIds.length} Students
+                  </strong>
+                </div>
+              </div>
+
+              <div>
+                {rooms
+                  .filter((r: any) => selectedRoomIdsForAllocation.includes(r.id))
+                  .reduce((sum: number, r: any) => sum + (r.totalCapacity || r.totalBenches * 2), 0) >=
+                (studentsEligibility.length - excludedStudentIds.length) ? (
+                  <span className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl text-[11px]">
+                    <CheckCircle2 size={13} />
+                    <span>क्षमता पर्याप्त छ (Sufficient Capacity)</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-1 rounded-xl text-[11px]">
+                    <AlertTriangle size={13} />
+                    <span>क्षमता अपुग (कृपया थप कोठा छनौट गर्नुहोस्)</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Action Button */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-purple-100">
           <p className="text-[11px] text-gray-500 font-nepali">
@@ -1285,7 +1463,7 @@ export default function ExamSeatPlanningPage() {
           <button
             type="button"
             onClick={() => autoGenerateMutation.mutate()}
-            disabled={autoGenerateMutation.isPending || !selectedExamId || selectedClassIds.length === 0}
+            disabled={autoGenerateMutation.isPending || !selectedExamId || selectedClassIds.length === 0 || selectedRoomIdsForAllocation.length === 0}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 px-6 py-3 text-xs font-bold text-white shadow-md transition disabled:opacity-50"
           >
             <Sparkles size={16} className="text-amber-300" />
@@ -1369,10 +1547,15 @@ export default function ExamSeatPlanningPage() {
         ) : (
           <div className="space-y-8">
             {Object.entries(seatPlansByRoom).map(([rId, { room, seats, benches }]) => {
+              const breakdown = getRoomLayoutBreakdown(room);
               const benchKeys = Object.keys(benches).map(Number).sort((a, b) => a - b);
-              const half = Math.ceil(benchKeys.length / 2);
-              const leftBenchKeys = benchKeys.slice(0, half);
-              const rightBenchKeys = benchKeys.slice(half);
+              const leftBenchKeys = benchKeys.slice(0, breakdown.leftBenches);
+              const middleBenchKeys = breakdown.columnLayout === '3_COLUMNS'
+                ? benchKeys.slice(breakdown.leftBenches, breakdown.leftBenches + breakdown.middleBenches)
+                : [];
+              const rightBenchKeys = benchKeys.slice(
+                breakdown.leftBenches + (breakdown.columnLayout === '3_COLUMNS' ? breakdown.middleBenches : 0)
+              );
 
               return (
                 <div
@@ -1395,12 +1578,17 @@ export default function ExamSeatPlanningPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-xs flex-wrap">
                       <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 font-bold">
-                        Left Row: {leftBenchKeys.length} Desks
+                        Left: {leftBenchKeys.length} Desks ({breakdown.leftSeatsPerBench}/desk)
                       </span>
-                      <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold">
-                        Right Row: {rightBenchKeys.length} Desks
+                      {middleBenchKeys.length > 0 && (
+                        <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold">
+                          Middle: {middleBenchKeys.length} Desks ({breakdown.middleSeatsPerBench}/desk)
+                        </span>
+                      )}
+                      <span className="px-3 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold">
+                        Right: {rightBenchKeys.length} Desks ({breakdown.rightSeatsPerBench}/desk)
                       </span>
                     </div>
                   </div>
@@ -1410,15 +1598,15 @@ export default function ExamSeatPlanningPage() {
                     <span>👨‍🏫 FRONT OF CLASSROOM: Teacher&apos;s Desk / Whiteboard (अगाडिको पोडियम / कालोपाटी)</span>
                   </div>
 
-                  {/* Physical 2-Column Desk Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+                  {/* Physical Column Desk Grid */}
+                  <div className={`grid grid-cols-1 ${middleBenchKeys.length > 0 ? 'lg:grid-cols-3' : 'md:grid-cols-2'} gap-6 relative`}>
                     {/* LEFT COLUMN DESKS */}
                     <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
                       <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                         <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
                           <span>⬅️ बायाँ लहर (LEFT ROW DESKS)</span>
                         </span>
-                        <span className="text-[11px] font-mono text-gray-500">{leftBenchKeys.length} Desks</span>
+                        <span className="text-[11px] font-mono text-gray-500">{leftBenchKeys.length} Desks &bull; {breakdown.leftSeatsPerBench} seats/desk</span>
                       </div>
 
                       <div className="space-y-2.5">
@@ -1490,13 +1678,90 @@ export default function ExamSeatPlanningPage() {
                       </div>
                     </div>
 
+                    {/* MIDDLE COLUMN DESKS (If present) */}
+                    {middleBenchKeys.length > 0 && (
+                      <div className="space-y-3 rounded-2xl border border-purple-200 bg-purple-50/30 p-4">
+                        <div className="flex items-center justify-between border-b border-purple-200 pb-2">
+                          <span className="font-extrabold text-xs text-purple-950 flex items-center gap-1.5">
+                            <span>↔️ बीचको लहर (MIDDLE ROW DESKS)</span>
+                          </span>
+                          <span className="text-[11px] font-mono text-gray-500">{middleBenchKeys.length} Desks &bull; {breakdown.middleSeatsPerBench} seats/desk</span>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {middleBenchKeys.map((bNo) => {
+                            const bSeats = benches[bNo] || [];
+
+                            return (
+                              <div
+                                key={bNo}
+                                className="rounded-xl border border-purple-300 bg-white p-2.5 shadow-2xs space-y-1.5 hover:border-purple-400 transition"
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 border-b border-slate-100 pb-1">
+                                  <span className="font-mono bg-purple-100 text-purple-900 px-2 py-0.5 rounded">
+                                    🪑 Bench #{bNo}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-mono">
+                                    {room.roomNo}-B{bNo}
+                                  </span>
+                                </div>
+
+                                <div className={`grid ${bSeats.length <= 1 ? 'grid-cols-1' : bSeats.length === 2 ? 'grid-cols-2' : bSeats.length === 3 ? 'grid-cols-3' : 'grid-cols-2 sm:grid-cols-4'} gap-2 text-xs`}>
+                                  {bSeats.length > 0 ? (
+                                    bSeats.map((seat: any, sIdx: number) => (
+                                      <div key={sIdx} className="rounded-xl border border-purple-200 bg-purple-50/50 p-2.5 space-y-1 hover:bg-amber-50/30 transition shadow-2xs">
+                                        <div className="flex items-center justify-between gap-1">
+                                          <span className="font-extrabold px-2 py-0.5 rounded-md bg-amber-200/90 text-amber-950 font-mono text-[11px] border border-amber-300 shadow-2xs">
+                                            🪑 {seat.seatNo || `Seat #${sIdx + 1}`}
+                                          </span>
+                                          <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded ${
+                                            seat.seatPosition === 'LEFT' ? 'text-blue-700 bg-blue-100 border border-blue-200' :
+                                            seat.seatPosition === 'RIGHT' ? 'text-purple-700 bg-purple-100 border border-purple-200' :
+                                            seat.seatPosition === 'MIDDLE' ? 'text-emerald-700 bg-emerald-100 border border-emerald-200' :
+                                            'text-amber-700 bg-amber-100 border border-amber-200'
+                                          }`}>
+                                            {seat.seatPosition}
+                                          </span>
+                                        </div>
+                                        <p className="font-bold text-gray-900 text-xs truncate">
+                                          {seat.student?.fullName}
+                                        </p>
+                                        <div className="flex items-center justify-between text-[10px] pt-0.5">
+                                          <span
+                                            className={`inline-block font-bold px-1.5 py-0.2 rounded border ${getClassBadgeColor(
+                                              seat.student?.classEnrollment?.[0]?.class?.name || 'Class'
+                                            )}`}
+                                          >
+                                            {seat.student?.classEnrollment?.[0]?.class?.name || 'Class'}
+                                          </span>
+                                          {seat?.rollNo && (
+                                            <span className="font-bold text-gray-600 font-mono">
+                                              Roll: #{seat.rollNo}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="col-span-full rounded-lg border border-dashed border-purple-200 bg-purple-50/50 p-2 text-center text-gray-400 italic text-[11px]">
+                                      Empty Bench
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* RIGHT COLUMN DESKS */}
                     <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
                       <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                         <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
                           <span>➡️ दायाँ लहर (RIGHT ROW DESKS)</span>
                         </span>
-                        <span className="text-[11px] font-mono text-gray-500">{rightBenchKeys.length} Desks</span>
+                        <span className="text-[11px] font-mono text-gray-500">{rightBenchKeys.length} Desks &bull; {breakdown.rightSeatsPerBench} seats/desk</span>
                       </div>
 
                       <div className="space-y-2.5">
@@ -1629,79 +1894,170 @@ export default function ExamSeatPlanningPage() {
                 <div className="flex items-center justify-between border-b border-blue-200/60 pb-2">
                   <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
                     <Columns size={14} className="text-blue-600" />
-                    <span>Physical Desk Columns (कोठाको लहर संरचना)</span>
+                    <span>Physical Desk Columns & Seats Setup (कोठाको लहर तथा सिट संरचना)</span>
                   </span>
-                  <span className="text-[10.5px] text-gray-500 font-nepali">२-लहर वा ३-लहर डेस्क</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setColumnLayout('2_COLUMNS')}
+                      className={`px-2 py-0.5 rounded text-[10.5px] font-bold transition ${
+                        columnLayout === '2_COLUMNS'
+                          ? 'bg-[#1e3a5f] text-white'
+                          : 'bg-white text-slate-700 border border-slate-300'
+                      }`}
+                    >
+                      २ लहर (2 Rows)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setColumnLayout('3_COLUMNS')}
+                      className={`px-2 py-0.5 rounded text-[10.5px] font-bold transition ${
+                        columnLayout === '3_COLUMNS'
+                          ? 'bg-[#1e3a5f] text-white'
+                          : 'bg-white text-slate-700 border border-slate-300'
+                      }`}
+                    >
+                      ३ लहर (3 Rows)
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">⬅️ Left Row Desks *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      required
-                      value={leftBenches}
-                      onChange={(e) => setLeftBenches(e.target.value)}
-                      className="erp-input font-mono font-bold"
-                    />
-                    <span className="text-[10px] text-gray-500">बायाँ लहरका बेन्च</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">➡️ Right Row Desks *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      required
-                      value={rightBenches}
-                      onChange={(e) => setRightBenches(e.target.value)}
-                      className="erp-input font-mono font-bold"
-                    />
-                    <span className="text-[10px] text-gray-500">दायाँ लहरका बेन्च</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk (सिट सङ्ख्या) *</label>
-                    <div className="space-y-1">
+                <div className={`grid grid-cols-1 ${columnLayout === '3_COLUMNS' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+                  {/* LEFT SIDE SETUP */}
+                  <div className="p-3 bg-white rounded-xl border border-blue-200 space-y-2">
+                    <span className="font-bold text-xs text-blue-900 block border-b border-blue-100 pb-1">
+                      ⬅️ बायाँ लहर (Left Row)
+                    </span>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">डेस्क/बेन्च सङ्ख्या (Desks):</label>
                       <input
                         type="number"
                         min="1"
-                        max="10"
+                        max="100"
                         required
-                        value={seatsPerBench}
-                        onChange={(e) => setSeatsPerBench(e.target.value)}
+                        value={leftBenches}
+                        onChange={(e) => setLeftBenches(e.target.value)}
                         className="erp-input font-mono font-bold"
-                        placeholder="e.g. 2"
                       />
-                      <div className="flex items-center gap-1 flex-wrap">
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">सिट प्रति डेस्क (Seats / Desk):</label>
+                      <div className="flex items-center gap-1">
                         {[1, 2, 3, 4].map((num) => (
                           <button
                             key={num}
                             type="button"
-                            onClick={() => setSeatsPerBench(String(num))}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                              seatsPerBench === String(num)
-                                ? 'bg-[#1e3a5f] text-white'
-                                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                            onClick={() => setLeftSeatsPerBench(String(num))}
+                            className={`flex-1 py-1 rounded text-[10.5px] font-bold transition ${
+                              leftSeatsPerBench === String(num)
+                                ? 'bg-blue-700 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
                             }`}
                           >
-                            {num === 1 ? '1' : num === 2 ? '2 (L&R)' : num === 3 ? '3' : `${num}`}
+                            {num === 1 ? '1' : num === 2 ? '2' : num === 3 ? '3' : '4'}
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-blue-700 text-right pt-0.5">
+                      क्षमता: {(parseInt(leftBenches) || 0) * (parseInt(leftSeatsPerBench) || 2)} जना
+                    </div>
+                  </div>
+
+                  {/* MIDDLE SIDE SETUP (If 3 Columns) */}
+                  {columnLayout === '3_COLUMNS' && (
+                    <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-2">
+                      <span className="font-bold text-xs text-purple-900 block border-b border-purple-100 pb-1">
+                        ↔️ बीचको लहर (Middle Row)
+                      </span>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-0.5">डेस्क/बेन्च सङ्ख्या (Desks):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={middleBenches}
+                          onChange={(e) => setMiddleBenches(e.target.value)}
+                          className="erp-input font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-0.5">सिट प्रति डेस्क (Seats / Desk):</label>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setMiddleSeatsPerBench(String(num))}
+                              className={`flex-1 py-1 rounded text-[10.5px] font-bold transition ${
+                                middleSeatsPerBench === String(num)
+                                  ? 'bg-purple-700 text-white'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                              }`}
+                            >
+                              {num === 1 ? '1' : num === 2 ? '2' : num === 3 ? '3' : '4'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-mono font-bold text-purple-700 text-right pt-0.5">
+                        क्षमता: {(parseInt(middleBenches) || 0) * (parseInt(middleSeatsPerBench) || 2)} जना
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RIGHT SIDE SETUP */}
+                  <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-2">
+                    <span className="font-bold text-xs text-indigo-900 block border-b border-indigo-100 pb-1">
+                      ➡️ दायाँ लहर (Right Row)
+                    </span>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">डेस्क/बेन्च सङ्ख्या (Desks):</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        required
+                        value={rightBenches}
+                        onChange={(e) => setRightBenches(e.target.value)}
+                        className="erp-input font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">सिट प्रति डेस्क (Seats / Desk):</label>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setRightSeatsPerBench(String(num))}
+                            className={`flex-1 py-1 rounded text-[10.5px] font-bold transition ${
+                              rightSeatsPerBench === String(num)
+                                ? 'bg-indigo-700 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                            }`}
+                          >
+                            {num === 1 ? '1' : num === 2 ? '2' : num === 3 ? '3' : '4'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-indigo-700 text-right pt-0.5">
+                      क्षमता: {(parseInt(rightBenches) || 0) * (parseInt(rightSeatsPerBench) || 2)} जना
                     </div>
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-white p-3 border border-blue-200 flex items-center justify-between font-mono text-xs">
                   <span className="text-gray-600 font-bold">
-                    Total: {(parseInt(leftBenches) || 0) + (parseInt(rightBenches) || 0)} Benches
+                    कुल बेन्च: {(parseInt(leftBenches) || 0) + (parseInt(rightBenches) || 0) + (columnLayout === '3_COLUMNS' ? (parseInt(middleBenches) || 0) : 0)} Benches
                   </span>
-                  <span className="font-extrabold text-blue-900">
-                    👥 Seating Capacity: {((parseInt(leftBenches) || 0) + (parseInt(rightBenches) || 0)) * (parseInt(seatsPerBench) || 2)} Students
+                  <span className="font-extrabold text-blue-900 text-sm">
+                    👥 कुल सिट क्षमता: {
+                      ((parseInt(leftBenches) || 0) * (parseInt(leftSeatsPerBench) || 2)) +
+                      ((parseInt(rightBenches) || 0) * (parseInt(rightSeatsPerBench) || 2)) +
+                      (columnLayout === '3_COLUMNS' ? ((parseInt(middleBenches) || 0) * (parseInt(middleSeatsPerBench) || 2)) : 0)
+                    } Students
                   </span>
                 </div>
               </div>
@@ -1782,79 +2138,170 @@ export default function ExamSeatPlanningPage() {
                 <div className="flex items-center justify-between border-b border-blue-200/60 pb-2">
                   <span className="font-extrabold text-xs text-[#1e3a5f] flex items-center gap-1.5">
                     <Columns size={14} className="text-blue-600" />
-                    <span>Physical Desk Columns (कोठाको लहर संरचना)</span>
+                    <span>Physical Desk Columns & Seats Setup (कोठाको लहर तथा सिट संरचना)</span>
                   </span>
-                  <span className="text-[10.5px] text-gray-500 font-nepali">२-लहर वा ३-लहर डेस्क</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditColumnLayout('2_COLUMNS')}
+                      className={`px-2 py-0.5 rounded text-[10.5px] font-bold transition ${
+                        editColumnLayout === '2_COLUMNS'
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-white text-slate-700 border border-slate-300'
+                      }`}
+                    >
+                      २ लहर
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditColumnLayout('3_COLUMNS')}
+                      className={`px-2 py-0.5 rounded text-[10.5px] font-bold transition ${
+                        editColumnLayout === '3_COLUMNS'
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-white text-slate-700 border border-slate-300'
+                      }`}
+                    >
+                      ३ लहर
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">⬅️ Left Row Desks *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      required
-                      value={editLeftBenches}
-                      onChange={(e) => setEditLeftBenches(e.target.value)}
-                      className="erp-input font-mono font-bold"
-                    />
-                    <span className="text-[10px] text-gray-500">बायाँ लहरका बेन्च</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">➡️ Right Row Desks *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      required
-                      value={editRightBenches}
-                      onChange={(e) => setEditRightBenches(e.target.value)}
-                      className="erp-input font-mono font-bold"
-                    />
-                    <span className="text-[10px] text-gray-500">दायाँ लहरका बेन्च</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-700 mb-1">Seats / Desk (सिट सङ्ख्या) *</label>
-                    <div className="space-y-1">
+                <div className={`grid grid-cols-1 ${editColumnLayout === '3_COLUMNS' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3`}>
+                  {/* EDIT LEFT SIDE SETUP */}
+                  <div className="p-3 bg-white rounded-xl border border-blue-200 space-y-2">
+                    <span className="font-bold text-xs text-blue-900 block border-b border-blue-100 pb-1">
+                      ⬅️ बायाँ लहर (Left Row)
+                    </span>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">डेस्क/बेन्च सङ्ख्या (Desks):</label>
                       <input
                         type="number"
                         min="1"
-                        max="10"
+                        max="100"
                         required
-                        value={editSeatsPerBench}
-                        onChange={(e) => setEditSeatsPerBench(e.target.value)}
+                        value={editLeftBenches}
+                        onChange={(e) => setEditLeftBenches(e.target.value)}
                         className="erp-input font-mono font-bold"
-                        placeholder="e.g. 2"
                       />
-                      <div className="flex items-center gap-1 flex-wrap">
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">सिट प्रति डेस्क (Seats / Desk):</label>
+                      <div className="flex items-center gap-1">
                         {[1, 2, 3, 4].map((num) => (
                           <button
                             key={num}
                             type="button"
-                            onClick={() => setEditSeatsPerBench(String(num))}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                              editSeatsPerBench === String(num)
+                            onClick={() => setEditLeftSeatsPerBench(String(num))}
+                            className={`flex-1 py-1 rounded text-[10.5px] font-bold transition ${
+                              editLeftSeatsPerBench === String(num)
                                 ? 'bg-blue-700 text-white'
-                                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
                             }`}
                           >
-                            {num === 1 ? '1' : num === 2 ? '2 (L&R)' : num === 3 ? '3' : `${num}`}
+                            {num === 1 ? '1' : num === 2 ? '2' : num === 3 ? '3' : '4'}
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-blue-700 text-right pt-0.5">
+                      क्षमता: {(parseInt(editLeftBenches) || 0) * (parseInt(editLeftSeatsPerBench) || 2)} जना
+                    </div>
+                  </div>
+
+                  {/* EDIT MIDDLE SIDE SETUP (If 3 Columns) */}
+                  {editColumnLayout === '3_COLUMNS' && (
+                    <div className="p-3 bg-white rounded-xl border border-purple-200 space-y-2">
+                      <span className="font-bold text-xs text-purple-900 block border-b border-purple-100 pb-1">
+                        ↔️ बीचको लहर (Middle Row)
+                      </span>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-0.5">डेस्क/बेन्च सङ्ख्या (Desks):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={editMiddleBenches}
+                          onChange={(e) => setEditMiddleBenches(e.target.value)}
+                          className="erp-input font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-0.5">सिट प्रति डेस्क (Seats / Desk):</label>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4].map((num) => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setEditMiddleSeatsPerBench(String(num))}
+                              className={`flex-1 py-1 rounded text-[10.5px] font-bold transition ${
+                                editMiddleSeatsPerBench === String(num)
+                                  ? 'bg-purple-700 text-white'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                              }`}
+                            >
+                              {num === 1 ? '1' : num === 2 ? '2' : num === 3 ? '3' : '4'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-[10px] font-mono font-bold text-purple-700 text-right pt-0.5">
+                        क्षमता: {(parseInt(editMiddleBenches) || 0) * (parseInt(editMiddleSeatsPerBench) || 2)} जना
+                      </div>
+                    </div>
+                  )}
+
+                  {/* EDIT RIGHT SIDE SETUP */}
+                  <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-2">
+                    <span className="font-bold text-xs text-indigo-900 block border-b border-indigo-100 pb-1">
+                      ➡️ दायाँ लहर (Right Row)
+                    </span>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">डेस्क/बेन्च सङ्ख्या (Desks):</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        required
+                        value={editRightBenches}
+                        onChange={(e) => setEditRightBenches(e.target.value)}
+                        className="erp-input font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-0.5">सिट प्रति डेस्क (Seats / Desk):</label>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setEditRightSeatsPerBench(String(num))}
+                            className={`flex-1 py-1 rounded text-[10.5px] font-bold transition ${
+                              editRightSeatsPerBench === String(num)
+                                ? 'bg-indigo-700 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                            }`}
+                          >
+                            {num === 1 ? '1' : num === 2 ? '2' : num === 3 ? '3' : '4'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-indigo-700 text-right pt-0.5">
+                      क्षमता: {(parseInt(editRightBenches) || 0) * (parseInt(editRightSeatsPerBench) || 2)} जना
                     </div>
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-white p-3 border border-blue-200 flex items-center justify-between font-mono text-xs">
                   <span className="text-gray-600 font-bold">
-                    Total: {(parseInt(editLeftBenches) || 0) + (parseInt(editRightBenches) || 0)} Benches
+                    कुल बेन्च: {(parseInt(editLeftBenches) || 0) + (parseInt(editRightBenches) || 0) + (editColumnLayout === '3_COLUMNS' ? (parseInt(editMiddleBenches) || 0) : 0)} Benches
                   </span>
-                  <span className="font-extrabold text-blue-900">
-                    👥 Seating Capacity: {((parseInt(editLeftBenches) || 0) + (parseInt(editRightBenches) || 0)) * (parseInt(editSeatsPerBench) || 2)} Students
+                  <span className="font-extrabold text-blue-900 text-sm">
+                    👥 कुल सिट क्षमता: {
+                      ((parseInt(editLeftBenches) || 0) * (parseInt(editLeftSeatsPerBench) || 2)) +
+                      ((parseInt(editRightBenches) || 0) * (parseInt(editRightSeatsPerBench) || 2)) +
+                      (editColumnLayout === '3_COLUMNS' ? ((parseInt(editMiddleBenches) || 0) * (parseInt(editMiddleSeatsPerBench) || 2)) : 0)
+                    } Students
                   </span>
                 </div>
               </div>
