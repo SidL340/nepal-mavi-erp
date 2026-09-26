@@ -596,10 +596,19 @@ export default function ExamSeatPlanningPage() {
     return colors[idx];
   };
 
-  // Print Door Notice (ढोका सूचना)
-  const printDoorNotice = () => {
+  // Print Door Notice (ढोका सूचना / Exam Hall Door Notice)
+  const printDoorNotice = (targetRoomId?: number | string) => {
     if (seatPlans.length === 0) {
       toast.error('No seat plan to print. Please generate seats first.');
+      return;
+    }
+
+    const roomsToPrint = targetRoomId
+      ? Object.values(seatPlansByRoom).filter((r) => String(r.room?.id) === String(targetRoomId))
+      : Object.values(seatPlansByRoom);
+
+    if (roomsToPrint.length === 0) {
+      toast.error('No seat plans found for the selected room.');
       return;
     }
 
@@ -618,35 +627,52 @@ export default function ExamSeatPlanningPage() {
       <head>
         <title>Exam Door Notice - ${examTitle}</title>
         <style>
-          @page { size: A4 portrait; margin: 10mm; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; margin: 0; padding: 0; color: #111; }
-          .header { text-align: center; border-bottom: 2px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 10px; }
-          .title { font-size: 16px; font-weight: 800; color: #1e3a5f; letter-spacing: 0.5px; }
-          .subtitle { font-size: 13px; font-weight: 700; color: #334155; margin-top: 2px; }
-          .meta { font-size: 11px; margin-top: 4px; color: #475569; }
+          @page { size: A4 portrait; margin: 8mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.5px; margin: 0; padding: 0; color: #111; line-height: 1.3; }
+          .header { text-align: center; border-bottom: 2.5px solid #1e3a5f; padding-bottom: 6px; margin-bottom: 8px; }
+          .school-title { font-size: 16px; font-weight: 900; color: #1e3a5f; letter-spacing: 0.5px; text-transform: uppercase; }
+          .school-subtitle { font-size: 11px; color: #475569; font-weight: 600; margin-top: 1px; }
+          .notice-badge { display: inline-block; background: #1e3a5f; color: #fff; font-size: 12px; font-weight: 800; padding: 3px 14px; border-radius: 20px; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .meta-bar { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; margin-top: 8px; font-size: 11px; }
+          .room-hero { background: #eff6ff; border: 2px solid #3b82f6; border-radius: 6px; padding: 8px 12px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+          .room-title { font-size: 18px; font-weight: 900; color: #1e3a5f; }
+          .room-subtitle { font-size: 11px; font-weight: bold; color: #1d4ed8; margin-top: 2px; }
+          .class-summary-box { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 10px; }
+          .class-summary-chip { background: #fff; border: 1px solid #f59e0b; color: #92400e; font-weight: 800; font-size: 10.5px; padding: 2px 8px; border-radius: 4px; }
           .room-card { page-break-after: always; margin-bottom: 20px; }
           .room-card:last-child { page-break-after: auto; }
-          .room-header { background: #1e3a5f; color: white; padding: 7px 12px; font-size: 13px; font-weight: bold; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-          .section-title { font-size: 11px; font-weight: bold; color: #1e3a5f; margin: 8px 0 4px 0; border-left: 3px solid #1e3a5f; padding-left: 5px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 10.5px; }
-          th, td { border: 1px solid #cbd5e1; padding: 4.5px 6px; text-align: left; vertical-align: middle; }
-          th { background: #f1f5f9; font-weight: 700; color: #1e293b; font-size: 10px; }
-          .seat-badge { font-weight: 800; font-family: monospace; background: #fef3c7; color: #92400e; padding: 2px 5px; border-radius: 3px; border: 1px solid #fde68a; font-size: 10.5px; white-space: nowrap; }
-          .bench-badge { font-weight: 700; font-family: monospace; color: #0f172a; }
-          .student-name { font-weight: 700; color: #0f172a; }
-          .class-tag { font-weight: 700; color: #1e3a5f; background: #e0f2fe; padding: 1px 4px; border-radius: 2px; font-size: 9.5px; }
-          .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-          .column-title { text-align: center; background: #e2e8f0; font-weight: bold; padding: 4px; font-size: 10.5px; border-radius: 3px; margin-bottom: 4px; color: #1e293b; }
+          .section-title { font-size: 11px; font-weight: 800; color: #1e3a5f; margin: 10px 0 4px 0; border-left: 3.5px solid #1e3a5f; padding-left: 6px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10px; }
+          th, td { border: 1px solid #cbd5e1; padding: 4px 6px; text-align: left; vertical-align: middle; }
+          th { background: #f1f5f9; font-weight: 800; color: #0f172a; font-size: 9.5px; }
+          .seat-badge { font-weight: 900; font-family: monospace; background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; border: 1px solid #fde68a; font-size: 11px; white-space: nowrap; display: inline-block; }
+          .bench-badge { font-weight: 800; font-family: monospace; color: #0f172a; }
+          .student-name { font-weight: 800; color: #0f172a; font-size: 10.5px; }
+          .class-tag { font-weight: 800; color: #1e3a5f; background: #e0f2fe; padding: 1.5px 5px; border-radius: 3px; font-size: 9.5px; border: 1px solid #bae6fd; }
+          .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+          .column-title { text-align: center; background: #e2e8f0; font-weight: 800; padding: 3px; font-size: 10px; border-radius: 3px; margin-bottom: 3px; color: #1e293b; }
+          .footer-signs { display: flex; justify-content: space-between; margin-top: 18px; padding-top: 16px; border-top: 1px dashed #94a3b8; font-size: 10px; font-weight: 800; color: #334155; }
         </style>
       </head>
       <body>
     `;
 
-    Object.values(seatPlansByRoom).forEach(({ room, seats, benches }) => {
-      // Sort seats by bench and position
+    roomsToPrint.forEach(({ room, seats, benches }) => {
+      // Sort seats sequentially by bench and position
       const sortedSeats = [...seats].sort((a, b) => {
         if (a.benchNo !== b.benchNo) return a.benchNo - b.benchNo;
         return (a.seatPosition || '').localeCompare(b.seatPosition || '');
+      });
+
+      // Compute class summary for this room
+      const classMap: Record<string, { className: string; rolls: number[]; count: number }> = {};
+      sortedSeats.forEach((s) => {
+        const cName = s.student?.classEnrollment?.[0]?.class?.name || `Class ${s.classId}`;
+        if (!classMap[cName]) {
+          classMap[cName] = { className: cName, rolls: [], count: 0 };
+        }
+        classMap[cName].count++;
+        if (s.rollNo) classMap[cName].rolls.push(Number(s.rollNo));
       });
 
       const benchKeys = Object.keys(benches).map(Number).sort((a, b) => a - b);
@@ -657,30 +683,49 @@ export default function ExamSeatPlanningPage() {
       html += `
         <div class="room-card">
           <div class="header">
-            <div class="title">श्री नेपाल माध्यमिक विद्यालय (NEPAL SECONDARY SCHOOL)</div>
-            <div class="subtitle">परीक्षा कोठा सिट सूचना (EXAMINATION ROOM SEAT DIRECTORY & NOTICE)</div>
-            <div class="meta">
-              <strong>${examTitle}</strong> &nbsp;|&nbsp; 
-              <strong>सत्र (Shift):</strong> ${shiftInfo?.nameNepali || selectedShift} (${shiftInfo?.startTime || ''} - ${shiftInfo?.endTime || ''})
+            <div class="school-title">श्री नेपाल माध्यमिक विद्यालय (NEPAL SECONDARY SCHOOL)</div>
+            <div class="school-subtitle">परीक्षा नियन्त्रण शाखा &bull; Examination Control Division</div>
+            <div><span class="notice-badge">📋 परीक्षा कोठा ढोका सिट सूचना (EXAM ROOM DOOR NOTICE)</span></div>
+          </div>
+
+          <div class="room-hero">
+            <div>
+              <div class="room-title">🏢 परीक्षा कोठा: ${room.roomNo}</div>
+              <div class="room-subtitle">भवन / ब्लक: ${room.building || 'Main Block'}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 13px; font-weight: 900; color: #1e3a5f;">कुल परीक्षार्थी: ${seats.length} जना</div>
+              <div style="font-size: 10.5px; color: #475569; font-weight: 700;">कुल डेस्क/बेन्च: ${benchKeys.length} वटा</div>
             </div>
           </div>
 
-          <div class="room-header">
-            <span>🏢 परीक्षा कोठा (Room): <strong>${room.roomNo}</strong> (${room.building || 'Main Block'})</span>
-            <span>कुल विद्यार्थी: <strong>${seats.length} जना</strong> &nbsp;|&nbsp; कुल बेन्च: <strong>${benchKeys.length}</strong></span>
+          <div class="meta-bar">
+            <div><strong>📝 परीक्षा (Exam):</strong> ${examTitle}</div>
+            <div><strong>⏰ सत्र (Shift):</strong> ${shiftInfo?.nameNepali || selectedShift} (${shiftInfo?.startTime || ''} - ${shiftInfo?.endTime || ''})</div>
           </div>
 
-          <div class="section-title">📋 १ देखि अन्तिम सिट सम्मको नामावली (Sequential Room Seat List)</div>
+          <div class="class-summary-box">
+            <span style="font-weight: 900; color: #b45309; font-size: 10.5px; display: flex; align-items: center;">🏷️ कोठामा समावेश कक्षाहरू:</span>
+            ${Object.values(classMap).map((cm) => {
+              const minRoll = cm.rolls.length > 0 ? Math.min(...cm.rolls) : '-';
+              const maxRoll = cm.rolls.length > 0 ? Math.max(...cm.rolls) : '-';
+              const rollRange = minRoll === maxRoll ? `Roll #${minRoll}` : `Roll #${minRoll} – #${maxRoll}`;
+              return `<span class="class-summary-chip">${cm.className}: ${rollRange} (${cm.count} जना)</span>`;
+            }).join(' ')}
+          </div>
+
+          <div class="section-title">📋 १ देखि अन्तिम सिट सम्मको क्रमिक नामावली (Sequential Seating Directory)</div>
           <table>
             <thead>
               <tr>
                 <th style="width: 13%; text-align: center;">सिट नं. (Seat No)</th>
-                <th style="width: 14%; text-align: center;">डेस्क/बेन्च (Bench)</th>
-                <th style="width: 10%; text-align: center;">स्थान (Side)</th>
-                <th style="width: 28%;">विद्यार्थीको नाम (Student Name)</th>
-                <th style="width: 15%;">कक्षा (Class)</th>
-                <th style="width: 10%; text-align: center;">रोल (Roll)</th>
-                <th style="width: 10%; text-align: center;">EMIS / दर्ता नं.</th>
+                <th style="width: 13%; text-align: center;">डेस्क/बेन्च</th>
+                <th style="width: 9%; text-align: center;">स्थान</th>
+                <th style="width: 25%;">परीक्षार्थीको नाम (Student Name)</th>
+                <th style="width: 14%;">कक्षा (Class)</th>
+                <th style="width: 8%; text-align: center;">रोल नं.</th>
+                <th style="width: 10%; text-align: center;">दर्ता / EMIS</th>
+                <th style="width: 8%; text-align: center;">उपस्थिति</th>
               </tr>
             </thead>
             <tbody>
@@ -690,25 +735,26 @@ export default function ExamSeatPlanningPage() {
                   <tr>
                     <td style="text-align: center;"><span class="seat-badge">🪑 ${displaySeatNo}</span></td>
                     <td style="text-align: center;" class="bench-badge">Bench #${s.benchNo}</td>
-                    <td style="text-align: center; font-size: 9.5px; font-weight: bold; color: #475569;">${s.seatPosition}</td>
+                    <td style="text-align: center; font-size: 9px; font-weight: 800; color: #475569;">${s.seatPosition}</td>
                     <td class="student-name">${s.student?.fullName || '—'}</td>
                     <td><span class="class-tag">${s.student?.classEnrollment?.[0]?.class?.name || 'Class ' + s.classId}</span></td>
-                    <td style="text-align: center; font-weight: bold; font-family: monospace;">#${s.rollNo || '-'}</td>
-                    <td style="text-align: center; font-family: monospace; font-size: 9.5px;">${s.student?.emisId || s.student?.studentId || '-'}</td>
+                    <td style="text-align: center; font-weight: 900; font-family: monospace;">#${s.rollNo || '-'}</td>
+                    <td style="text-align: center; font-family: monospace; font-size: 9px;">${s.student?.emisId || s.student?.studentId || '-'}</td>
+                    <td style="text-align: center; font-size: 9px; color: #94a3b8;">[ &nbsp; ]</td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
           </table>
 
-          <div class="section-title" style="margin-top: 12px;">🗺️ कोठाको भौतिक डेस्क संरचना (Physical Classroom Desk Map)</div>
+          <div class="section-title">🗺️ कोठाको भौतिक डेस्क नक्सा (Classroom Desk Seating Layout)</div>
           <div class="grid-container">
             <div>
-              <div class="column-title">⬅️ बायाँ लहर (LEFT ROW BENCHES)</div>
+              <div class="column-title">⬅️ बायाँ लहर (LEFT ROW DESKS)</div>
               <table>
                 <thead>
                   <tr>
-                    <th style="width: 18%;">Bench</th>
+                    <th style="width: 18%; text-align: center;">Bench</th>
                     <th style="width: 82%;">सिट तथा परीक्षार्थी विवरण (Seated Students)</th>
                   </tr>
                 </thead>
@@ -721,13 +767,13 @@ export default function ExamSeatPlanningPage() {
                         <td>
                           <div style="display:flex; flex-wrap:wrap; gap:3px;">
                             ${bSeats.length > 0 ? bSeats.map((s: any) => `
-                              <div style="flex:1 1 calc(50% - 4px); min-width:95px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px;">
+                              <div style="flex:1 1 calc(50% - 4px); min-width:90px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                                  <span class="seat-badge" style="font-size:9px; padding:1px 3px;">${s.seatNo || 'Seat'}</span>
-                                  <span style="font-size:8.5px; font-weight:bold; color:#1e3a5f;">${s.seatPosition}</span>
+                                  <span class="seat-badge" style="font-size:8.5px; padding:0.5px 3px;">${s.seatNo || 'Seat'}</span>
+                                  <span style="font-size:8px; font-weight:800; color:#1e3a5f;">${s.seatPosition}</span>
                                 </div>
-                                <div class="student-name" style="font-size:10px; margin-top:2px;">${s.student?.fullName}</div>
-                                <div style="font-size:9px; color:#475569;">${s.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${s.rollNo || '-'})</div>
+                                <div class="student-name" style="font-size:9.5px; margin-top:1px;">${s.student?.fullName}</div>
+                                <div style="font-size:8.5px; color:#475569;">${s.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: #${s.rollNo || '-'})</div>
                               </div>
                             `).join('') : '<span style="color:#999; font-style:italic;">खाली बेन्च</span>'}
                           </div>
@@ -740,11 +786,11 @@ export default function ExamSeatPlanningPage() {
             </div>
 
             <div>
-              <div class="column-title">➡️ दायाँ लहर (RIGHT ROW BENCHES)</div>
+              <div class="column-title">➡️ दायाँ लहर (RIGHT ROW DESKS)</div>
               <table>
                 <thead>
                   <tr>
-                    <th style="width: 18%;">Bench</th>
+                    <th style="width: 18%; text-align: center;">Bench</th>
                     <th style="width: 82%;">सिट तथा परीक्षार्थी विवरण (Seated Students)</th>
                   </tr>
                 </thead>
@@ -757,13 +803,13 @@ export default function ExamSeatPlanningPage() {
                         <td>
                           <div style="display:flex; flex-wrap:wrap; gap:3px;">
                             ${bSeats.length > 0 ? bSeats.map((s: any) => `
-                              <div style="flex:1 1 calc(50% - 4px); min-width:95px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px;">
+                              <div style="flex:1 1 calc(50% - 4px); min-width:90px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:3px; padding:2px 4px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                                  <span class="seat-badge" style="font-size:9px; padding:1px 3px;">${s.seatNo || 'Seat'}</span>
-                                  <span style="font-size:8.5px; font-weight:bold; color:#1e3a5f;">${s.seatPosition}</span>
+                                  <span class="seat-badge" style="font-size:8.5px; padding:0.5px 3px;">${s.seatNo || 'Seat'}</span>
+                                  <span style="font-size:8px; font-weight:800; color:#1e3a5f;">${s.seatPosition}</span>
                                 </div>
-                                <div class="student-name" style="font-size:10px; margin-top:2px;">${s.student?.fullName}</div>
-                                <div style="font-size:9px; color:#475569;">${s.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: ${s.rollNo || '-'})</div>
+                                <div class="student-name" style="font-size:9.5px; margin-top:1px;">${s.student?.fullName}</div>
+                                <div style="font-size:8.5px; color:#475569;">${s.student?.classEnrollment?.[0]?.class?.name || ''} (Roll: #${s.rollNo || '-'})</div>
                               </div>
                             `).join('') : '<span style="color:#999; font-style:italic;">खाली बेन्च</span>'}
                           </div>
@@ -774,6 +820,12 @@ export default function ExamSeatPlanningPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div class="footer-signs">
+            <div>____________________________<br/>निरीक्षकको दस्तखत (Invigilator Sign)</div>
+            <div>____________________________<br/>केन्द्राध्यक्ष / परीक्षा शाखा (Exam In-charge)</div>
+            <div>____________________________<br/>प्रधानाध्यापक (Headmaster / Principal)</div>
           </div>
         </div>
       `;
@@ -791,10 +843,19 @@ export default function ExamSeatPlanningPage() {
     printWindow.document.close();
   };
 
-  // Print Desk Slips / Desk Cards (डेस्कमा टाँस्ने सिट स्टिकर/स्लिपहरू)
-  const printDeskSlips = () => {
+  // Print Desk Slips / Desk Stickers (डेस्कमा टाँस्ने सिट स्टिकर/स्लिपहरू)
+  const printDeskSlips = (targetRoomId?: number | string) => {
     if (seatPlans.length === 0) {
       toast.error('No seat plan to print.');
+      return;
+    }
+
+    const plansToPrint = targetRoomId
+      ? seatPlans.filter((s) => String(s.roomId) === String(targetRoomId))
+      : seatPlans;
+
+    if (plansToPrint.length === 0) {
+      toast.error('No seat plans found for the selected room.');
       return;
     }
 
@@ -813,29 +874,29 @@ export default function ExamSeatPlanningPage() {
       <head>
         <title>Desk Stickers - ${examTitle}</title>
         <style>
-          @page { size: A4; margin: 8mm; }
+          @page { size: A4 portrait; margin: 6mm; }
           body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10px; margin: 0; padding: 0; color: #111; }
-          .slips-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+          .slips-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
           .slip-card {
-            border: 2px dashed #334155;
+            border: 2px dashed #475569;
             border-radius: 8px;
-            padding: 10px 12px;
+            padding: 9px 12px;
             box-sizing: border-box;
             background: #fff;
             position: relative;
             page-break-inside: avoid;
           }
-          .school-header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 4px; margin-bottom: 6px; }
-          .school-name { font-weight: 800; font-size: 11.5px; color: #1e3a5f; letter-spacing: 0.5px; }
-          .exam-name { font-size: 9.5px; font-weight: 700; color: #475569; margin-top: 1px; }
-          .seat-hero { background: #fef3c7; border: 1.5px solid #fde68a; border-radius: 6px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+          .school-header { text-align: center; border-bottom: 1.5px solid #1e3a5f; padding-bottom: 3px; margin-bottom: 5px; }
+          .school-name { font-weight: 900; font-size: 11px; color: #1e3a5f; letter-spacing: 0.5px; text-transform: uppercase; }
+          .exam-name { font-size: 9px; font-weight: 700; color: #475569; margin-top: 1px; }
+          .seat-hero { background: #fef3c7; border: 1.5px solid #fde68a; border-radius: 6px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
           .seat-number-big { font-size: 18px; font-weight: 900; color: #92400e; font-family: monospace; }
-          .room-bench-info { text-align: right; font-size: 10.5px; font-weight: 800; color: #1e3a5f; }
-          .candidate-details { font-size: 11px; margin-top: 4px; line-height: 1.4; }
-          .candidate-name { font-size: 13px; font-weight: 800; color: #0f172a; }
-          .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 4px; font-size: 10px; }
-          .meta-item { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
-          .cut-guide { text-align: right; font-size: 8px; color: #94a3b8; margin-top: 4px; font-style: italic; }
+          .room-bench-info { text-align: right; font-size: 10px; font-weight: 800; color: #1e3a5f; }
+          .candidate-details { font-size: 10.5px; margin-top: 3px; line-height: 1.35; }
+          .candidate-name { font-size: 13px; font-weight: 900; color: #0f172a; }
+          .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 3px; font-size: 9.5px; }
+          .meta-item { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; }
+          .cut-guide { text-align: right; font-size: 7.5px; color: #94a3b8; margin-top: 4px; font-style: italic; font-weight: bold; }
         </style>
       </head>
       <body>
@@ -843,7 +904,7 @@ export default function ExamSeatPlanningPage() {
     `;
 
     // Sort seat plans room-wise and bench-wise
-    const sortedPlans = [...seatPlans].sort((a, b) => {
+    const sortedPlans = [...plansToPrint].sort((a, b) => {
       if (a.roomId !== b.roomId) return a.roomId - b.roomId;
       if (a.benchNo !== b.benchNo) return a.benchNo - b.benchNo;
       return (a.seatPosition || '').localeCompare(b.seatPosition || '');
@@ -860,12 +921,12 @@ export default function ExamSeatPlanningPage() {
           
           <div class="seat-hero">
             <div>
-              <div style="font-size: 8.5px; font-weight: bold; color: #b45309; text-transform: uppercase;">EXAM SEAT NO (सिट नं.)</div>
+              <div style="font-size: 8px; font-weight: 900; color: #b45309; text-transform: uppercase;">EXAM SEAT NO (सिट नं.)</div>
               <div class="seat-number-big">🪑 ${displaySeatNo}</div>
             </div>
             <div class="room-bench-info">
-              <div>🏢 ${seat.room?.roomNo || 'Room'}</div>
-              <div style="color: #475569; font-size: 9.5px;">Bench #${seat.benchNo} (${seat.seatPosition})</div>
+              <div>🏢 Room: <strong>${seat.room?.roomNo || 'Room'}</strong></div>
+              <div style="color: #475569; font-size: 9px; font-weight: 700;">Bench #${seat.benchNo} (${seat.seatPosition})</div>
             </div>
           </div>
 
@@ -874,10 +935,10 @@ export default function ExamSeatPlanningPage() {
             <div class="meta-grid">
               <div class="meta-item"><strong>कक्षा:</strong> ${seat.student?.classEnrollment?.[0]?.class?.name || 'Class ' + seat.classId}</div>
               <div class="meta-item"><strong>रोल नं:</strong> #${seat.rollNo || '—'}</div>
-              <div class="meta-item" style="grid-column: span 2;"><strong>दर्ता / सिम्बोल:</strong> ${seat.student?.emisId || seat.student?.studentId || '—'}</div>
+              <div class="meta-item" style="grid-column: span 2;"><strong>दर्ता / सिम्बोल नं:</strong> ${seat.student?.emisId || seat.student?.studentId || '—'}</div>
             </div>
           </div>
-          <div class="cut-guide">✂️ डेस्कमा टाँस्नका लागि यहाँबाट काट्नुहोस् (Cut along dotted line)</div>
+          <div class="cut-guide">✂️ डेस्कमा टाँस्नका लागि यहाँबाट काट्नुहोस् (Cut & Tape to Desk)</div>
         </div>
       `;
     });
@@ -929,22 +990,24 @@ export default function ExamSeatPlanningPage() {
 
           <button
             type="button"
-            onClick={printDoorNotice}
+            onClick={() => printDoorNotice()}
             disabled={seatPlans.length === 0}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-700 transition shadow-2xs disabled:opacity-40"
+            title="सबै परीक्षा कोठाहरूको ढोका सूचना प्रिन्ट गर्नुहोस्"
           >
             <Printer size={14} className="text-blue-600" />
-            <span>Print Door Notice (ढोका टाँस)</span>
+            <span>Print All Door Notices (ढोका टाँस)</span>
           </button>
 
           <button
             type="button"
-            onClick={printDeskSlips}
+            onClick={() => printDeskSlips()}
             disabled={seatPlans.length === 0}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-3.5 py-2 text-xs font-bold text-gray-700 transition shadow-2xs disabled:opacity-40"
+            title="सबै परीक्षार्थीहरूको डेस्कमा टाँस्ने सिट स्लिपहरू प्रिन्ट गर्नुहोस्"
           >
             <Printer size={14} className="text-purple-600" />
-            <span>Desk Slips (स्लिपहरू)</span>
+            <span>Print All Desk Slips (डेस्क स्लिपहरू)</span>
           </button>
 
           <button
@@ -1511,20 +1574,22 @@ export default function ExamSeatPlanningPage() {
               <>
                 <button
                   type="button"
-                  onClick={printDoorNotice}
+                  onClick={() => printDoorNotice()}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 text-xs font-bold shadow-sm transition active:scale-95"
+                  title="सबै कोठाहरूको ढोका सूचना प्रिन्ट गर्नुहोस्"
                 >
-                  <Printer size={14} />
-                  <span>Print Door Notice</span>
+                  <Printer size={14} className="text-amber-300" />
+                  <span>Print All Door Notices (ढोका सूचना)</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={printDeskSlips}
+                  onClick={() => printDeskSlips()}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white px-3.5 py-2 text-xs font-bold shadow-sm transition active:scale-95"
+                  title="सबै परीक्षार्थीहरूको डेस्कमा टाँस्ने सिट स्लिपहरू प्रिन्ट गर्नुहोस्"
                 >
-                  <Printer size={14} />
-                  <span>Print Desk Slips</span>
+                  <Printer size={14} className="text-cyan-200" />
+                  <span>Print All Desk Slips (डेस्क स्लिपहरू)</span>
                 </button>
               </>
             )}
@@ -1563,7 +1628,7 @@ export default function ExamSeatPlanningPage() {
                   className="rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-sm space-y-5"
                 >
                   {/* Room Banner */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-slate-200 pb-3">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-2xl bg-[#1e3a5f] text-white flex items-center justify-center font-black text-sm shadow-xs">
                         🏢
@@ -1578,18 +1643,42 @@ export default function ExamSeatPlanningPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs flex-wrap">
-                      <span className="px-3 py-1 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 font-bold">
-                        Left: {leftBenchKeys.length} Desks ({breakdown.leftSeatsPerBench}/desk)
-                      </span>
-                      {middleBenchKeys.length > 0 && (
-                        <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold">
-                          Middle: {middleBenchKeys.length} Desks ({breakdown.middleSeatsPerBench}/desk)
+                    <div className="flex items-center gap-2 text-xs flex-wrap justify-between lg:justify-end">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2.5 py-1 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 font-bold">
+                          Left: {leftBenchKeys.length} Desks ({breakdown.leftSeatsPerBench}/desk)
                         </span>
-                      )}
-                      <span className="px-3 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold">
-                        Right: {rightBenchKeys.length} Desks ({breakdown.rightSeatsPerBench}/desk)
-                      </span>
+                        {middleBenchKeys.length > 0 && (
+                          <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 font-bold">
+                            Middle: {middleBenchKeys.length} Desks ({breakdown.middleSeatsPerBench}/desk)
+                          </span>
+                        )}
+                        <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold">
+                          Right: {rightBenchKeys.length} Desks ({breakdown.rightSeatsPerBench}/desk)
+                        </span>
+                      </div>
+
+                      {/* Room-specific Print Actions */}
+                      <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
+                        <button
+                          type="button"
+                          onClick={() => printDoorNotice(room.id)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1 text-[11px] font-bold shadow-2xs transition active:scale-95"
+                          title={`Print Door Notice for Room ${room.roomNo} only`}
+                        >
+                          <Printer size={12} className="text-amber-300" />
+                          <span>Door Notice</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => printDeskSlips(room.id)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-blue-600 bg-blue-700 hover:bg-blue-800 text-white px-2.5 py-1 text-[11px] font-bold shadow-2xs transition active:scale-95"
+                          title={`Print Desk Slips for Room ${room.roomNo} only`}
+                        >
+                          <Printer size={12} className="text-cyan-200" />
+                          <span>Desk Slips</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
