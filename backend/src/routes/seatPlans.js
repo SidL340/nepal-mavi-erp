@@ -691,26 +691,6 @@ router.post('/auto-generate', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'E
   }
 });
 
-          roomSeatCounter++;
-        }
-      }
-    }
-
-    if (newSeatPlans.length > 0) {
-      await prisma.examSeatPlan.createMany({ data: newSeatPlans });
-    }
-
-    return res.json({
-      success: true,
-      message: `सिट प्लानिङ [${shiftName}] सफलतापूर्वक तयार भयो! कुल ${newSeatPlans.length} जना विद्यार्थीहरूलाई ${rooms.length} वटा कोठामा सिट नं. (Seat 01, 02...) सहित व्यवस्थित गरियो। (बहिष्कृत: ${excludedIdsSet.size} जना)`,
-      data: { totalSeated: newSeatPlans.length, excludedCount: excludedIdsSet.size, shift: shiftName },
-    });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
-  }
-});
-
 // POST /api/seat-plans/allot-student — manual or late-arriving student seat allotment
 router.post('/allot-student', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'EXAM_INCHARGE'), async (req, res) => {
   try {
