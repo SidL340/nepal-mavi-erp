@@ -70,9 +70,14 @@ function getClassRank(name) {
 // GET /api/classes
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { academicYearId } = req.query;
+    const { academicYearId, allYears } = req.query;
     const where = {};
-    if (academicYearId) where.academicYearId = parseInt(academicYearId);
+    if (academicYearId) {
+      where.academicYearId = parseInt(academicYearId);
+    } else if (allYears !== 'true') {
+      const activeAy = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (activeAy) where.academicYearId = activeAy.id;
+    }
     let classes = await prisma.class.findMany({
       where,
       include: {

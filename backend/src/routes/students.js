@@ -324,9 +324,9 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
     };
     const affectedClassIds = new Set();
 
-    // Load existing classes for fast lookup under this Academic Year
+    // Load existing classes for fast lookup (from active academic year so past imports never create duplicate classes)
     const existingClasses = await prisma.class.findMany({
-      where: { academicYearId },
+      where: { academicYear: { isActive: true } },
     });
     
     // Map of normalizedName+section -> classId
@@ -361,7 +361,12 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
         return classLookup.get(keyNoSec);
       }
 
-      // Auto-create class on the fly for this academic year
+      // If importing for past academic year, NEVER create new Class records!
+      if (!isActiveYear) {
+        return null;
+      }
+
+      // Auto-create class on the fly ONLY for the ACTIVE academic year
       const newClass = await prisma.class.create({
         data: {
           name: normalizedName,
