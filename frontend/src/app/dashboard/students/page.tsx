@@ -39,7 +39,7 @@ export default function StudentsPage() {
   const queryClient = useQueryClient();
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'directory' | 'admission' | 'transferred' | 'analytics'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'admission' | 'upgrade' | 'transferred' | 'analytics'>('directory');
 
   // Filters (IEMIS Standard Filter Bar: Year, Class, Section, Search)
   const [selectedYear, setSelectedYear] = useState('');
@@ -48,6 +48,21 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [forceLoadAll, setForceLoadAll] = useState(false);
   const [batchYearFilter, setBatchYearFilter] = useState('');
+
+  // ── UPGRADE & PROMOTION PORTAL STATE ────────────────────────────────────
+  const [promoteFromYear, setPromoteFromYear] = useState('');
+  const [promoteFromClass, setPromoteFromClass] = useState('');
+  const [promoteToYear, setPromoteToYear] = useState('');
+  const [promoteToClass, setPromoteToClass] = useState('');
+  const [studentPromoteState, setStudentPromoteState] = useState<{
+    [id: number]: {
+      action: 'PROMOTE' | 'REPEAT' | 'GRADUATE' | 'TRANSFER';
+      targetClassId?: string;
+      rollNo?: number | string;
+      selected: boolean;
+    };
+  }>({});
+  const [selectAllPromote, setSelectAllPromote] = useState(true);
 
   // Modals
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -143,6 +158,21 @@ export default function StudentsPage() {
       return res.data;
     },
     enabled: activeTab === 'directory' && isFilterActive,
+  });
+
+  // Fetch Eligible Students for Class Promotion / Upgrade
+  const { data: sourceClassStudents = [], isLoading: isSourceClassLoading } = useQuery({
+    queryKey: ['promote-source-students', promoteFromYear, promoteFromClass],
+    queryFn: async () => {
+      if (!promoteFromClass) return [];
+      const params = new URLSearchParams();
+      if (promoteFromYear && promoteFromYear !== 'all') params.append('academicYearId', promoteFromYear);
+      params.append('classId', promoteFromClass);
+      params.append('limit', 'all');
+      const res = await api.get(`/students?${params.toString()}`);
+      return res.data?.data || [];
+    },
+    enabled: activeTab === 'upgrade' && Boolean(promoteFromClass),
   });
 
   // Fetch Transferred/Alumni Students
@@ -349,6 +379,26 @@ export default function StudentsPage() {
     bulkImportMutation.mutate(formData);
   };
 
+  // Bulk Student Upgrade / Promotion Mutation
+  const bulkUpgradeMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/students/bulk-upgrade', payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'विद्यार्थी कक्षा स्तरोन्नति सफल भयो!', { duration: 7000 });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['transferred-students'] });
+      queryClient.invalidateQueries({ queryKey: ['student-analytics'] });
+      queryClient.invalidateQueries({ queryKey: ['promote-source-students'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      setStudentPromoteState({});
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'विद्यार्थी स्तरोन्नति गर्न सकिएन।');
+    },
+  });
+
   // Auto-Assign Roll Numbers Mutation
   const autoRollMutation = useMutation({
     mutationFn: async () => {
@@ -404,6 +454,15 @@ export default function StudentsPage() {
           >
             <UserCheck size={14} />
             <span>Admission Portal (नयाँ भर्ना)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('upgrade')}
+            className={`rounded-lg px-3.5 py-1.5 transition flex items-center gap-1.5 ${
+              activeTab === 'upgrade' ? 'bg-gradient-to-r from-emerald-700 to-teal-800 text-white shadow-xs' : 'text-gray-700 hover:text-gray-900'
+            }`}
+          >
+            <GraduationCap size={15} className={activeTab === 'upgrade' ? 'text-amber-300' : 'text-emerald-600'} />
+            <span>Upgrade Students (कक्षा स्तरोन्नति)</span>
           </button>
           <button
             onClick={() => setActiveTab('transferred')}
@@ -1125,7 +1184,507 @@ export default function StudentsPage() {
         </div>
       )}
 
-      {/* ════════════════════ TAB 3: TRANSFERRED & ALUMNI ════════════════════ */}
+      {/* ════════════════════ TAB 3: UPGRADE & PROMOTION PORTAL ════════════════════ */}
+      {activeTab === 'upgrade' && (
+        <div className="space-y-5">
+          {/* Header Card */}
+          <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-blue-50/60 p-5 shadow-2xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base md:text-lg font-black text-emerald-950 flex items-center gap-2">
+                  <GraduationCap className="text-emerald-700" size={24} />
+                  <span>Student Promotion & Class Upgrade Portal (विद्यार्थी कक्षा स्तरोन्नति पोर्टल)</span>
+                </h2>
+                <p className="text-xs text-emerald-900/80 mt-1 max-w-3xl leading-relaxed">
+                  शैक्षिक सत्र समाप्तिपछि विद्यार्थीहरूलाई नयाँ शैक्षिक सत्रको अर्को कक्षामा स्तरोन्नति (Promote / Upgrade) गर्नुहोस्, कक्षा दोहोर्‍याउनुहोस् (Repeat), वा कक्षा १० र १२ का विद्यार्थीहरूलाई उत्तीर्ण (Graduate / Pass-out) गराउनुहोस्।
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50 transition shadow-2xs"
+                >
+                  <FileSpreadsheet size={15} className="text-emerald-600" />
+                  <span>IEMIS Excel बाट आयात गरी स्तरोन्नति</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Dual Option Guidance Banner */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-emerald-200/60 text-[11px]">
+              <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-200/80 text-emerald-950 flex items-start gap-2">
+                <Sparkles size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold">विकल्प १ (Direct ERP Batch Upgrade):</strong>
+                  <span>तलको फारमबाट वर्तमान कक्षा र नयाँ सत्रको कक्षा छनोट गरी एकै क्लिकमा सबै वा छानिएका विद्यार्थीहरूलाई स्तरोन्नति गर्नुहोस्।</span>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/80 border border-teal-200/80 text-teal-950 flex items-start gap-2">
+                <FileSpreadsheet size={16} className="text-teal-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold">विकल्प २ (Re-import Next Year IEMIS):</strong>
+                  <span>यदि तपाईंसँग नयाँ वर्षको IEMIS Excel फाइल छ भने सिधै आयात गर्दा पनि प्रणालीले पुरानो विद्यार्थी पहिचान गरी स्वतः नयाँ कक्षामा जोड्दछ।</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Promotion Transition Control Card */}
+          <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-2xs space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2 border-b border-gray-100 pb-2">
+              <span>१. सत्र तथा कक्षा छनोट (Select Academic Year & Class Transition)</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              {/* Left: Source Year & Class */}
+              <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3">
+                <p className="text-xs font-black text-blue-900 flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">FROM</span>
+                  <span>वर्तमान शैक्षिक सत्र तथा कक्षा (Current Class & Year)</span>
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">वर्तमान शैक्षिक सत्र *</label>
+                    <select
+                      value={promoteFromYear}
+                      onChange={(e) => setPromoteFromYear(e.target.value)}
+                      className="erp-input bg-white text-xs"
+                    >
+                      <option value="">-- सत्र छनोट गर्नुहोस् --</option>
+                      {academicYearsData?.map((ay: any) => (
+                        <option key={ay.id} value={ay.id}>
+                          {ay.year} {ay.isActive ? '⭐ (Active)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">वर्तमान कक्षा (From Class) *</label>
+                    <select
+                      value={promoteFromClass}
+                      onChange={(e) => {
+                        const newClassId = e.target.value;
+                        setPromoteFromClass(newClassId);
+                        setStudentPromoteState({});
+                        // Auto-suggest next class if possible
+                        const currentCls = classesData?.find((c: any) => String(c.id) === String(newClassId));
+                        if (currentCls) {
+                          const match = currentCls.name.match(/\d+/);
+                          if (match) {
+                            const nextNum = parseInt(match[0]) + 1;
+                            const targetCls = classesData?.find((c: any) => c.name.includes(String(nextNum)) && (promoteToYear ? String(c.academicYearId) === String(promoteToYear) : true));
+                            if (targetCls) setPromoteToClass(String(targetCls.id));
+                          }
+                        }
+                      }}
+                      className="erp-input bg-white text-xs font-bold"
+                    >
+                      <option value="">-- कक्षा छनोट गर्नुहोस् --</option>
+                      {classesData
+                        ?.filter((c: any) => !promoteFromYear || String(c.academicYearId) === String(promoteFromYear))
+                        .map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.section ? `(${c.section})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Target Year & Class */}
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 space-y-3">
+                <p className="text-xs font-black text-emerald-900 flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] text-white">TO</span>
+                  <span>नयाँ शैक्षिक सत्र तथा अर्को कक्षा (Target Next Class & Year)</span>
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">नयाँ शैक्षिक सत्र (To Year) *</label>
+                    <select
+                      value={promoteToYear}
+                      onChange={(e) => setPromoteToYear(e.target.value)}
+                      className="erp-input bg-white text-xs font-bold text-emerald-900"
+                    >
+                      <option value="">-- नयाँ सत्र छनोट गर्नुहोस् --</option>
+                      {academicYearsData?.map((ay: any) => (
+                        <option key={ay.id} value={ay.id}>
+                          {ay.year} {ay.isActive ? '⭐ (Active)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">नयाँ कक्षा (Target Class) *</label>
+                    <select
+                      value={promoteToClass}
+                      onChange={(e) => setPromoteToClass(e.target.value)}
+                      className="erp-input bg-white text-xs font-bold text-emerald-900"
+                    >
+                      <option value="">-- स्तरोन्नति हुने कक्षा छनोट --</option>
+                      {classesData
+                        ?.filter((c: any) => !promoteToYear || String(c.academicYearId) === String(promoteToYear))
+                        .map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.section ? `(${c.section})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Student Roster & Promotion Actions Table */}
+          {promoteFromClass ? (
+            <div className="rounded-2xl border border-gray-200/80 bg-white p-5 shadow-2xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                    २. विद्यार्थीहरूको स्तरोन्नति स्थिति (Student Promotion Roster)
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    प्रत्येक विद्यार्थीको लागि स्तरोन्नति (Promote), दोहोर्‍याउने (Repeat), वा उत्तीर्ण (Graduate) स्थिति चयन गर्नुहोस्।
+                  </p>
+                </div>
+
+                {/* Batch Actions Toolbar */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated: any = {};
+                      sourceClassStudents.forEach((s: any) => {
+                        updated[s.id] = { action: 'PROMOTE', selected: true, targetClassId: promoteToClass };
+                      });
+                      setStudentPromoteState(updated);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2.5 py-1 text-[11px] font-bold transition"
+                  >
+                    <CheckCircle2 size={13} />
+                    <span>सबैलाई स्तरोन्नति (Promote All)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated: any = {};
+                      sourceClassStudents.forEach((s: any) => {
+                        updated[s.id] = { action: 'GRADUATE', selected: true };
+                      });
+                      setStudentPromoteState(updated);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 px-2.5 py-1 text-[11px] font-bold transition"
+                  >
+                    <GraduationCap size={13} />
+                    <span>सबै उत्तीर्ण (Graduate All - SEE/12)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated: any = {};
+                      sourceClassStudents.forEach((s: any) => {
+                        updated[s.id] = { action: 'REPEAT', selected: true, targetClassId: promoteFromClass };
+                      });
+                      setStudentPromoteState(updated);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 px-2.5 py-1 text-[11px] font-bold transition"
+                  >
+                    <RotateCcw size={13} />
+                    <span>सबै दोहोर्‍याउने (Repeat All)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Roster Table */}
+              <div className="overflow-x-auto rounded-xl border border-gray-100">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#1e3a5f] text-white">
+                    <tr>
+                      <th className="px-3 py-3 text-center w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectAllPromote}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            setSelectAllPromote(isChecked);
+                            const updated: any = { ...studentPromoteState };
+                            sourceClassStudents.forEach((s: any) => {
+                              updated[s.id] = {
+                                ...(updated[s.id] || { action: 'PROMOTE', targetClassId: promoteToClass }),
+                                selected: isChecked,
+                              };
+                            });
+                            setStudentPromoteState(updated);
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-emerald-600"
+                        />
+                      </th>
+                      <th className="px-3 py-3 text-center w-14">Roll</th>
+                      <th className="px-4 py-3">Student Name (विद्यार्थी)</th>
+                      <th className="px-4 py-3">IEMIS ID</th>
+                      <th className="px-4 py-3 text-center">स्तरोन्नति कार्य (Promotion Action)</th>
+                      <th className="px-4 py-3">नयाँ कक्षा (Target Class)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {isSourceClassLoading ? (
+                      <tr>
+                        <td colSpan={6} className="py-10 text-center text-gray-400">
+                          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                          <p className="mt-2 text-xs">विद्यार्थी सूची लोड हुँदैछ...</p>
+                        </td>
+                      </tr>
+                    ) : sourceClassStudents.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-10 text-center text-gray-400">
+                          <Users size={30} className="mx-auto text-gray-300 mb-2" />
+                          <p className="text-sm font-semibold text-gray-600">यो कक्षामा कुनै विद्यार्थी भेटिएन</p>
+                          <p className="text-xs text-gray-400">कृपया अर्को कक्षा वा सत्र छनोट गर्नुहोस्।</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      sourceClassStudents.map((s: any) => {
+                        const curState = studentPromoteState[s.id] || { action: 'PROMOTE', selected: true, targetClassId: promoteToClass };
+                        const isSelected = curState.selected !== false;
+                        const action = curState.action || 'PROMOTE';
+                        const enrollment = s.classEnrollment?.[0];
+
+                        return (
+                          <tr key={s.id} className={`hover:bg-slate-50 transition ${!isSelected ? 'opacity-50 bg-gray-50' : ''}`}>
+                            <td className="px-3 py-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  setStudentPromoteState({
+                                    ...studentPromoteState,
+                                    [s.id]: {
+                                      ...curState,
+                                      selected: e.target.checked,
+                                    },
+                                  });
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 text-emerald-600"
+                              />
+                            </td>
+
+                            <td className="px-3 py-3 text-center font-bold text-gray-600">
+                              {enrollment?.rollNo || '—'}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <p className="font-bold text-gray-900">{s.fullName}</p>
+                              {s.fullNameNepali && (
+                                <p className="text-[10px] text-gray-500 font-nepali">{s.fullNameNepali}</p>
+                              )}
+                              <span className="text-[10px] text-gray-400">
+                                {s.gender || 'N/A'} | DOB: {s.dateOfBirthBs || '—'}
+                              </span>
+                            </td>
+
+                            <td className="px-4 py-3 font-mono text-[11px] font-bold text-slate-700">
+                              {s.studentId}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentPromoteState({
+                                      ...studentPromoteState,
+                                      [s.id]: { ...curState, action: 'PROMOTE', selected: true, targetClassId: promoteToClass },
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${
+                                    action === 'PROMOTE'
+                                      ? 'bg-emerald-600 text-white shadow-2xs'
+                                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  }`}
+                                >
+                                  <span>🟢 स्तरोन्नति</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentPromoteState({
+                                      ...studentPromoteState,
+                                      [s.id]: { ...curState, action: 'REPEAT', selected: true, targetClassId: promoteFromClass },
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${
+                                    action === 'REPEAT'
+                                      ? 'bg-amber-600 text-white shadow-2xs'
+                                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                  }`}
+                                >
+                                  <span>🟡 दोहोर्‍याउने</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentPromoteState({
+                                      ...studentPromoteState,
+                                      [s.id]: { ...curState, action: 'GRADUATE', selected: true },
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${
+                                    action === 'GRADUATE'
+                                      ? 'bg-blue-600 text-white shadow-2xs'
+                                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                  }`}
+                                >
+                                  <span>🎓 उत्तीर्ण</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentPromoteState({
+                                      ...studentPromoteState,
+                                      [s.id]: { ...curState, action: 'TRANSFER', selected: true },
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${
+                                    action === 'TRANSFER'
+                                      ? 'bg-rose-600 text-white shadow-2xs'
+                                      : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                                  }`}
+                                >
+                                  <span>🔴 सरुवा</span>
+                                </button>
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {action === 'GRADUATE' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                                  <GraduationCap size={12} /> उत्तीर्ण / Alumni
+                                </span>
+                              ) : action === 'TRANSFER' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md">
+                                  <ArrowRightLeft size={12} /> स्थानान्तरण / TC
+                                </span>
+                              ) : (
+                                <select
+                                  value={curState.targetClassId || promoteToClass || ''}
+                                  onChange={(e) => {
+                                    setStudentPromoteState({
+                                      ...studentPromoteState,
+                                      [s.id]: {
+                                        ...curState,
+                                        targetClassId: e.target.value,
+                                      },
+                                    });
+                                  }}
+                                  className="erp-input text-xs py-1 font-semibold"
+                                >
+                                  <option value="">-- कक्षा छनोट --</option>
+                                  {classesData
+                                    ?.filter((c: any) => !promoteToYear || String(c.academicYearId) === String(promoteToYear))
+                                    .map((c: any) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.name} {c.section ? `(${c.section})` : ''}
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Execution Action Footer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <div className="text-xs text-gray-600">
+                  <span>जम्मा छनोट भएका विद्यार्थी: </span>
+                  <strong className="font-bold text-emerald-800">
+                    {sourceClassStudents.filter((s: any) => (studentPromoteState[s.id]?.selected ?? true)).length} जना
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={
+                    bulkUpgradeMutation.isPending ||
+                    !promoteToYear ||
+                    sourceClassStudents.length === 0
+                  }
+                  onClick={() => {
+                    const selectedList = sourceClassStudents
+                      .filter((s: any) => (studentPromoteState[s.id]?.selected ?? true))
+                      .map((s: any) => {
+                        const st = studentPromoteState[s.id] || { action: 'PROMOTE', targetClassId: promoteToClass };
+                        return {
+                          studentId: s.id,
+                          action: st.action || 'PROMOTE',
+                          targetClassId: st.targetClassId || promoteToClass,
+                        };
+                      });
+
+                    if (selectedList.length === 0) {
+                      toast.error('कृपया कम्तीमा एक विद्यार्थी छनोट गर्नुहोस्।');
+                      return;
+                    }
+
+                    if (confirm(`के तपाईं ${selectedList.length} जना विद्यार्थीहरूलाई नयाँ शैक्षिक सत्रमा स्तरोन्नति/अपग्रेड गर्न निश्चित हुनुहुन्छ?`)) {
+                      bulkUpgradeMutation.mutate({
+                        fromAcademicYearId: promoteFromYear ? parseInt(promoteFromYear) : null,
+                        fromClassId: promoteFromClass ? parseInt(promoteFromClass) : null,
+                        toAcademicYearId: parseInt(promoteToYear),
+                        toClassId: promoteToClass ? parseInt(promoteToClass) : null,
+                        studentPromotions: selectedList,
+                      });
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-2.5 font-bold text-white shadow-md hover:from-emerald-700 hover:to-teal-800 disabled:opacity-50 transition"
+                >
+                  {bulkUpgradeMutation.isPending ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      <span>स्तरोन्नति कार्य जारी छ...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GraduationCap size={16} />
+                      <span>विद्यार्थी स्तरोन्नति कार्यान्वयन गर्नुहोस् (Execute Promotion)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-white/70 p-12 text-center shadow-2xs">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4 shadow-xs">
+                <GraduationCap size={30} />
+              </div>
+              <h3 className="text-base font-bold text-gray-800 mb-1">
+                विद्यार्थी स्तरोन्नतिका लागि कक्षा छनोट गर्नुहोस्
+              </h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
+                माथिको फारमबाट वर्तमान शैक्षिक सत्र र कक्षा छनोट गर्नासाथ विद्यार्थीहरूको सूची यहाँ देखा पर्नेछ।
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════ TAB 4: TRANSFERRED & ALUMNI ════════════════════ */}
       {activeTab === 'transferred' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">

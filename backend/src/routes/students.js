@@ -638,6 +638,155 @@ router.get('/credentials/export', authenticate, authorize('SUPER_ADMIN', 'ADMIN'
   }
 });
 
+// POST /api/students/bulk-upgrade — Upgrade / Promote students to next academic year and class
+router.post('/bulk-upgrade', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const {
+      fromAcademicYearId,
+      fromClassId,
+      toAcademicYearId,
+      toClassId,
+      studentPromotions = [], // [{ studentId, action: 'PROMOTE'|'REPEAT'|'GRADUATE'|'TRANSFER', targetClassId, rollNo }]
+    } = req.body;
+
+    if (!toAcademicYearId) {
+      return res.status(400).json({ success: false, message: 'Target Academic Year (toAcademicYearId) is required.' });
+    }
+
+    const targetAy = await prisma.academicYear.findUnique({
+      where: { id: parseInt(toAcademicYearId) },
+    });
+    if (!targetAy) {
+      return res.status(404).json({ success: false, message: 'Target Academic Year not found.' });
+    }
+
+    const isTargetYearActive = targetAy.isActive === true;
+    const defaultTargetClassId = toClassId ? parseInt(toClassId) : null;
+
+    let promotedCount = 0;
+    let repeatedCount = 0;
+    let graduatedCount = 0;
+    let transferredCount = 0;
+    const errors = [];
+
+    for (const item of studentPromotions) {
+      try {
+        const sId = parseInt(item.studentId);
+        const action = (item.action || 'PROMOTE').toUpperCase();
+        const finalClassId = item.targetClassId ? parseInt(item.targetClassId) : defaultTargetClassId;
+        const rollNo = item.rollNo ? parseInt(item.rollNo) : null;
+
+        const student = await prisma.student.findUnique({
+          where: { id: sId },
+          include: { classEnrollment: true },
+        });
+        if (!student) continue;
+
+        if (action === 'PROMOTE' || action === 'REPEAT') {
+          if (!finalClassId) {
+            errors.push({ student: student.fullName, error: 'No target class specified' });
+            continue;
+          }
+
+          // If target year is the currently active academic year, deactivate past active enrollments
+          if (isTargetYearActive) {
+            await prisma.classEnrollment.updateMany({
+              where: { studentId: student.id, isActive: true },
+              data: { isActive: false },
+            });
+          }
+
+          // Upsert ClassEnrollment for target class
+          const existingEnrol = await prisma.classEnrollment.findUnique({
+            where: {
+              studentId_classId: {
+                studentId: student.id,
+                classId: finalClassId,
+              },
+            },
+          });
+
+          if (existingEnrol) {
+            await prisma.classEnrollment.update({
+              where: { id: existingEnrol.id },
+              data: {
+                rollNo: rollNo ?? existingEnrol.rollNo,
+                isActive: isTargetYearActive,
+              },
+            });
+          } else {
+            await prisma.classEnrollment.create({
+              data: {
+                studentId: student.id,
+                classId: finalClassId,
+                rollNo,
+                isActive: isTargetYearActive,
+              },
+            });
+          }
+
+          // Ensure student is active
+          await prisma.student.update({
+            where: { id: student.id },
+            data: {
+              status: 'ACTIVE',
+              isActive: true,
+            },
+          });
+
+          if (action === 'PROMOTE') promotedCount++;
+          else repeatedCount++;
+        } else if (action === 'GRADUATE') {
+          await prisma.student.update({
+            where: { id: student.id },
+            data: {
+              status: 'GRADUATED',
+              isActive: false,
+            },
+          });
+          await prisma.classEnrollment.updateMany({
+            where: { studentId: student.id, isActive: true },
+            data: { isActive: false },
+          });
+          graduatedCount++;
+        } else if (action === 'TRANSFER') {
+          await prisma.student.update({
+            where: { id: student.id },
+            data: {
+              status: 'TRANSFERRED',
+              isActive: false,
+              transferReason: 'स्थानान्तरण / सरुवा (Upgraded out of school)',
+            },
+          });
+          await prisma.classEnrollment.updateMany({
+            where: { studentId: student.id, isActive: true },
+            data: { isActive: false },
+          });
+          transferredCount++;
+        }
+      } catch (rowErr) {
+        errors.push({ studentId: item.studentId, error: rowErr.message });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `विद्यार्थी स्तरोन्नति सम्पन्न भयो! स्तरोन्नति: ${promotedCount}, दोहोर्‍याइएका: ${repeatedCount}, उत्तीर्ण/पूर्व: ${graduatedCount}, सरुवा: ${transferredCount}`,
+      data: {
+        promotedCount,
+        repeatedCount,
+        graduatedCount,
+        transferredCount,
+        totalProcessed: studentPromotions.length,
+        errors,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
 // GET /api/students/analytics — detailed demographics, status & birthday counts
 router.get('/analytics', authenticate, async (req, res) => {
   try {
