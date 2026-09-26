@@ -141,6 +141,7 @@ export default function TeachersPage() {
 
   // Directory filter state
   const [activeCategoryTab, setActiveCategoryTab] = useState<'ALL' | 'TEACHING' | 'NON_TEACHING'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [filterType, setFilterType] = useState('');
   const [inchargeFilter, setInchargeFilter] = useState('');
@@ -219,12 +220,15 @@ export default function TeachersPage() {
 
   // Fetch staff & teachers
   const { data: teachersData, isLoading } = useQuery({
-    queryKey: ['teachers', filterType, inchargeFilter, search],
+    queryKey: ['teachers', filterType, inchargeFilter, search, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterType) params.append('type', filterType);
       if (inchargeFilter) params.append('inchargeRole', inchargeFilter);
       if (search) params.append('search', search);
+      if (statusFilter === 'ALL') params.append('all', 'true');
+      else if (statusFilter === 'INACTIVE') params.append('status', 'INACTIVE');
+      else params.append('status', 'ACTIVE');
       const res = await api.get(`/teachers?${params.toString()}`);
       return res.data?.data || [];
     },
@@ -356,6 +360,22 @@ export default function TeachersPage() {
     },
   });
 
+  // Update Staff Status (Active vs Transferred/Retired)
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, isActive, statusReason, dateOfRetirementBs }: { id: number; isActive: boolean; statusReason?: string; dateOfRetirementBs?: string }) => {
+      const res = await api.patch(`/teachers/${id}/status`, { isActive, statusReason, dateOfRetirementBs });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'शिक्षक/कर्मचारी स्थिति अद्यावधिक भयो');
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      queryClient.invalidateQueries({ queryKey: ['teachers-all-payroll'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update status');
+    },
+  });
+
   // Assign Role & Auto Tasks Mutation
   const assignRoleMutation = useMutation({
     mutationFn: async ({
@@ -481,6 +501,12 @@ export default function TeachersPage() {
       data.subjectIds = selectedSubjectIds;
     } else {
       data.subjectIds = [];
+    }
+    const isHist = fd.get('isHistorical') === 'true';
+    if (isHist) {
+      data.isActive = false;
+      data.enableLogin = false;
+      data.isHistorical = true;
     }
     addTeacherMutation.mutate(data);
   };
@@ -725,41 +751,71 @@ export default function TeachersPage() {
       {mainViewTab === 'directory' && (
         <div className="space-y-4">
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
-            {/* Category Switcher Tabs */}
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 shrink-0">
-              <button
-                onClick={() => setActiveCategoryTab('ALL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  activeCategoryTab === 'ALL'
-                    ? 'bg-[#1e3a5f] text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Users size={13} />
-                <span>All ({allTeachers.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveCategoryTab('TEACHING')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  activeCategoryTab === 'TEACHING'
-                    ? 'bg-[#1e3a5f] text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <GraduationCap size={13} />
-                <span>Teaching Faculty (शिक्षक) ({teachingStaff.length})</span>
-              </button>
-              <button
-                onClick={() => setActiveCategoryTab('NON_TEACHING')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  activeCategoryTab === 'NON_TEACHING'
-                    ? 'bg-[#1e3a5f] text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Briefcase size={13} />
-                <span>Non-Teaching Staff (कर्मचारी) ({nonTeachingStaff.length})</span>
-              </button>
+            {/* Category Switcher Tabs & Status Filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200 shrink-0">
+                <button
+                  onClick={() => setActiveCategoryTab('ALL')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    activeCategoryTab === 'ALL'
+                      ? 'bg-[#1e3a5f] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Users size={13} />
+                  <span>All Category ({allTeachers.length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryTab('TEACHING')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    activeCategoryTab === 'TEACHING'
+                      ? 'bg-[#1e3a5f] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <GraduationCap size={13} />
+                  <span>Teaching Faculty (शिक्षक) ({teachingStaff.length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryTab('NON_TEACHING')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    activeCategoryTab === 'NON_TEACHING'
+                      ? 'bg-[#1e3a5f] text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Briefcase size={13} />
+                  <span>Non-Teaching Staff (कर्मचारी) ({nonTeachingStaff.length})</span>
+                </button>
+              </div>
+
+              {/* Status Filter */}
+              <div className="inline-flex rounded-xl bg-amber-50/90 p-1 border border-amber-200 shrink-0">
+                <button
+                  onClick={() => setStatusFilter('ACTIVE')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    statusFilter === 'ACTIVE' ? 'bg-emerald-700 text-white shadow-xs' : 'text-emerald-900 hover:bg-emerald-100/50'
+                  }`}
+                >
+                  कार्यरत (Active)
+                </button>
+                <button
+                  onClick={() => setStatusFilter('INACTIVE')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    statusFilter === 'INACTIVE' ? 'bg-rose-700 text-white shadow-xs' : 'text-rose-900 hover:bg-rose-100/50'
+                  }`}
+                >
+                  विगत / सरुवा (Past)
+                </button>
+                <button
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    statusFilter === 'ALL' ? 'bg-amber-700 text-white shadow-xs' : 'text-amber-900 hover:bg-amber-100/50'
+                  }`}
+                >
+                  सबै (All)
+                </button>
+              </div>
             </div>
 
             {/* Search & Incharge Filter + View Toggle */}
@@ -893,7 +949,7 @@ export default function TeachersPage() {
                                   )}
                                 </div>
                                 <div>
-                                  <div className="font-extrabold text-gray-900 text-xs flex items-center gap-1.5">
+                                  <div className="font-extrabold text-gray-900 text-xs flex items-center gap-1.5 flex-wrap">
                                     <span>{staff.fullName}</span>
                                     <span
                                       className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 text-[9px] font-extrabold ${
@@ -905,6 +961,11 @@ export default function TeachersPage() {
                                       {isNonTeaching ? <Briefcase size={9} /> : <GraduationCap size={9} />}
                                       <span>{isNonTeaching ? 'कर्मचारी' : 'शिक्षक'}</span>
                                     </span>
+                                    {!staff.isActive && (
+                                      <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                                        विगत / सरुवा (Past)
+                                      </span>
+                                    )}
                                   </div>
                                   {staff.fullNameNepali && (
                                     <p className="text-[11px] text-gray-500 font-nepali">{staff.fullNameNepali}</p>
@@ -1040,6 +1101,30 @@ export default function TeachersPage() {
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   type="button"
+                                  onClick={() => {
+                                    const nextState = !staff.isActive;
+                                    const promptMsg = nextState 
+                                      ? `"${staff.fullName}" लाई पुनः कार्यरत (Active) स्थितिमा ल्याउने हो?`
+                                      : `"${staff.fullName}" लाई सरुवा वा अवकाश (Transferred / Retired / Inactive) स्थितिमा राख्ने हो? (Login Portal खाता बन्द हुनेछ)`;
+                                    if (confirm(promptMsg)) {
+                                      updateStatusMutation.mutate({
+                                        id: staff.id,
+                                        isActive: nextState,
+                                        statusReason: nextState ? 'पुनः कार्यरत' : 'सरुवा / अवकाश',
+                                      });
+                                    }
+                                  }}
+                                  className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                    staff.isActive 
+                                      ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' 
+                                      : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                  }`}
+                                  title={staff.isActive ? 'सरुवा / अवकाश जनाउनुहोस् (Mark as Transferred / Retired)' : 'पुनः कार्यरत बनाउनुहोस् (Re-activate Staff)'}
+                                >
+                                  <UserCheck size={15} />
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => openAssignRoleModal(staff)}
                                   className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 transition cursor-pointer"
                                   title="Assign / Manage Incharge Roles"
@@ -1120,8 +1205,13 @@ export default function TeachersPage() {
                             )}
                           </div>
                           <div>
-                            <h3 className="font-extrabold text-sm text-gray-900 leading-tight flex items-center gap-1.5">
+                            <h3 className="font-extrabold text-sm text-gray-900 leading-tight flex items-center gap-1.5 flex-wrap">
                               <span>{staff.fullName}</span>
+                              {!staff.isActive && (
+                                <span className="inline-block rounded px-1.5 py-0.2 text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                                  विगत / सरुवा
+                                </span>
+                              )}
                             </h3>
                             {staff.fullNameNepali && (
                               <p className="text-[10px] text-gray-500 font-nepali">{staff.fullNameNepali}</p>
@@ -1154,6 +1244,30 @@ export default function TeachersPage() {
 
                         {/* Actions */}
                         <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextState = !staff.isActive;
+                              const promptMsg = nextState 
+                                ? `"${staff.fullName}" लाई पुनः कार्यरत (Active) स्थितिमा ल्याउने हो?`
+                                : `"${staff.fullName}" लाई सरुवा वा अवकाश (Transferred / Retired / Inactive) स्थितिमा राख्ने हो? (Login Portal खाता बन्द हुनेछ)`;
+                              if (confirm(promptMsg)) {
+                                updateStatusMutation.mutate({
+                                  id: staff.id,
+                                  isActive: nextState,
+                                  statusReason: nextState ? 'पुनः कार्यरत' : 'सरुवा / अवकाश',
+                                });
+                              }
+                            }}
+                            className={`p-1.5 rounded-lg transition cursor-pointer ${
+                              staff.isActive 
+                                ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' 
+                                : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                            }`}
+                            title={staff.isActive ? 'सरुवा / अवकाश जनाउनुहोस् (Mark as Transferred / Retired)' : 'पुनः कार्यरत बनाउनुहोस् (Re-activate Staff)'}
+                          >
+                            <UserCheck size={15} />
+                          </button>
                           <button
                             onClick={() => openAssignRoleModal(staff)}
                             className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 transition cursor-pointer"
@@ -2210,6 +2324,27 @@ export default function TeachersPage() {
                   </div>
                 </div>
               )}
+
+              {/* Past / Historical Staff Toggle */}
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isHistorical"
+                    id="isHistorical"
+                    value="true"
+                    className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
+                  />
+                  <div>
+                    <span className="font-bold text-xs text-amber-950">
+                      विगत / पूर्व शिक्षक वा कर्मचारी (Past / Historical Staff Record)
+                    </span>
+                    <p className="text-[11px] text-amber-800 font-nepali">
+                      विगतका आर्थिक वर्षको तलब भरपाईका लागि मात्र दर्ता गर्ने हो भने चिन्ह लगाउनुहोस्। यिनीहरूको कुनै Login Portal खाता सिर्जना हुने छैन।
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
                 <button

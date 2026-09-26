@@ -14,8 +14,16 @@ function generatePassword(length = 8) {
 // GET /api/teachers
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { type, category, inchargeRole, search } = req.query;
-    const where = { isActive: true };
+    const { type, category, inchargeRole, search, includeInactive, all, status } = req.query;
+    const where = {};
+    if (includeInactive !== 'true' && all !== 'true' && !status) {
+      where.isActive = true;
+    } else if (status === 'ACTIVE') {
+      where.isActive = true;
+    } else if (status === 'INACTIVE' || status === 'TRANSFERRED' || status === 'RETIRED' || status === 'LEFT') {
+      where.isActive = false;
+    }
+
     if (type) where.type = type;
     if (inchargeRole) {
       where.inchargeRole = { contains: inchargeRole };
@@ -83,14 +91,15 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // POST /api/teachers
-router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const {
       fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
       panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
       type, taha, shreni, post, designation, photoUrl,
       isTeachingStaff,
-      dateOfJoiningBs, dateOfRetirementBs, subjectIds, role
+      dateOfJoiningBs, dateOfRetirementBs, subjectIds, role,
+      isActive, enableLogin, isHistorical
     } = req.body;
 
     const username = (fullName.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.') + '.' + Date.now().toString().slice(-4)).slice(0, 20);
@@ -108,9 +117,12 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
       }
     }
 
+    const staffIsActive = isActive !== undefined ? Boolean(isActive) : !Boolean(isHistorical);
+    const userIsActive = enableLogin !== undefined ? Boolean(enableLogin) : staffIsActive;
+
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { username, passwordHash, role: userRole, mustChangePassword: true },
+        data: { username, passwordHash, role: userRole, isActive: userIsActive, mustChangePassword: true },
       });
       const teacher = await tx.teacher.create({
         data: {
@@ -124,22 +136,66 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, re
           designation,
           photoUrl: photoUrl || null,
           dateOfJoiningBs, dateOfRetirementBs,
+          isActive: staffIsActive,
           subjects: (subjectIds && subjectIds.length > 0) ? {
             create: subjectIds.map(sid => ({ subjectId: parseInt(sid) }))
           } : undefined,
         },
       });
-      return { teacher, plainPassword, username };
+      return { teacher, plainPassword, username, userIsActive };
     });
 
     return res.status(201).json({
       success: true,
       data: result.teacher,
-      credentials: { username: result.username, password: result.plainPassword },
+      credentials: result.userIsActive ? { username: result.username, password: result.plainPassword } : null,
+      message: result.userIsActive ? 'शिक्षक/कर्मचारी दर्ता भयो (Login Portal सक्रिय)' : 'विगत/पूर्व शिक्षक/कर्मचारी अभिलेख सुरक्षित गरियो (Login Portal निष्कृय)',
     });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+  }
+});
+
+// PATCH /api/teachers/:id/status - Update staff status (Active, Transferred, Retired, Left)
+router.patch('/:id/status', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const teacherId = parseInt(req.params.id);
+    const { isActive, statusReason, dateOfRetirementBs, disableLogin } = req.body;
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { id: teacherId },
+      include: { user: true },
+    });
+    if (!teacher) return res.status(404).json({ success: false, message: 'Teacher/Staff not found.' });
+
+    const updatedTeacher = await prisma.$transaction(async (tx) => {
+      const t = await tx.teacher.update({
+        where: { id: teacherId },
+        data: {
+          isActive: Boolean(isActive),
+          dateOfRetirementBs: dateOfRetirementBs || (isActive ? null : teacher.dateOfRetirementBs),
+        },
+      });
+
+      if (disableLogin !== undefined || !isActive) {
+        await tx.user.update({
+          where: { id: teacher.userId },
+          data: { isActive: Boolean(isActive && !disableLogin) },
+        });
+      }
+
+      return t;
+    });
+
+    return res.json({
+      success: true,
+      data: updatedTeacher,
+      message: isActive ? 'शिक्षक पुनः कार्यरत (Active) स्थितिमा अद्यावधिक गरियो।' : `शिक्षक स्थिति अद्यावधिक गरियो (${statusReason || 'सरुवा/अवकाश'})।`,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: 'Status update failed: ' + err.message });
   }
 });
 

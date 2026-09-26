@@ -106,12 +106,65 @@ export default function PayrollPage() {
   const [isSingleEditModalOpen, setIsSingleEditModalOpen] = useState(false);
   const [singleEditData, setSingleEditData] = useState<any>(null);
 
-  // ── 1. Fetch Teachers (Faculty & Staff) ──────────────────────────────────
+  // Past / Historical Staff State
+  const [staffStatusFilter, setStaffStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [isAddPastStaffOpen, setIsAddPastStaffOpen] = useState(false);
+  const [pastStaffForm, setPastStaffForm] = useState({
+    fullName: '',
+    fullNameNepali: '',
+    gender: 'MALE',
+    phone: '',
+    panNo: '',
+    shreni: 'TEACHING',
+    taha: 'माध्यमिक तह',
+    post: 'मा.वि. शिक्षक',
+    type: 'RASTRIYA',
+    dateOfJoiningBs: '',
+    dateOfRetirementBs: '',
+    statusReason: 'सरुवा (Transferred)',
+  });
+
+  // ── 1. Fetch Teachers (Faculty & Staff - including historical/past staff) ───
   const { data: teachersData, isLoading: isTeachersLoading } = useQuery({
     queryKey: ['teachers-all-payroll'],
     queryFn: async () => {
-      const res = await api.get('/teachers');
+      const res = await api.get('/teachers?includeInactive=true');
       return res.data?.data || [];
+    },
+  });
+
+  // Add Past Staff Mutation
+  const addPastStaffMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/teachers', {
+        ...payload,
+        isActive: false,
+        enableLogin: false,
+        isHistorical: true,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('विगत/पूर्व शिक्षक कर्मचारी अभिलेख सुरक्षित भयो (Login Portal खाता बिना)');
+      queryClient.invalidateQueries({ queryKey: ['teachers-all-payroll'] });
+      setIsAddPastStaffOpen(false);
+      setPastStaffForm({
+        fullName: '',
+        fullNameNepali: '',
+        gender: 'MALE',
+        phone: '',
+        panNo: '',
+        shreni: 'TEACHING',
+        taha: 'माध्यमिक तह',
+        post: 'मा.वि. शिक्षक',
+        type: 'RASTRIYA',
+        dateOfJoiningBs: '',
+        dateOfRetirementBs: '',
+        statusReason: 'सरुवा (Transferred)',
+      });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to add past staff');
     },
   });
 
@@ -355,9 +408,11 @@ export default function PayrollPage() {
     }));
   };
 
-  // Filtered displayed staff
+  // Filtered displayed staff (including active vs past/transferred)
   const displayedStaff = useMemo(() => {
     return (teachersData || []).filter((t: any) => {
+      if (staffStatusFilter === 'ACTIVE' && t.isActive === false) return false;
+      if (staffStatusFilter === 'INACTIVE' && t.isActive !== false) return false;
       if (selectedCategory === 'TEACHING' && t.shreni === 'NON_TEACHING') return false;
       if (selectedCategory === 'NON_TEACHING' && t.shreni !== 'NON_TEACHING') return false;
       if (filterType && t.type !== filterType) return false;
@@ -373,7 +428,7 @@ export default function PayrollPage() {
       }
       return true;
     });
-  }, [teachersData, selectedCategory, filterType, searchStaff]);
+  }, [teachersData, staffStatusFilter, selectedCategory, filterType, searchStaff]);
 
   // Grand Totals of selected staff
   const grandTotals = useMemo(() => {
@@ -445,7 +500,7 @@ export default function PayrollPage() {
         monthFrom: monthFromStr,
         monthTo: monthToStr,
         monthCount,
-        financialYearId: activeFinancialYear?.id,
+        financialYearId: selectedFinancialYear?.id || activeFinancialYear?.id,
       });
       return res.data;
     },
@@ -495,7 +550,7 @@ export default function PayrollPage() {
         monthFrom: monthFromStr,
         monthTo: monthToStr,
         monthCount,
-        financialYearId: activeFinancialYear?.id,
+        financialYearId: selectedFinancialYear?.id || activeFinancialYear?.id,
       });
 
       const savedPayrolls = saveRes.data?.data || [];
@@ -1029,61 +1084,102 @@ export default function PayrollPage() {
           </div>
 
           {/* Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-2xs">
-            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200">
-              <button
-                onClick={() => setSelectedCategory('ALL')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  selectedCategory === 'ALL' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                All Staff ({teachersData?.length || 0})
-              </button>
-              <button
-                onClick={() => setSelectedCategory('TEACHING')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  selectedCategory === 'TEACHING' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Teaching Faculty (शिक्षक)
-              </button>
-              <button
-                onClick={() => setSelectedCategory('NON_TEACHING')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  selectedCategory === 'NON_TEACHING' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Non-Teaching Staff (कर्मचारी)
-              </button>
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-2xs">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Category Pills */}
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-gray-200">
+                <button
+                  onClick={() => setSelectedCategory('ALL')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    selectedCategory === 'ALL' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  All Category ({teachersData?.length || 0})
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('TEACHING')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    selectedCategory === 'TEACHING' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Teaching Faculty (शिक्षक)
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('NON_TEACHING')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    selectedCategory === 'NON_TEACHING' ? 'bg-[#1e3a5f] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Non-Teaching (कर्मचारी)
+                </button>
+              </div>
+
+              {/* Staff Status Filter Pills (Active vs Past / Transferred) */}
+              <div className="inline-flex rounded-xl bg-amber-50/80 p-1 border border-amber-200">
+                <button
+                  onClick={() => setStaffStatusFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    staffStatusFilter === 'ALL' ? 'bg-amber-700 text-white shadow-xs' : 'text-amber-900 hover:bg-amber-100/60'
+                  }`}
+                >
+                  सबै ({teachersData?.length || 0})
+                </button>
+                <button
+                  onClick={() => setStaffStatusFilter('ACTIVE')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    staffStatusFilter === 'ACTIVE' ? 'bg-emerald-700 text-white shadow-xs' : 'text-emerald-900 hover:bg-emerald-100/60'
+                  }`}
+                >
+                  कार्यरत / Active ({teachersData?.filter((t: any) => t.isActive !== false).length || 0})
+                </button>
+                <button
+                  onClick={() => setStaffStatusFilter('INACTIVE')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    staffStatusFilter === 'INACTIVE' ? 'bg-rose-700 text-white shadow-xs' : 'text-rose-900 hover:bg-rose-100/60'
+                  }`}
+                >
+                  विगत/सरुवा / Past Staff ({teachersData?.filter((t: any) => t.isActive === false).length || 0})
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-              <div className="relative flex-1">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              {/* + Add Past / Historical Staff Button */}
+              <button
+                type="button"
+                onClick={() => setIsAddPastStaffOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer shrink-0"
+              >
+                <Plus size={14} />
+                <span>+ पूर्व/विगत शिक्षक थप्नुहोस् (Past Staff)</span>
+              </button>
+
+              <div className="relative flex-1 min-w-[140px]">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search staff by name, post, taha, PAN..."
+                  placeholder="Search staff by name, post, PAN..."
                   value={searchStaff}
                   onChange={(e) => setSearchStaff(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs focus:bg-white focus:outline-hidden"
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 font-bold text-xs text-gray-700">
+              <div className="flex items-center gap-1.5 font-bold text-xs text-gray-700 shrink-0">
                 <input
                   type="checkbox"
                   id="selectAllStaff"
-                  checked={selectedTeacherIds.length === (teachersData?.length || 0) && teachersData?.length > 0}
+                  checked={selectedTeacherIds.length === displayedStaff.length && displayedStaff.length > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedTeacherIds(teachersData?.map((t: any) => t.id) || []);
+                      setSelectedTeacherIds(displayedStaff.map((t: any) => t.id));
                     } else {
                       setSelectedTeacherIds([]);
                     }
                   }}
                   className="rounded text-[#1e3a5f] w-4 h-4 cursor-pointer"
                 />
-                <label htmlFor="selectAllStaff" className="cursor-pointer">सबै छनौट ({selectedTeacherIds.length})</label>
+                <label htmlFor="selectAllStaff" className="cursor-pointer">सबै ({selectedTeacherIds.length})</label>
               </div>
             </div>
           </div>
@@ -1181,8 +1277,15 @@ export default function PayrollPage() {
 
                           {/* Name & Title */}
                           <td className="py-2 px-3">
-                            <div className="font-extrabold text-gray-900 text-xs truncate max-w-[150px]">
-                              {teacher.fullName}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-gray-900 text-xs truncate max-w-[150px]">
+                                {teacher.fullName}
+                              </span>
+                              {!teacher.isActive && (
+                                <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.2 rounded">
+                                  विगत / सरुवा
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-gray-500 font-nepali truncate max-w-[150px]">
                               {teacher.fullNameNepali || teacher.post || 'शिक्षक'}
@@ -2226,6 +2329,184 @@ export default function PayrollPage() {
                 <span>Print Slip</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════ ADD PAST / HISTORICAL STAFF MODAL ════════════ */}
+      {isAddPastStaffOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-900 rounded-xl">
+                  <Users size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    विगत / पूर्व शिक्षक वा कर्मचारीको अभिलेख (Historical Staff)
+                  </h3>
+                  <p className="text-[11px] text-gray-500 font-nepali">
+                    विगतका आर्थिक वर्षको तलब भरपाईका लागि दर्ता (Login Portal खाता बन्द रहनेछ)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddPastStaffOpen(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+              <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-700" />
+              <span>
+                यो फारामबाट विगतमा सरुवा भएका, अवकाश पाएका वा राजिनामा दिएका शिक्षक/कर्मचारीको विवरण थपिनेछ। उनीहरूको कुनै पनि Login Portal सक्रिय हुने छैन र केवल तलब भरपाई तथा अभिलेखमा प्रयोग हुनेछ।
+              </span>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!pastStaffForm.fullName.trim()) {
+                  toast.error('कृपया शिक्षक वा कर्मचारीको नाम प्रविष्ट गर्नुहोस्');
+                  return;
+                }
+                addPastStaffMutation.mutate(pastStaffForm);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">
+                    कर्मचारीको पूरा नाम (English) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ram Prasad Sharma"
+                    value={pastStaffForm.fullName}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, fullName: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">
+                    नाम (नेपालीमा)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="उदा: राम प्रसाद शर्मा"
+                    value={pastStaffForm.fullNameNepali}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, fullNameNepali: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2 font-nepali"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">प्रकार / वर्ग</label>
+                  <select
+                    value={pastStaffForm.shreni}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPastStaffForm({
+                        ...pastStaffForm,
+                        shreni: val,
+                        post: val === 'NON_TEACHING' ? 'कार्यालय सहयोगी' : 'मा.वि. शिक्षक',
+                        taha: val === 'NON_TEACHING' ? 'कार्यालय सहयोगी' : 'माध्यमिक तह',
+                      });
+                    }}
+                    className="w-full rounded-lg border border-gray-300 p-2 font-medium"
+                  >
+                    <option value="TEACHING">शिक्षक (Teaching Staff)</option>
+                    <option value="NON_TEACHING">गैर-शैक्षिक कर्मचारी (Non-Teaching Staff)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">दरबन्दी प्रकार</label>
+                  <select
+                    value={pastStaffForm.type}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, type: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2 font-medium"
+                  >
+                    <option value="RASTRIYA">स्थायी / दरबन्दी (National/Permanent)</option>
+                    <option value="RAHAT">राहत शिक्षक (Rahat)</option>
+                    <option value="KARAR">करार शिक्षक (Contract)</option>
+                    <option value="NIJI_SROTH">निजी स्रोत (School Source)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">तह (Taha / Level)</label>
+                  <input
+                    type="text"
+                    placeholder="माध्यमिक तह / निम्न माध्यमिक तह / प्राथमिक तह"
+                    value={pastStaffForm.taha}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, taha: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">पद (Post)</label>
+                  <input
+                    type="text"
+                    placeholder="उदा: शिक्षक, सह-लेखापाल, पियन"
+                    value={pastStaffForm.post}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, post: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">स्थायी लेखा नं. (PAN No)</label>
+                  <input
+                    type="text"
+                    placeholder="PAN No"
+                    value={pastStaffForm.panNo}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, panNo: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">अवस्था / कारण (Status)</label>
+                  <select
+                    value={pastStaffForm.statusReason}
+                    onChange={(e) => setPastStaffForm({ ...pastStaffForm, statusReason: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 p-2 font-medium"
+                  >
+                    <option value="सरुवा (Transferred)">सरुवा (Transferred)</option>
+                    <option value="अनिवार्य अवकाश (Retired)">अनिवार्य अवकाश (Retired)</option>
+                    <option value="राजिनामा (Resigned)">राजिनामा (Resigned)</option>
+                    <option value="अन्य पूर्व कर्मचारी (Past Staff)">अन्य पूर्व कर्मचारी (Past Staff)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPastStaffOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                >
+                  रद्द गर्नुहोस् (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={addPastStaffMutation.isPending}
+                  className="px-5 py-2 text-xs font-bold text-white bg-amber-700 hover:bg-amber-800 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>{addPastStaffMutation.isPending ? 'थप्दैछ...' : 'सुरक्षित गर्नुहोस् (Add Past Staff)'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
