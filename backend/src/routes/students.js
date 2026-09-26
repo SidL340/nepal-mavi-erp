@@ -408,53 +408,113 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
       if (s.emisId) existingMap.set(s.emisId.trim(), s);
     }
 
+    // Helper for flexible and fuzzy cell extraction
+    function getCellValue(row, ...keys) {
+      for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
+          return String(row[k]).trim();
+        }
+      }
+      const rowKeys = Object.keys(row);
+      for (const target of keys) {
+        const cleanTarget = target.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (const rk of rowKeys) {
+          if (rk.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanTarget) {
+            if (row[rk] !== undefined && row[rk] !== null && String(row[rk]).trim() !== '') {
+              return String(row[rk]).trim();
+            }
+          }
+        }
+      }
+      return '';
+    }
+
+    function normalizeGender(raw) {
+      if (!raw) return null;
+      const str = String(raw).trim().toLowerCase();
+      if (['m', 'male', 'boy', 'पुरुष', 'छात्र', 'm.', 'b'].includes(str)) return 'Male';
+      if (['f', 'female', 'girl', 'महिला', 'छात्रा', 'f.', 'g'].includes(str)) return 'Female';
+      if (['other', 'others', 'अन्य', 'o', 'third gender', 't'].includes(str)) return 'Other';
+      return String(raw).trim();
+    }
+
+    function normalizeBloodGroup(raw) {
+      if (!raw) return null;
+      let bg = String(raw).trim().toUpperCase().replace(/\s+/g, '');
+      bg = bg.replace(/POSITIVE/i, '+').replace(/NEGATIVE/i, '-').replace(/POS/i, '+').replace(/NEG/i, '-').replace(/VE/i, '');
+      const valid = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+      for (const v of valid) {
+        if (bg === v || bg === v.replace('+', '')) return v;
+      }
+      return bg || null;
+    }
+
+    function normalizeDate(raw) {
+      if (!raw) return null;
+      let str = String(raw).trim();
+      if (/^\d{5}$/.test(str)) {
+        const num = parseInt(str);
+        const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+        if (!isNaN(d.getTime())) {
+          const yyyy = d.getUTCFullYear();
+          const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+          const dd = String(d.getUTCDate()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd}`;
+        }
+      }
+      str = str.replace(/[./]/g, '-');
+      const parts = str.split('-');
+      if (parts.length === 3) {
+        const y = parts[0].trim();
+        const m = parts[1].trim().padStart(2, '0');
+        const d = parts[2].trim().padStart(2, '0');
+        if (y.length === 4) return `${y}-${m}-${d}`;
+      }
+      return str || null;
+    }
+
     // Process rows
     for (const row of rows) {
       try {
-        const rawEmisId = String(row['Student IEMIS Id'] || row['Student IEMIS ID'] || row['Student Id'] || row['Student ID'] || row['IEMIS Code'] || row['studentId'] || '').trim();
-        const fullName  = String(row['Student Name'] || row['FullName'] || row['Full Name'] || row['Name'] || '').trim();
+        const rawEmisId = getCellValue(row, 'Student IEMIS Id', 'Student IEMIS ID', 'Student Id', 'Student ID', 'IEMIS Code', 'IEMIS ID', 'EMIS ID', 'studentId', 'Registration No', 'Reg No', 'विद्यार्थी कोड');
+        const fullName  = getCellValue(row, 'Student Name', 'FullName', 'Full Name', 'Name', 'विद्यार्थीको नाम', 'Student', 'studentName');
         if (!fullName) { results.skipped++; continue; }
 
-        const fullNameNepali = String(row['Student Name in Nepali'] || row['FullNameNepali'] || row['NameNepali'] || '').trim() || null;
+        const fullNameNepali = getCellValue(row, 'Student Name in Nepali', 'Name in Nepali', 'FullNameNepali', 'NameNepali', 'नेपाली नाम', 'नाम (नेपाली)') || null;
         const hasEmisId = Boolean(rawEmisId);
         const targetClassId = await resolveClassId(row);
-        const rollNo = row['S.N'] || row['S.N.'] || row['SN'] || row['Roll No'] || row['rollNo'] || null;
+        const rollNo = getCellValue(row, 'S.N', 'S.N.', 'SN', 'Roll No', 'Roll Number', 'Roll', 'रोल नं.', 'rollNo') || null;
 
-        const fatherName      = String(row['Father Name'] || '').trim() || null;
-        const motherName      = String(row['Mother Name'] || '').trim() || null;
-        const guardianName    = String(row['Guardian Name'] || fatherName || '').trim() || null;
+        const fatherName      = getCellValue(row, 'Father Name', "Father's Name", 'Father', 'बुवाको नाम', 'बाबुको नाम', 'fatherName', 'FatherName') || null;
+        const motherName      = getCellValue(row, 'Mother Name', "Mother's Name", 'Mother', 'आमाको नाम', 'motherName', 'MotherName') || null;
+        const guardianName    = getCellValue(row, 'Guardian Name', 'Guardian', 'अभिभावकको नाम', 'अभिभावक', 'guardianName', 'GuardianName', 'Local Guardian') || fatherName || motherName || null;
         
-        let guardianContact = String(row['Guardian Contact Number'] || row['Guardian Contact'] || row['Contact'] || '').trim() || null;
-        if (guardianContact === '00' || guardianContact === '0' || guardianContact === 'null' || guardianContact === 'undefined') {
-          guardianContact = null;
+        let rawContact = getCellValue(row, 'Guardian Contact Number', 'Guardian Contact', 'Guardian Phone', 'Contact Number', 'Contact', 'Phone Number', 'Phone', 'Mobile', 'Mobile Number', 'फोन नं.', 'सम्पर्क नं.', 'guardianContact', 'phone', 'mobile');
+        let guardianContact = rawContact && !['00', '0', 'null', 'undefined', 'n/a', 'none'].includes(rawContact.toLowerCase()) ? rawContact : null;
+
+        let guardianRelation = getCellValue(row, 'Guardian Relation', 'Relation', 'Relationship', 'नाता', 'सम्बन्ध', 'guardianRelation') || null;
+        if (!guardianRelation && guardianName) {
+          if (fatherName && guardianName.toLowerCase() === fatherName.toLowerCase()) guardianRelation = 'Father';
+          else if (motherName && guardianName.toLowerCase() === motherName.toLowerCase()) guardianRelation = 'Mother';
         }
 
-        const gender          = String(row['Gender'] || '').trim() || null;
+        const gender          = normalizeGender(getCellValue(row, 'Gender', 'Sex', 'लिंग', 'gender', 'sex', 'M/F', 'Sex / Gender'));
         
-        let permAddress     = String(row['Permanent Address'] || row['Address'] || '').trim() || null;
-        if (permAddress && (permAddress.startsWith('-null') || permAddress.toLowerCase() === 'null')) {
-          permAddress = null;
-        }
+        let rawAddr = getCellValue(row, 'Permanent Address', 'PermanentAddress', 'Address', 'ठेगाना', 'स्थायी ठेगाना', 'District', 'Municipality', 'Ward', 'Tole', 'Temporary Address', 'अस्थायी ठेगाना', 'address');
+        let permAddress = rawAddr && !rawAddr.startsWith('-null') && !['null', 'undefined', 'n/a'].includes(rawAddr.toLowerCase()) ? rawAddr : null;
 
-        let dob             = String(row['DOB'] || row['Date of Birth'] || '').trim() || null;
-        // Format DOB e.g. 2075-7-27 -> 2075-07-27
-        if (dob && dob.includes('-')) {
-          const parts = dob.split('-');
-          if (parts.length === 3) {
-            const y = parts[0];
-            const m = parts[1].padStart(2, '0');
-            const d = parts[2].padStart(2, '0');
-            dob = `${y}-${m}-${d}`;
-          }
-        }
+        const dob             = normalizeDate(getCellValue(row, 'DOB', 'Date of Birth', 'Date of Birth (BS)', 'Date of Birth (AD)', 'जन्म मिति', 'DOB (BS)', 'DOB (AD)', 'DOB_BS', 'DOB_AD', 'dob', 'dateOfBirthBs', 'BirthDate', 'जन्ममिति'));
+        const bloodGroup      = normalizeBloodGroup(getCellValue(row, 'Blood Group', 'BloodGroup', 'Blood', 'रक्त समूह', 'bloodGroup', 'रक्तसमूह'));
+        const ethnicity       = getCellValue(row, 'Ethnicity', 'Ethnic Group', 'Caste', 'जात', 'जाति', 'जात/जाति', 'Mother Tongue', 'मातृभाषा', 'Community', 'caste', 'ethnicity', 'Ethnic') || null;
+        const religion        = getCellValue(row, 'Religion', 'धर्म', 'religion') || null;
 
-        const motherTongue    = String(row['Mother Tongue'] || row['Ethnicity'] || '').trim() || null;
-        let disabilityType  = String(row['Disability Type'] || row['Disability'] || '').trim() || null;
-        if (disabilityType && disabilityType.toLowerCase() === 'no disability') {
-          disabilityType = 'None';
-        }
+        let rawDisability   = getCellValue(row, 'Disability Type', 'Disability', 'अपाङ्गता', 'disability');
+        let disabilityType  = (rawDisability && !['no disability', 'none', 'no', '0', 'null'].includes(rawDisability.toLowerCase())) ? rawDisability : 'None';
 
-        const rawIsTransferred = String(row['Is Transferred'] || row['isTransferred'] || '').trim().toLowerCase();
+        const previousSchool  = getCellValue(row, 'Previous School', 'Previous School Name', 'अघिल्लो विद्यालय', 'Last School', 'previousSchool') || null;
+        const admissionDateBs = normalizeDate(getCellValue(row, 'Admission Date', 'Admission Date (BS)', 'भर्ना मिति', 'admissionDateBs')) || null;
+
+        const rawIsTransferred = String(getCellValue(row, 'Is Transferred', 'isTransferred', 'सरुवा', 'Status') || '').trim().toLowerCase();
         const isExplicitTransferred = rawIsTransferred === 'yes' || rawIsTransferred === 'true' || rawIsTransferred === '1' || rawIsTransferred === 'transferred';
 
         // CASE 1: Student has NO EMIS ID and treatNoEmisAsTransferred is true OR row is marked as Transferred
@@ -476,11 +536,16 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
               motherName,
               guardianName,
               guardianContact,
+              guardianRelation,
               gender,
               address: permAddress,
               dateOfBirthBs: dob,
-              ethnicity: motherTongue,
+              bloodGroup,
+              ethnicity,
+              religion,
               disability: disabilityType,
+              previousSchool,
+              admissionDateBs,
               status: 'TRANSFERRED',
               isActive: false,
               transferReason: isExplicitTransferred ? 'IEMIS Transferred (सरुवा भएको)' : `विगत सत्र (${academicYearName}) अभिलेख / सरुवा (No EMIS ID recorded)`,
@@ -508,17 +573,23 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
         const existingStudent = existingMap.get(studentId) || (rawEmisId ? existingMap.get(rawEmisId) : null);
 
         if (existingStudent) {
-          // Existing student profile matched! Enrich missing details and link to this academic year class
+          // Existing student profile matched! Enrich missing or updated details and link to this academic year class
           const updateData = {};
-          if (!existingStudent.fatherName && fatherName) updateData.fatherName = fatherName;
-          if (!existingStudent.motherName && motherName) updateData.motherName = motherName;
-          if (!existingStudent.guardianName && guardianName) updateData.guardianName = guardianName;
-          if (!existingStudent.guardianContact && guardianContact) updateData.guardianContact = guardianContact;
-          if (!existingStudent.gender && gender) updateData.gender = gender;
-          if (!existingStudent.address && permAddress) updateData.address = permAddress;
-          if (!existingStudent.dateOfBirthBs && dob) updateData.dateOfBirthBs = dob;
-          if (!existingStudent.ethnicity && motherTongue) updateData.ethnicity = motherTongue;
-          if (!existingStudent.disability && disabilityType) updateData.disability = disabilityType;
+          if (fatherName) updateData.fatherName = fatherName;
+          if (motherName) updateData.motherName = motherName;
+          if (guardianName) updateData.guardianName = guardianName;
+          if (guardianContact) updateData.guardianContact = guardianContact;
+          if (guardianRelation) updateData.guardianRelation = guardianRelation;
+          if (gender) updateData.gender = gender;
+          if (permAddress) updateData.address = permAddress;
+          if (dob) updateData.dateOfBirthBs = dob;
+          if (bloodGroup) updateData.bloodGroup = bloodGroup;
+          if (ethnicity) updateData.ethnicity = ethnicity;
+          if (religion) updateData.religion = religion;
+          if (disabilityType) updateData.disability = disabilityType;
+          if (previousSchool) updateData.previousSchool = previousSchool;
+          if (admissionDateBs) updateData.admissionDateBs = admissionDateBs;
+          if (fullNameNepali && !existingStudent.fullNameNepali) updateData.fullNameNepali = fullNameNepali;
           if (!existingStudent.emisId && rawEmisId) updateData.emisId = rawEmisId;
 
           if (Object.keys(updateData).length > 0) {
@@ -553,7 +624,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
                 data: {
                   studentId: existingStudent.id,
                   classId: targetClassId,
-                  rollNo: rollNo ? parseInt(rollNo) : null,
+                  rollNo: rollNo && !isNaN(parseInt(rollNo)) ? parseInt(rollNo) : null,
                   isActive: isActiveYear,
                 },
               });
@@ -588,16 +659,22 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
             userId: user.id,
             studentId,
             fullName,
+            fullNameNepali,
             fatherName,
             motherName,
             guardianName,
             guardianContact,
+            guardianRelation,
             emisId: rawEmisId || null,
             gender,
             address: permAddress,
             dateOfBirthBs: dob,
-            ethnicity: motherTongue,
+            bloodGroup,
+            ethnicity,
+            religion,
             disability: disabilityType,
+            previousSchool,
+            admissionDateBs,
             status: isActiveYear ? 'ACTIVE' : 'PAST_RECORD',
             isActive: isActiveYear,
           },
@@ -613,7 +690,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
             data: {
               studentId: student.id,
               classId: targetClassId,
-              rollNo: rollNo ? parseInt(rollNo) : null,
+              rollNo: rollNo && !isNaN(parseInt(rollNo)) ? parseInt(rollNo) : null,
               isActive: isActiveYear,
             },
           });
@@ -621,7 +698,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
 
         results.created++;
       } catch (rowErr) {
-        results.errors.push({ row: String(row['FullName'] || 'Unknown'), error: rowErr.message });
+        results.errors.push({ row: String(row['FullName'] || row['Student Name'] || 'Unknown'), error: rowErr.message });
       }
     }
 

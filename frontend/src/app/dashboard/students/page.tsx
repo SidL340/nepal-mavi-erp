@@ -378,7 +378,25 @@ export default function StudentsPage() {
 
   const [showFormatGuide, setShowFormatGuide] = useState(false);
 
-  // Download Sample IEMIS Excel / CSV Template (Exact 21-Column IEMIS Standard)
+  // Calculate age dynamically from BS or AD Date of Birth
+  const computeStudentAge = (dobStr?: string | null): number | null => {
+    if (!dobStr) return null;
+    const match = String(dobStr).match(/^(\d{4})/);
+    if (!match) return null;
+    const birthYear = parseInt(match[1]);
+    if (isNaN(birthYear)) return null;
+    if (birthYear > 2000 && birthYear < 2100) {
+      const age = 2082 - birthYear;
+      return age > 0 && age < 100 ? age : null;
+    }
+    if (birthYear > 1950 && birthYear <= new Date().getFullYear()) {
+      const age = new Date().getFullYear() - birthYear;
+      return age > 0 && age < 100 ? age : null;
+    }
+    return null;
+  };
+
+  // Download Comprehensive IEMIS Excel / CSV Template
   const handleDownloadTemplate = () => {
     const headers = [
       'S.N',
@@ -392,16 +410,21 @@ export default function StudentsPage() {
       'Mother Name',
       'Class',
       'Section',
-      'Year',
+      'Roll No',
       'Permanent Address',
       'Temporary Address',
       'DOB',
-      'Is Transferred',
-      'Mother Tongue',
-      'Disability Type',
       'Age',
+      'Blood Group',
+      'Ethnicity',
+      'Religion',
+      'Disability Type',
       'Guardian Name',
       'Guardian Contact Number',
+      'Guardian Relation',
+      'Previous School',
+      'Admission Date',
+      'Is Transferred',
     ];
 
     const sampleRows = [
@@ -411,22 +434,27 @@ export default function StudentsPage() {
         'Nepal Secondary School',
         '3201600058003308',
         'Aachal Kumari',
-        '',
+        'आँचल कुमारी',
         'Female',
         'Rajesh Raut Kurmi',
         'Gujeshwori Devi',
         '8',
-        '',
-        '2082',
+        'A',
+        '1',
         'Brindaban-1, Rautahat',
         'Brindaban-1, Rautahat',
         '2068-06-17',
-        'No',
-        'Bajjika',
-        'No Disability',
         '14',
+        'B+',
+        'Madhesi (Kurmi)',
+        'Hindu',
+        'None',
         'Rajesh Raut Kurmi',
         '9825519506',
+        'Father',
+        'Shree Bal Kalyan Ma.Vi.',
+        '2081-01-15',
+        'No',
       ],
       [
         '2',
@@ -434,22 +462,27 @@ export default function StudentsPage() {
         'Nepal Secondary School',
         '3201600057601760',
         'Aachal Patel',
-        '',
+        'आँचल पटेल',
         'Female',
         'Rambishwas Patel',
         'Sima Devi',
         '6',
-        '',
-        '2082',
+        'B',
+        '2',
         'Brindaban-1, Rautahat',
         'Brindaban-1, Rautahat',
         '2072-10-11',
-        'No',
-        'Bajjika',
-        'No Disability',
         '10',
+        'O+',
+        'Madhesi (Patel)',
+        'Hindu',
+        'None',
         'Rambishwas Patel',
         '9812345678',
+        'Father',
+        '',
+        '2081-01-15',
+        'No',
       ],
       [
         '3',
@@ -457,22 +490,27 @@ export default function StudentsPage() {
         'Nepal Secondary School',
         '3201600058003388',
         'Aadesh Paswan',
-        '',
+        'आदेश पासवान',
         'Male',
         'Ram Adhar Paswan',
         'Anita Paswan',
         '2',
-        '',
-        '2082',
+        'A',
+        '1',
         'Brindaban-1, Rautahat',
         'Brindaban-1, Rautahat',
         '2075-07-27',
-        'No',
-        'Bhojpuri',
-        'No Disability',
         '7',
+        'A+',
+        'Dalit (Paswan)',
+        'Hindu',
+        'None',
         'Ram Adhar Paswan',
         '9803456789',
+        'Father',
+        '',
+        '2081-01-15',
+        'No',
       ],
       [
         '4',
@@ -480,22 +518,27 @@ export default function StudentsPage() {
         'Nepal Secondary School',
         '3201600057701806',
         'Aadhity Patel',
-        '',
+        'आदित्य पटेल',
         'Male',
         'Bachan Raut Kurmi',
         'Sharmila Devi',
         '6',
-        '',
-        '2082',
+        'A',
+        '3',
         'Brindaban-1, Rautahat',
         'Brindaban-1, Rautahat',
         '2069-06-30',
-        'No',
-        'Nepali',
-        'No Disability',
         '13',
+        'AB+',
+        'Madhesi (Kurmi)',
+        'Hindu',
+        'None',
         'Bachan Raut Kurmi',
+        '9819876543',
+        'Father',
         '',
+        '2081-01-15',
+        'No',
       ],
     ];
 
@@ -507,12 +550,12 @@ export default function StudentsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'iemis_student_import_template.csv');
+    link.setAttribute('download', 'iemis_student_full_import_template.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success('नेपाल सरकार IEMIS मानक एक्सेल/CSV ढाँचा डाउनलोड भयो!');
+    toast.success('नेपाल सरकार IEMIS मानक पूर्ण एक्सेल/CSV ढाँचा डाउनलोड भयो!');
   };
 
   const handleBulkImportSubmit = (e: React.FormEvent) => {
@@ -914,7 +957,7 @@ export default function StudentsPage() {
                                     {student.fullName.slice(0, 2).toUpperCase()}
                                   </div>
                                   <div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                       <p className="font-bold text-gray-900">{student.fullName}</p>
                                       {isTransferred ? (
                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
@@ -929,13 +972,43 @@ export default function StudentsPage() {
                                           📁 विगत अभिलेख (Record Only)
                                         </span>
                                       ) : null}
+
+                                      {/* Blood Group Badge */}
+                                      {student.bloodGroup && (
+                                        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                                          🩸 {student.bloodGroup}
+                                        </span>
+                                      )}
+
+                                      {/* Ethnicity / Caste Badge */}
+                                      {student.ethnicity && (
+                                        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
+                                          {student.ethnicity}
+                                        </span>
+                                      )}
                                     </div>
                                     {student.fullNameNepali && (
                                       <p className="text-[10px] text-gray-500 font-nepali">{student.fullNameNepali}</p>
                                     )}
-                                    <span className="text-[10px] text-gray-400">
-                                      DOB: {student.dateOfBirthBs || 'N/A'} ({student.gender || 'N/A'})
-                                    </span>
+                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500 flex-wrap font-sans">
+                                      {student.gender && (
+                                        <span className={`font-semibold ${
+                                          student.gender === 'Female' ? 'text-pink-600' : 'text-blue-600'
+                                        }`}>
+                                          {student.gender === 'Female' ? '♀ छात्रा (Female)' : student.gender === 'Male' ? '♂ छात्र (Male)' : student.gender}
+                                        </span>
+                                      )}
+                                      {student.dateOfBirthBs && (
+                                        <span>
+                                          DOB: <strong className="font-mono text-gray-700">{student.dateOfBirthBs}</strong>
+                                          {computeStudentAge(student.dateOfBirthBs) && (
+                                            <span className="ml-1 text-emerald-700 font-bold">
+                                              ({computeStudentAge(student.dateOfBirthBs)} वर्ष)
+                                            </span>
+                                          )}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </td>
@@ -961,8 +1034,20 @@ export default function StudentsPage() {
                           </td>
 
                           <td className="px-4 py-3">
-                            <p className="font-medium text-gray-800">{student.fatherName || student.guardianName || '—'}</p>
-                            <p className="text-[10px] text-gray-500 font-mono">{student.guardianContact || student.phone || '—'}</p>
+                            <div className="text-xs">
+                              <p className="font-medium text-gray-900">
+                                {student.fatherName ? `बुवा: ${student.fatherName}` : (student.guardianName || '—')}
+                              </p>
+                              {student.motherName && (
+                                <p className="text-[10px] text-gray-500">आमा: {student.motherName}</p>
+                              )}
+                              <p className="text-[10px] text-indigo-700 font-mono font-bold mt-0.5">
+                                {student.guardianContact || student.phone || '—'}
+                              </p>
+                              {student.address && (
+                                <p className="text-[10px] text-gray-400 truncate max-w-[180px]">{student.address}</p>
+                              )}
+                            </div>
                           </td>
 
                           <td className="px-4 py-3 text-right">
@@ -2856,10 +2941,28 @@ export default function StudentsPage() {
                         <td className="p-1.5 text-gray-600">विद्यार्थीको लिंग</td>
                       </tr>
                       <tr>
-                        <td className="p-1.5 font-mono font-bold text-blue-700">DOB</td>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">DOB (Date of Birth)</td>
                         <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
-                        <td className="p-1.5 font-mono text-gray-600">2068-06-17 / 2075-7-27</td>
-                        <td className="p-1.5 text-gray-600">जन्म मिति (वि.सं.)</td>
+                        <td className="p-1.5 font-mono text-gray-600">2068-06-17 / 2075-07-27</td>
+                        <td className="p-1.5 text-gray-600">जन्म मिति (वि.सं.) — उमेर स्वतः गणना हुन्छ</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-rose-700">Blood Group</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 font-mono text-gray-600">A+ / B+ / O+ / AB+ / O-</td>
+                        <td className="p-1.5 text-gray-600">विद्यार्थीको रक्त समूह</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-amber-800">Ethnicity / Caste / Mother Tongue</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Dalit / Janajati / Madhesi / Kurmi / Bajjika</td>
+                        <td className="p-1.5 text-gray-600">जात / जाति / मातृभाषा जनसांख्यिकी</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Religion</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Hindu / Islam / Buddhist / Christian</td>
+                        <td className="p-1.5 text-gray-600">धर्म</td>
                       </tr>
                       <tr>
                         <td className="p-1.5 font-mono font-bold text-blue-700">Father Name / Mother Name</td>
@@ -2868,10 +2971,10 @@ export default function StudentsPage() {
                         <td className="p-1.5 text-gray-600">बुवा तथा आमाको नाम</td>
                       </tr>
                       <tr>
-                        <td className="p-1.5 font-mono font-bold text-blue-700">Guardian Name & Contact</td>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Guardian Name & Contact & Relation</td>
                         <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
-                        <td className="p-1.5 font-mono text-gray-600">9825519506</td>
-                        <td className="p-1.5 text-gray-600">अभिभावकको नाम तथा फोन नम्बर</td>
+                        <td className="p-1.5 font-mono text-gray-600">9825519506 (Father)</td>
+                        <td className="p-1.5 text-gray-600">अभिभावकको नाम, फोन नम्बर र नाता</td>
                       </tr>
                       <tr>
                         <td className="p-1.5 font-mono font-bold text-blue-700">Permanent Address</td>
@@ -2880,16 +2983,22 @@ export default function StudentsPage() {
                         <td className="p-1.5 text-gray-600">स्थायी ठेगाना</td>
                       </tr>
                       <tr>
-                        <td className="p-1.5 font-mono font-bold text-blue-700">Mother Tongue</td>
-                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
-                        <td className="p-1.5 text-gray-600">Bajjika / Bhojpuri / Nepali / Tharu</td>
-                        <td className="p-1.5 text-gray-600">मातृभाषा जनसांख्यिकी</td>
-                      </tr>
-                      <tr>
                         <td className="p-1.5 font-mono font-bold text-blue-700">Disability Type</td>
                         <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
                         <td className="p-1.5 text-gray-600">No Disability / None / अपाङ्गता</td>
                         <td className="p-1.5 text-gray-600">समावेशी शिक्षा स्थिति</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Previous School</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 text-gray-600">Shree Bal Kalyan Ma.Vi.</td>
+                        <td className="p-1.5 text-gray-600">अघिल्लो विद्यालय</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1.5 font-mono font-bold text-blue-700">Admission Date</td>
+                        <td className="p-1.5"><span className="text-[10px] font-bold text-gray-500">वैकल्पिक</span></td>
+                        <td className="p-1.5 font-mono text-gray-600">2081-01-15</td>
+                        <td className="p-1.5 text-gray-600">भर्ना मिति (वि.सं.)</td>
                       </tr>
                       <tr>
                         <td className="p-1.5 font-mono font-bold text-blue-700">Is Transferred</td>

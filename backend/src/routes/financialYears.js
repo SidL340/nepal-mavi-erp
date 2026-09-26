@@ -203,54 +203,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
   }
 });
 
-// ── 5. UPDATE FINANCIAL YEAR ─────────────────────────────────────────────────
-router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const {
-      year,
-      startDateBs,
-      endDateBs,
-      isActive,
-      openingCashBalance,
-      openingBankBalance,
-      openingPayables,
-      openingReceivables,
-      openingDetails,
-      remarks,
-    } = req.body;
-
-    if (isActive) {
-      await prisma.financialYear.updateMany({ data: { isActive: false } });
-    }
-
-    const updated = await prisma.financialYear.update({
-      where: { id },
-      data: {
-        year: year ? year.trim() : undefined,
-        startDateBs: startDateBs ? startDateBs.trim() : undefined,
-        endDateBs: endDateBs ? endDateBs.trim() : undefined,
-        isActive: isActive !== undefined ? isActive : undefined,
-        openingCashBalance: openingCashBalance !== undefined ? parseFloat(openingCashBalance) || 0 : undefined,
-        openingBankBalance: openingBankBalance !== undefined ? parseFloat(openingBankBalance) || 0 : undefined,
-        openingPayables: openingPayables !== undefined ? parseFloat(openingPayables) || 0 : undefined,
-        openingReceivables: openingReceivables !== undefined ? parseFloat(openingReceivables) || 0 : undefined,
-        openingDetails: openingDetails !== undefined ? (typeof openingDetails === 'string' ? openingDetails : JSON.stringify(openingDetails)) : undefined,
-        remarks: remarks !== undefined ? remarks : undefined,
-      }
-    });
-
-    return res.json({
-      success: true,
-      data: updated,
-      message: `Financial Year "${updated.year}" updated successfully.`
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// ── 5B. GET OPENING BALANCES FOR A FINANCIAL YEAR ───────────────────────────
+// ── 5A. GET OPENING BALANCES FOR A FINANCIAL YEAR ───────────────────────────
 router.get('/:id/opening-balances', authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -287,8 +240,8 @@ router.get('/:id/opening-balances', authenticate, async (req, res) => {
   }
 });
 
-// ── 5C. UPDATE OPENING BALANCES FOR A FINANCIAL YEAR ────────────────────────
-router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+// Helper for saving opening balances
+async function handleSaveOpeningBalances(req, res) {
   try {
     const id = parseInt(req.params.id);
     const fy = await prisma.financialYear.findUnique({ where: { id } });
@@ -359,16 +312,15 @@ router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMI
 
         const hId = item.headId ? parseInt(item.headId) : (defaultHead?.id || 1);
 
-        // Check if existing opening bill exists
-        const existing = await prisma.expenseEntry.findFirst({
+        // Check if carryforward expense bill already exists
+        const existingExp = await prisma.expenseEntry.findFirst({
           where: {
             financialYearId: id,
-            billNo: cleanBillNo,
-            ...(pId ? { partyId: pId } : {}),
-          },
+            billNumber: cleanBillNo,
+          }
         });
 
-        if (!existing) {
+        if (!existingExp) {
           await prisma.expenseEntry.create({
             data: {
               academicYearId,
@@ -376,17 +328,32 @@ router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMI
               headId: hId,
               partyId: pId,
               paidTo: pName,
-              billNo: cleanBillNo,
-              amount: 0,
+              billNumber: cleanBillNo,
+              amount: itemAmt,
+              paidAmount: 0,
+              dueAmount: itemAmt,
+              status: 'DUE',
+              paymentMode: 'CREDIT',
               expenseDateBs: fy.startDateBs || '2081-04-01',
-              expenseDateAd: new Date(),
-              paymentMedium: 'UNPAID_BILL',
-              paidFromAccount: 'अघिल्लो आ.व. बाट सरेको दायित्व (Opening Carryforward Payable)',
-              description: `${item.description || 'अघिल्लो आ.व. बाट जिम्मेवारी सरेको तिर्न बाँकी दायित्व'} [Total Bill: Rs. ${itemAmt.toLocaleString()}]`,
-              remarks: `Opening Carryforward Payable (विगत आ.व. को बक्यौता): Rs. ${itemAmt.toLocaleString()}`,
-              approvedBy: 'Principal (प्रधानाध्यापक)',
-            },
+              description: item.description ? `[विगत वर्ष जिम्मेवारी दायित्व] ${item.description}` : `विगत आर्थिक वर्षबाट जिम्मेवारी सरेको बाँकी दायित्व (${pName})`,
+              sourceLevel: 'INTERNAL',
+            }
+          }).catch((expErr) => {
+            console.error('Error creating carryforward expense entry:', expErr.message);
           });
+        } else {
+          await prisma.expenseEntry.update({
+            where: { id: existingExp.id },
+            data: {
+              headId: hId,
+              partyId: pId,
+              paidTo: pName,
+              amount: itemAmt,
+              dueAmount: itemAmt - (existingExp.paidAmount || 0),
+              status: (itemAmt - (existingExp.paidAmount || 0)) <= 0 ? 'PAID' : (existingExp.paidAmount > 0 ? 'PARTIAL' : 'DUE'),
+              description: item.description ? `[विगत वर्ष जिम्मेवारी दायित्व] ${item.description}` : existingExp.description,
+            }
+          }).catch(() => {});
         }
       }
     }
@@ -394,7 +361,68 @@ router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMI
     return res.json({
       success: true,
       data: updated,
-      message: `प्रारम्भिक मौज्दात, बैंक हिसाब तथा शीर्षकगत/पार्टीगत तिर्न बाँकी दायित्व सफलतापूर्वक दर्ता भयो!`,
+      message: `प्रारम्भिक मौज्दात तथा जिम्मेवारी दायित्व सफलतापूर्वक सुरक्षित भयो।`,
+    });
+  } catch (err) {
+    console.error('Save opening balances error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ── 5B. UPDATE OPENING BALANCES (Supports PUT, POST, and alternate URL patterns) ───
+router.put('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), handleSaveOpeningBalances);
+router.post('/:id/opening-balances', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), handleSaveOpeningBalances);
+router.put('/opening-balances/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), handleSaveOpeningBalances);
+router.post('/opening-balances/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), handleSaveOpeningBalances);
+
+// ── 5C. UPDATE FINANCIAL YEAR (Generic) ──────────────────────────────────────
+router.put('/:id', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const {
+      year,
+      startDateBs,
+      endDateBs,
+      isActive,
+      openingCashBalance,
+      openingBankBalance,
+      openingPayables,
+      openingReceivables,
+      openingDetails,
+      bankBalances,
+      carryforwardPayablesList,
+      remarks,
+    } = req.body;
+
+    if (isActive) {
+      await prisma.financialYear.updateMany({ data: { isActive: false } });
+    }
+
+    // If carryforward payables or bank balances provided in generic PUT, route through handler
+    if (carryforwardPayablesList || bankBalances) {
+      return handleSaveOpeningBalances(req, res);
+    }
+
+    const updated = await prisma.financialYear.update({
+      where: { id },
+      data: {
+        year: year ? year.trim() : undefined,
+        startDateBs: startDateBs ? startDateBs.trim() : undefined,
+        endDateBs: endDateBs ? endDateBs.trim() : undefined,
+        isActive: isActive !== undefined ? isActive : undefined,
+        openingCashBalance: openingCashBalance !== undefined ? parseFloat(openingCashBalance) || 0 : undefined,
+        openingBankBalance: openingBankBalance !== undefined ? parseFloat(openingBankBalance) || 0 : undefined,
+        openingPayables: openingPayables !== undefined ? parseFloat(openingPayables) || 0 : undefined,
+        openingReceivables: openingReceivables !== undefined ? parseFloat(openingReceivables) || 0 : undefined,
+        openingDetails: openingDetails !== undefined ? (typeof openingDetails === 'string' ? openingDetails : JSON.stringify(openingDetails)) : undefined,
+        remarks: remarks !== undefined ? remarks : undefined,
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: updated,
+      message: `Financial Year "${updated.year}" updated successfully.`
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
