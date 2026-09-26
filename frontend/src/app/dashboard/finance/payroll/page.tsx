@@ -60,11 +60,13 @@ export default function PayrollPage() {
   // Period / Year & Month Range State
   const currentBS = todayBS();
   const currentYear = currentBS.slice(0, 4) || '2083';
+  const [selectedFYId, setSelectedFYId] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>(currentYear);
   const [fromMonth, setFromMonth] = useState<string>('04'); // साउन
   const [toMonth, setToMonth] = useState<string>('06'); // असोज
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'TEACHING' | 'NON_TEACHING'>('ALL');
   const [filterType, setFilterType] = useState<string>(''); // RASTRIYA, NIJI_SROTH
+  const [historyFYFilter, setHistoryFYFilter] = useState<string>('ALL');
 
   // Global Multipliers & Allowances Toggles
   const [globalFestivalAllowed, setGlobalFestivalAllowed] = useState<boolean>(false);
@@ -131,6 +133,26 @@ export default function PayrollPage() {
     },
   });
   const activeFinancialYear = financialYearsData?.find((f: any) => f.isActive) || financialYearsData?.[0];
+
+  // Resolve selected Financial Year
+  const selectedFinancialYear = useMemo(() => {
+    if (!financialYearsData || financialYearsData.length === 0) return activeFinancialYear;
+    if (selectedFYId) {
+      return financialYearsData.find((f: any) => f.id.toString() === selectedFYId) || activeFinancialYear;
+    }
+    return activeFinancialYear || financialYearsData[0];
+  }, [financialYearsData, selectedFYId, activeFinancialYear]);
+
+  // Sync FY selection on initial data load
+  useEffect(() => {
+    if (activeFinancialYear && !selectedFYId) {
+      setSelectedFYId(activeFinancialYear.id.toString());
+      const yrMatch = activeFinancialYear.year?.match(/(\d{4})/);
+      if (yrMatch && yrMatch[1]) {
+        setSelectedYear(yrMatch[1]);
+      }
+    }
+  }, [activeFinancialYear, selectedFYId]);
 
   // ── 4. Fetch Bank Accounts for Bulk Payment ───────────────────────────
   const { data: bankAccountsData } = useQuery({
@@ -209,10 +231,16 @@ export default function PayrollPage() {
         gradeNo: 3, // B (Default 3 grades, easily editable)
         gradeAmount: gradeRate, // C
         bimaThap: globalInsuranceGovContribution, // G (Default 400)
+        // Dedicated Allowance flags & values
+        hasPraABhata: isPrincipal || isVicePrincipal,
         praABhata: isPrincipal ? 1000 : (isVicePrincipal ? 500 : 0), // I
+        hasMahangiGhata: true,
         mahangiGhata: globalDearnessAmount, // J (Default 2000)
+        hasDurgamBhata: false,
         durgamBhata: 0, // K
+        hasProtsahanBhata: false,
         protsahanBhata: 0, // L
+        hasOtherBhata: false,
         otherBhata: 0, // M
         karmachariKoshSapati: 0, // R (Loan)
         includeChaadparba: globalFestivalAllowed, // V
@@ -255,11 +283,22 @@ export default function PayrollPage() {
     const G = parseFloat(row.bimaThap !== undefined ? row.bimaThap : 400); // बीमा थप
     const H = +(E + F + G).toFixed(2); // कुल तलब (E + F + G)
 
-    const I = parseFloat(row.praABhata || 0); // प्र.अ. भत्ता
-    const J = parseFloat(row.mahangiGhata !== undefined ? row.mahangiGhata : 2000); // महङ्गी भत्ता
-    const K = parseFloat(row.durgamBhata || 0); // दुर्गम भत्ता
-    const L = parseFloat(row.protsahanBhata || 0); // प्रोत्साहन भत्ता
-    const M = parseFloat(row.otherBhata || 0); // अन्य भत्ता
+    // Allowances (only added if checkbox is checked or enabled)
+    const isPraA = row.hasPraABhata !== undefined ? row.hasPraABhata : (parseFloat(row.praABhata || 0) > 0);
+    const I = isPraA ? parseFloat(row.praABhata || 0) : 0; // प्र.अ. भत्ता
+
+    const isMahangi = row.hasMahangiGhata !== undefined ? row.hasMahangiGhata : (row.mahangiGhata !== undefined ? parseFloat(row.mahangiGhata) > 0 : true);
+    const J = isMahangi ? parseFloat(row.mahangiGhata !== undefined ? row.mahangiGhata : 2000) : 0; // महङ्गी भत्ता
+
+    const isDurgam = row.hasDurgamBhata !== undefined ? row.hasDurgamBhata : (parseFloat(row.durgamBhata || 0) > 0);
+    const K = isDurgam ? parseFloat(row.durgamBhata || 0) : 0; // दुर्गम भत्ता
+
+    const isProtsahan = row.hasProtsahanBhata !== undefined ? row.hasProtsahanBhata : (parseFloat(row.protsahanBhata || 0) > 0);
+    const L = isProtsahan ? parseFloat(row.protsahanBhata || 0) : 0; // प्रोत्साहन भत्ता
+
+    const isOther = row.hasOtherBhata !== undefined ? row.hasOtherBhata : (parseFloat(row.otherBhata || 0) > 0);
+    const M = isOther ? parseFloat(row.otherBhata || 0) : 0; // अन्य भत्ता
+
     const N = +(I + J + K + L + M).toFixed(2); // जम्मा भत्ता
 
     const O = +(H + N).toFixed(2); // जम्मा तलब भत्ता (H + N)
@@ -809,27 +848,65 @@ export default function PayrollPage() {
           <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-2xs space-y-3">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 border-b border-gray-100 pb-3">
               {/* Year & Month Selectors */}
-              <div className="flex flex-wrap items-center gap-3 text-xs font-bold text-gray-800">
-                <div className="flex items-center gap-1.5 bg-blue-50/80 px-3 py-1.5 rounded-xl border border-blue-200">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs font-bold text-gray-800">
+                {/* 1. Fiscal Year (आर्थिक वर्ष) */}
+                <div className="flex items-center gap-1.5 bg-blue-50/90 px-3 py-1.5 rounded-xl border border-blue-200">
                   <Calendar size={15} className="text-[#1e3a5f]" />
-                  <span>आर्थिक वर्ष:</span>
+                  <span className="text-[#1e3a5f]">आर्थिक वर्ष:</span>
                   <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="bg-transparent font-bold text-[#1e3a5f] focus:outline-hidden cursor-pointer"
+                    value={selectedFYId || activeFinancialYear?.id?.toString() || ''}
+                    onChange={(e) => {
+                      const fyId = e.target.value;
+                      setSelectedFYId(fyId);
+                      const fy = financialYearsData?.find((f: any) => f.id.toString() === fyId);
+                      if (fy) {
+                        const yrMatch = fy.year?.match(/(\d{4})/);
+                        if (yrMatch && yrMatch[1]) {
+                          setSelectedYear(yrMatch[1]);
+                        }
+                      }
+                    }}
+                    className="bg-transparent font-extrabold text-[#1e3a5f] focus:outline-hidden cursor-pointer"
                   >
-                    <option value="2083">२०८३/०८४ (2083/84)</option>
-                    <option value="2082">२०८२/०८३ (2082/83)</option>
-                    <option value="2081">२०८१/०८२ (2081/82)</option>
+                    {financialYearsData && financialYearsData.length > 0 ? (
+                      financialYearsData.map((fy: any) => (
+                        <option key={fy.id} value={fy.id.toString()} className="text-gray-900 font-bold">
+                          {fy.year?.includes('२०') || fy.year?.includes('20') ? `आ.व. ${fy.year}` : `आ.व. ${fy.year}`} {fy.isActive ? '(चालु / Active)' : ''}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="2083" className="text-gray-900">२०८३/०८४ (2083/84)</option>
+                        <option value="2082" className="text-gray-900">२०८२/०८३ (2082/83)</option>
+                        <option value="2081" className="text-gray-900">२०८१/०८२ (2081/82)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-gray-200">
+                {/* 2. Exact Year (वर्ष) */}
+                <div className="flex items-center gap-1.5 bg-slate-100/90 px-2.5 py-1.5 rounded-xl border border-gray-200">
+                  <span className="text-gray-700">वर्ष (Year):</span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-2 py-0.5 focus:outline-hidden cursor-pointer"
+                  >
+                    {['2085', '2084', '2083', '2082', '2081', '2080', '2079', '2078'].map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr} BS
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 3. Nepali Month Range */}
+                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-gray-200">
                   <span>कुन महिना देखि:</span>
                   <select
                     value={fromMonth}
                     onChange={(e) => setFromMonth(e.target.value)}
-                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus:outline-hidden"
+                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus:outline-hidden cursor-pointer"
                   >
                     {NEPALI_MONTHS.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -842,7 +919,7 @@ export default function PayrollPage() {
                   <select
                     value={toMonth}
                     onChange={(e) => setToMonth(e.target.value)}
-                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus:outline-hidden"
+                    className="font-bold text-gray-900 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus:outline-hidden cursor-pointer"
                   >
                     {NEPALI_MONTHS.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -851,8 +928,8 @@ export default function PayrollPage() {
                     ))}
                   </select>
 
-                  <span className="bg-[#1e3a5f] text-white px-2 py-0.5 rounded-md font-mono text-[11px]">
-                    {monthCount} महिना ({monthCount === 3 ? 'त्रैमासिक निकासा' : monthCount === 1 ? 'मासिक निकासा' : `${monthCount} Months`})
+                  <span className="bg-[#1e3a5f] text-white px-2 py-0.5 rounded-md font-mono text-[11px] shadow-2xs">
+                    {monthCount} महिना ({monthCount === 3 ? 'त्रैमासिक निकासा' : monthCount === 1 ? 'मासिक निकासा' : `${monthCount} महिना`})
                   </span>
                 </div>
               </div>
@@ -1021,31 +1098,37 @@ export default function PayrollPage() {
                       <Check size={12} className="mx-auto" />
                     </th>
                     <th className="py-2.5 px-2 text-center w-8">क्र.सं.</th>
-                    <th className="py-2.5 px-3 min-w-[170px]">कर्मचारीको नाम</th>
-                    <th className="py-2.5 px-2 min-w-[130px]">तह / स्केल</th>
-                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-blue-900/60">मूल तलब<br/>[A]</th>
+                    <th className="py-2.5 px-3 min-w-[160px]">कर्मचारीको नाम</th>
+                    <th className="py-2.5 px-2 min-w-[120px]">तह / स्केल</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-900/60">मूल तलब<br/>[A]</th>
                     <th className="py-2.5 px-2 min-w-[65px] text-center">ग्रेड संख्या<br/>[B]</th>
-                    <th className="py-2.5 px-2 min-w-[75px] text-right">ग्रेड दर<br/>[C]</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right">ग्रेड दर<br/>[C]</th>
                     <th className="py-2.5 px-2 min-w-[80px] text-right bg-blue-950/70">जम्मा ग्रेड<br/>[D=B×C]</th>
-                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-900">जम्मा तलब<br/>[E=A+D]</th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right">क.सं. कोष १०%<br/>[F]</th>
-                    <th className="py-2.5 px-2 min-w-[70px] text-right">बीमा थप<br/>[G]</th>
-                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-indigo-950">कुल तलब<br/>[H=E+F+G]</th>
-                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-900">जम्मा भत्ता<br/>[N]</th>
-                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-purple-950">मासिक जम्मा<br/>[O=H+N]</th>
-                    <th className="py-2.5 px-2 min-w-[110px] text-right bg-slate-900 text-amber-300">
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-blue-900">जम्मा तलब<br/>[E=A+D]</th>
+                    <th className="py-2.5 px-2 min-w-[80px] text-right">क.सं. कोष १०%<br/>[F]</th>
+                    <th className="py-2.5 px-2 min-w-[65px] text-right">बीमा थप<br/>[G]</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-indigo-950">कुल तलब<br/>[H=E+F+G]</th>
+                    {/* Allowances I, J, K, L, M */}
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-950/90">प्र.अ. भत्ता<br/>[I]</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-950/90">महङ्गी भत्ता<br/>[J]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">दुर्गम भत्ता<br/>[K]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">प्रोत्साहन<br/>[L]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-purple-950/90">अन्य भत्ता<br/>[M]</th>
+                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-purple-900 font-black">जम्मा भत्ता<br/>[N=I+J+K+L+M]</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-purple-950">मासिक जम्मा<br/>[O=H+N]</th>
+                    <th className="py-2.5 px-2 min-w-[105px] text-right bg-slate-900 text-amber-300">
                       {monthCount}M तलब भत्ता<br/>[P=O×{monthCount}]
                     </th>
                     <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-950">कोष २०% कट्टी<br/>[Q]</th>
                     <th className="py-2.5 px-2 min-w-[75px] text-right bg-rose-950/70">सापट कट्टी<br/>[R]</th>
-                    <th className="py-2.5 px-2 min-w-[75px] text-right bg-rose-950/70">बीमा कट्टी<br/>[S]</th>
-                    <th className="py-2.5 px-2 min-w-[90px] text-right bg-rose-900 text-white">जम्मा कट्टी<br/>[T=Q+R+S]</th>
-                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-blue-950">बाँकी पाउनु<br/>[U=P-T]</th>
-                    <th className="py-2.5 px-2 min-w-[80px] text-right">चाडपर्व<br/>[V=E]</th>
-                    <th className="py-2.5 px-2 min-w-[75px] text-right">पोसाक<br/>[W]</th>
-                    <th className="py-2.5 px-2 min-w-[100px] text-right bg-emerald-950">जम्मा रकम<br/>[X=U+V+W]</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right bg-rose-950/70">बीमा कट्टी<br/>[S]</th>
+                    <th className="py-2.5 px-2 min-w-[85px] text-right bg-rose-900 text-white">जम्मा कट्टी<br/>[T=Q+R+S]</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-blue-950">बाँकी पाउनु<br/>[U=P-T]</th>
+                    <th className="py-2.5 px-2 min-w-[75px] text-right">चाडपर्व<br/>[V=E]</th>
+                    <th className="py-2.5 px-2 min-w-[70px] text-right">पोसाक<br/>[W]</th>
+                    <th className="py-2.5 px-2 min-w-[95px] text-right bg-emerald-950">जम्मा रकम<br/>[X=U+V+W]</th>
                     <th className="py-2.5 px-2 min-w-[75px] text-right">सा.सु. कर १%<br/>[Y]</th>
-                    <th className="py-2.5 px-3 min-w-[115px] text-right bg-emerald-700 text-white font-black">
+                    <th className="py-2.5 px-3 min-w-[110px] text-right bg-emerald-700 text-white font-black">
                       खुद भुक्तानी<br/>[Z=X-Y]
                     </th>
                   </tr>
@@ -1053,14 +1136,14 @@ export default function PayrollPage() {
                 <tbody className="divide-y divide-gray-100 bg-white">
                   {isTeachersLoading ? (
                     <tr>
-                      <td colSpan={25} className="p-12 text-center text-gray-400">
+                      <td colSpan={30} className="p-12 text-center text-gray-400">
                         <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
                         <p className="mt-2 text-xs">Loading payroll sheet data...</p>
                       </td>
                     </tr>
                   ) : displayedStaff.length === 0 ? (
                     <tr>
-                      <td colSpan={25} className="p-12 text-center text-gray-400">
+                      <td colSpan={30} className="p-12 text-center text-gray-400">
                         No teachers or staff found.
                       </td>
                     </tr>
@@ -1098,10 +1181,10 @@ export default function PayrollPage() {
 
                           {/* Name & Title */}
                           <td className="py-2 px-3">
-                            <div className="font-extrabold text-gray-900 text-xs truncate max-w-[160px]">
+                            <div className="font-extrabold text-gray-900 text-xs truncate max-w-[150px]">
                               {teacher.fullName}
                             </div>
-                            <div className="text-[10px] text-gray-500 font-nepali truncate max-w-[160px]">
+                            <div className="text-[10px] text-gray-500 font-nepali truncate max-w-[150px]">
                               {teacher.fullNameNepali || teacher.post || 'शिक्षक'}
                             </div>
                           </td>
@@ -1184,8 +1267,153 @@ export default function PayrollPage() {
                             {calc.H?.toLocaleString()}
                           </td>
 
-                          {/* [N] जम्मा भत्ता */}
-                          <td className="py-2 px-2 text-right font-mono font-semibold text-purple-900 bg-purple-50/50">
+                          {/* [I] प्र.अ. भत्ता (Checkbox + Amount) */}
+                          <td className="py-2 px-2 text-right font-mono bg-purple-50/20">
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="checkbox"
+                                checked={row.hasPraABhata || false}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  handleFieldChange(teacher.id, 'hasPraABhata', checked);
+                                  if (checked && (!row.praABhata || row.praABhata === 0)) {
+                                    handleFieldChange(teacher.id, 'praABhata', 500);
+                                  }
+                                }}
+                                className="rounded text-purple-700 w-3.5 h-3.5 cursor-pointer"
+                                title="प्र.अ. भत्ता लागू छ/छैन"
+                              />
+                              <input
+                                type="number"
+                                disabled={!row.hasPraABhata}
+                                value={row.hasPraABhata ? (row.praABhata || 0) : 0}
+                                onChange={(e) => handleFieldChange(teacher.id, 'praABhata', parseFloat(e.target.value) || 0)}
+                                className={`w-14 text-right font-mono text-xs bg-transparent border-b focus:outline-hidden ${
+                                  row.hasPraABhata ? 'border-purple-300 font-bold text-purple-900' : 'border-gray-200 text-gray-300 opacity-50'
+                                }`}
+                                placeholder="0"
+                              />
+                            </div>
+                          </td>
+
+                          {/* [J] महङ्गी भत्ता (Checkbox + Amount) */}
+                          <td className="py-2 px-2 text-right font-mono bg-purple-50/20">
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="checkbox"
+                                checked={row.hasMahangiGhata !== false}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  handleFieldChange(teacher.id, 'hasMahangiGhata', checked);
+                                  if (checked && (!row.mahangiGhata || row.mahangiGhata === 0)) {
+                                    handleFieldChange(teacher.id, 'mahangiGhata', globalDearnessAmount || 2000);
+                                  }
+                                }}
+                                className="rounded text-purple-700 w-3.5 h-3.5 cursor-pointer"
+                                title="महङ्गी भत्ता लागू छ/छैन"
+                              />
+                              <input
+                                type="number"
+                                disabled={row.hasMahangiGhata === false}
+                                value={row.hasMahangiGhata !== false ? (row.mahangiGhata !== undefined ? row.mahangiGhata : 2000) : 0}
+                                onChange={(e) => handleFieldChange(teacher.id, 'mahangiGhata', parseFloat(e.target.value) || 0)}
+                                className={`w-14 text-right font-mono text-xs bg-transparent border-b focus:outline-hidden ${
+                                  row.hasMahangiGhata !== false ? 'border-purple-300 font-bold text-purple-900' : 'border-gray-200 text-gray-300 opacity-50'
+                                }`}
+                                placeholder="0"
+                              />
+                            </div>
+                          </td>
+
+                          {/* [K] दुर्गम भत्ता (Checkbox + Amount) */}
+                          <td className="py-2 px-2 text-right font-mono bg-purple-50/20">
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="checkbox"
+                                checked={row.hasDurgamBhata || false}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  handleFieldChange(teacher.id, 'hasDurgamBhata', checked);
+                                  if (checked && (!row.durgamBhata || row.durgamBhata === 0)) {
+                                    handleFieldChange(teacher.id, 'durgamBhata', 1000);
+                                  }
+                                }}
+                                className="rounded text-purple-700 w-3.5 h-3.5 cursor-pointer"
+                                title="दुर्गम भत्ता लागू छ/छैन"
+                              />
+                              <input
+                                type="number"
+                                disabled={!row.hasDurgamBhata}
+                                value={row.hasDurgamBhata ? (row.durgamBhata || 0) : 0}
+                                onChange={(e) => handleFieldChange(teacher.id, 'durgamBhata', parseFloat(e.target.value) || 0)}
+                                className={`w-14 text-right font-mono text-xs bg-transparent border-b focus:outline-hidden ${
+                                  row.hasDurgamBhata ? 'border-purple-300 font-bold text-purple-900' : 'border-gray-200 text-gray-300 opacity-50'
+                                }`}
+                                placeholder="0"
+                              />
+                            </div>
+                          </td>
+
+                          {/* [L] प्रोत्साहन भत्ता (Checkbox + Amount) */}
+                          <td className="py-2 px-2 text-right font-mono bg-purple-50/20">
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="checkbox"
+                                checked={row.hasProtsahanBhata || false}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  handleFieldChange(teacher.id, 'hasProtsahanBhata', checked);
+                                  if (checked && (!row.protsahanBhata || row.protsahanBhata === 0)) {
+                                    handleFieldChange(teacher.id, 'protsahanBhata', 1000);
+                                  }
+                                }}
+                                className="rounded text-purple-700 w-3.5 h-3.5 cursor-pointer"
+                                title="प्रोत्साहन भत्ता लागू छ/छैन"
+                              />
+                              <input
+                                type="number"
+                                disabled={!row.hasProtsahanBhata}
+                                value={row.hasProtsahanBhata ? (row.protsahanBhata || 0) : 0}
+                                onChange={(e) => handleFieldChange(teacher.id, 'protsahanBhata', parseFloat(e.target.value) || 0)}
+                                className={`w-14 text-right font-mono text-xs bg-transparent border-b focus:outline-hidden ${
+                                  row.hasProtsahanBhata ? 'border-purple-300 font-bold text-purple-900' : 'border-gray-200 text-gray-300 opacity-50'
+                                }`}
+                                placeholder="0"
+                              />
+                            </div>
+                          </td>
+
+                          {/* [M] अन्य भत्ता (Checkbox + Amount) */}
+                          <td className="py-2 px-2 text-right font-mono bg-purple-50/20">
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="checkbox"
+                                checked={row.hasOtherBhata || false}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  handleFieldChange(teacher.id, 'hasOtherBhata', checked);
+                                  if (checked && (!row.otherBhata || row.otherBhata === 0)) {
+                                    handleFieldChange(teacher.id, 'otherBhata', 500);
+                                  }
+                                }}
+                                className="rounded text-purple-700 w-3.5 h-3.5 cursor-pointer"
+                                title="अन्य भत्ता लागू छ/छैन"
+                              />
+                              <input
+                                type="number"
+                                disabled={!row.hasOtherBhata}
+                                value={row.hasOtherBhata ? (row.otherBhata || 0) : 0}
+                                onChange={(e) => handleFieldChange(teacher.id, 'otherBhata', parseFloat(e.target.value) || 0)}
+                                className={`w-14 text-right font-mono text-xs bg-transparent border-b focus:outline-hidden ${
+                                  row.hasOtherBhata ? 'border-purple-300 font-bold text-purple-900' : 'border-gray-200 text-gray-300 opacity-50'
+                                }`}
+                                placeholder="0"
+                              />
+                            </div>
+                          </td>
+
+                          {/* [N] जम्मा भत्ता (N = I + J + K + L + M) */}
+                          <td className="py-2 px-2 text-right font-mono font-extrabold text-purple-950 bg-purple-100/70">
                             <div className="flex items-center justify-end gap-1">
                               <span>{calc.N?.toLocaleString()}</span>
                               <button
@@ -1195,7 +1423,7 @@ export default function PayrollPage() {
                                   setIsSingleEditModalOpen(true);
                                 }}
                                 className="text-[9px] text-purple-700 hover:text-purple-950 underline cursor-pointer"
-                                title="Edit detailed allowances (प्र.अ., महङ्गी, दुर्गम भत्ता)"
+                                title="Detailed allowance view"
                               >
                                 ⚙️
                               </button>
@@ -1291,7 +1519,7 @@ export default function PayrollPage() {
                     <td colSpan={4} className="py-3 px-3 text-left font-black tracking-wide text-amber-300">
                       कुल जम्मा (GRAND TOTAL: {grandTotals.count} जना शिक्षक/कर्मचारी):
                     </td>
-                    <td colSpan={10}></td>
+                    <td colSpan={15}></td>
                     <td className="py-3 px-2 text-right font-mono font-extrabold text-amber-300 text-sm">
                       रू {grandTotals.totalGrossP.toLocaleString()}
                     </td>
@@ -1329,9 +1557,28 @@ export default function PayrollPage() {
               <h2 className="text-sm font-bold text-[#1e3a5f]">Generated Payroll History (निकासा विवरण तथा भरपाई अभिलेख)</h2>
               <p className="text-xs text-gray-500 font-nepali">पहिले तयार वा भुक्तानी गरिएका शिक्षक/कर्मचारी तलब भरपाईको सूची</p>
             </div>
-            <span className="text-xs font-bold text-gray-600 bg-slate-100 px-3 py-1 rounded-xl">
-              कुल भरपाई: {payrollsData?.length || 0}
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200 text-xs font-bold">
+                <Calendar size={13} className="text-[#1e3a5f]" />
+                <span className="text-[#1e3a5f]">आर्थिक वर्ष:</span>
+                <select
+                  value={historyFYFilter}
+                  onChange={(e) => setHistoryFYFilter(e.target.value)}
+                  className="bg-transparent font-bold text-[#1e3a5f] focus:outline-hidden cursor-pointer"
+                >
+                  <option value="ALL">सबै आर्थिक वर्षहरू (All FY)</option>
+                  {(financialYearsData || []).map((fy: any) => (
+                    <option key={fy.id} value={fy.id.toString()}>
+                      आ.व. {fy.year} {fy.isActive ? '(चालु)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <span className="text-xs font-bold text-gray-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-gray-200">
+                कुल भरपाई: {(payrollsData || []).filter((p: any) => historyFYFilter === 'ALL' || p.financialYearId?.toString() === historyFYFilter).length}
+              </span>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
@@ -1353,15 +1600,17 @@ export default function PayrollPage() {
                 <tbody className="divide-y divide-gray-100">
                   {isPayrollsLoading ? (
                     <tr><td colSpan={9} className="p-8 text-center text-gray-400">Loading payroll records...</td></tr>
-                  ) : (payrollsData || []).length === 0 ? (
+                  ) : (payrollsData || []).filter((p: any) => historyFYFilter === 'ALL' || p.financialYearId?.toString() === historyFYFilter).length === 0 ? (
                     <tr>
                       <td colSpan={9} className="p-8 text-center text-gray-400">
                         <Wallet size={28} className="mx-auto text-gray-300 mb-1" />
-                        <p className="text-sm font-semibold text-gray-600">No payroll records generated yet</p>
+                        <p className="text-sm font-semibold text-gray-600">No payroll records found for this fiscal year</p>
                       </td>
                     </tr>
                   ) : (
-                    payrollsData.map((p: any) => (
+                    (payrollsData || [])
+                      .filter((p: any) => historyFYFilter === 'ALL' || p.financialYearId?.toString() === historyFYFilter)
+                      .map((p: any) => (
                       <tr key={p.id} className="hover:bg-slate-50">
                         <td className="px-4 py-3.5 font-bold text-gray-900">
                           {p.teacher?.fullName || '—'}
@@ -1664,50 +1913,164 @@ export default function PayrollPage() {
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div>
-                <label className="block font-semibold text-gray-700 mb-0.5">प्र.अ. / इन्चार्ज भत्ता [I]:</label>
+            <div className="space-y-3 text-xs">
+              {/* [I] प्र.अ. भत्ता */}
+              <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bulkRows[singleEditData.teacherId]?.hasPraABhata || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        handleFieldChange(singleEditData.teacherId, 'hasPraABhata', checked);
+                        if (checked && (!bulkRows[singleEditData.teacherId]?.praABhata || bulkRows[singleEditData.teacherId]?.praABhata === 0)) {
+                          handleFieldChange(singleEditData.teacherId, 'praABhata', 500);
+                        }
+                      }}
+                      className="rounded text-purple-700 w-4 h-4 cursor-pointer"
+                    />
+                    <span>प्र.अ. / इन्चार्ज भत्ता [I]</span>
+                  </label>
+                  <span className="text-[10px] text-gray-500">Applicable?</span>
+                </div>
                 <input
                   type="number"
-                  value={bulkRows[singleEditData.teacherId]?.praABhata || 0}
+                  disabled={!bulkRows[singleEditData.teacherId]?.hasPraABhata}
+                  value={bulkRows[singleEditData.teacherId]?.hasPraABhata ? (bulkRows[singleEditData.teacherId]?.praABhata || 0) : 0}
                   onChange={(e) => handleFieldChange(singleEditData.teacherId, 'praABhata', parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                  className={`w-full rounded-lg border p-2 font-mono ${
+                    bulkRows[singleEditData.teacherId]?.hasPraABhata ? 'border-purple-300 bg-white font-bold' : 'border-gray-200 bg-gray-100 text-gray-400'
+                  }`}
+                  placeholder="0"
                 />
               </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-0.5">महङ्गी भत्ता [J]:</label>
+
+              {/* [J] महङ्गी भत्ता */}
+              <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bulkRows[singleEditData.teacherId]?.hasMahangiGhata !== false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        handleFieldChange(singleEditData.teacherId, 'hasMahangiGhata', checked);
+                        if (checked && (!bulkRows[singleEditData.teacherId]?.mahangiGhata || bulkRows[singleEditData.teacherId]?.mahangiGhata === 0)) {
+                          handleFieldChange(singleEditData.teacherId, 'mahangiGhata', globalDearnessAmount || 2000);
+                        }
+                      }}
+                      className="rounded text-purple-700 w-4 h-4 cursor-pointer"
+                    />
+                    <span>महङ्गी भत्ता [J]</span>
+                  </label>
+                  <span className="text-[10px] text-gray-500">Applicable?</span>
+                </div>
                 <input
                   type="number"
-                  value={bulkRows[singleEditData.teacherId]?.mahangiGhata || 0}
+                  disabled={bulkRows[singleEditData.teacherId]?.hasMahangiGhata === false}
+                  value={bulkRows[singleEditData.teacherId]?.hasMahangiGhata !== false ? (bulkRows[singleEditData.teacherId]?.mahangiGhata !== undefined ? bulkRows[singleEditData.teacherId]?.mahangiGhata : 2000) : 0}
                   onChange={(e) => handleFieldChange(singleEditData.teacherId, 'mahangiGhata', parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                  className={`w-full rounded-lg border p-2 font-mono ${
+                    bulkRows[singleEditData.teacherId]?.hasMahangiGhata !== false ? 'border-purple-300 bg-white font-bold' : 'border-gray-200 bg-gray-100 text-gray-400'
+                  }`}
+                  placeholder="0"
                 />
               </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-0.5">दुर्गम भत्ता [K]:</label>
+
+              {/* [K] दुर्गम भत्ता */}
+              <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bulkRows[singleEditData.teacherId]?.hasDurgamBhata || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        handleFieldChange(singleEditData.teacherId, 'hasDurgamBhata', checked);
+                        if (checked && (!bulkRows[singleEditData.teacherId]?.durgamBhata || bulkRows[singleEditData.teacherId]?.durgamBhata === 0)) {
+                          handleFieldChange(singleEditData.teacherId, 'durgamBhata', 1000);
+                        }
+                      }}
+                      className="rounded text-purple-700 w-4 h-4 cursor-pointer"
+                    />
+                    <span>दुर्गम भत्ता [K]</span>
+                  </label>
+                  <span className="text-[10px] text-gray-500">Applicable?</span>
+                </div>
                 <input
                   type="number"
-                  value={bulkRows[singleEditData.teacherId]?.durgamBhata || 0}
+                  disabled={!bulkRows[singleEditData.teacherId]?.hasDurgamBhata}
+                  value={bulkRows[singleEditData.teacherId]?.hasDurgamBhata ? (bulkRows[singleEditData.teacherId]?.durgamBhata || 0) : 0}
                   onChange={(e) => handleFieldChange(singleEditData.teacherId, 'durgamBhata', parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                  className={`w-full rounded-lg border p-2 font-mono ${
+                    bulkRows[singleEditData.teacherId]?.hasDurgamBhata ? 'border-purple-300 bg-white font-bold' : 'border-gray-200 bg-gray-100 text-gray-400'
+                  }`}
+                  placeholder="0"
                 />
               </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-0.5">प्रोत्साहन भत्ता [L]:</label>
+
+              {/* [L] प्रोत्साहन भत्ता */}
+              <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bulkRows[singleEditData.teacherId]?.hasProtsahanBhata || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        handleFieldChange(singleEditData.teacherId, 'hasProtsahanBhata', checked);
+                        if (checked && (!bulkRows[singleEditData.teacherId]?.protsahanBhata || bulkRows[singleEditData.teacherId]?.protsahanBhata === 0)) {
+                          handleFieldChange(singleEditData.teacherId, 'protsahanBhata', 1000);
+                        }
+                      }}
+                      className="rounded text-purple-700 w-4 h-4 cursor-pointer"
+                    />
+                    <span>प्रोत्साहन भत्ता [L]</span>
+                  </label>
+                  <span className="text-[10px] text-gray-500">Applicable?</span>
+                </div>
                 <input
                   type="number"
-                  value={bulkRows[singleEditData.teacherId]?.protsahanBhata || 0}
+                  disabled={!bulkRows[singleEditData.teacherId]?.hasProtsahanBhata}
+                  value={bulkRows[singleEditData.teacherId]?.hasProtsahanBhata ? (bulkRows[singleEditData.teacherId]?.protsahanBhata || 0) : 0}
                   onChange={(e) => handleFieldChange(singleEditData.teacherId, 'protsahanBhata', parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                  className={`w-full rounded-lg border p-2 font-mono ${
+                    bulkRows[singleEditData.teacherId]?.hasProtsahanBhata ? 'border-purple-300 bg-white font-bold' : 'border-gray-200 bg-gray-100 text-gray-400'
+                  }`}
+                  placeholder="0"
                 />
               </div>
-              <div>
-                <label className="block font-semibold text-gray-700 mb-0.5">अन्य भत्ता [M]:</label>
+
+              {/* [M] अन्य भत्ता */}
+              <div className="p-2.5 rounded-xl border border-gray-200 bg-slate-50 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bulkRows[singleEditData.teacherId]?.hasOtherBhata || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        handleFieldChange(singleEditData.teacherId, 'hasOtherBhata', checked);
+                        if (checked && (!bulkRows[singleEditData.teacherId]?.otherBhata || bulkRows[singleEditData.teacherId]?.otherBhata === 0)) {
+                          handleFieldChange(singleEditData.teacherId, 'otherBhata', 500);
+                        }
+                      }}
+                      className="rounded text-purple-700 w-4 h-4 cursor-pointer"
+                    />
+                    <span>अन्य भत्ता [M]</span>
+                  </label>
+                  <span className="text-[10px] text-gray-500">Applicable?</span>
+                </div>
                 <input
                   type="number"
-                  value={bulkRows[singleEditData.teacherId]?.otherBhata || 0}
+                  disabled={!bulkRows[singleEditData.teacherId]?.hasOtherBhata}
+                  value={bulkRows[singleEditData.teacherId]?.hasOtherBhata ? (bulkRows[singleEditData.teacherId]?.otherBhata || 0) : 0}
                   onChange={(e) => handleFieldChange(singleEditData.teacherId, 'otherBhata', parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-gray-300 p-2 font-mono"
+                  className={`w-full rounded-lg border p-2 font-mono ${
+                    bulkRows[singleEditData.teacherId]?.hasOtherBhata ? 'border-purple-300 bg-white font-bold' : 'border-gray-200 bg-gray-100 text-gray-400'
+                  }`}
+                  placeholder="0"
                 />
               </div>
             </div>
