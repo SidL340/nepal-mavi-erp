@@ -322,6 +322,19 @@ router.put('/:id', authenticate, async (req, res) => {
       });
     }
 
+    if (rest.isActive !== undefined && teacher.userId && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
+      await prisma.user.update({
+        where: { id: teacher.userId },
+        data: { isActive: Boolean(rest.isActive) },
+      });
+      if (!rest.isActive) {
+        await prisma.class.updateMany({
+          where: { classTeacherId: teacherId },
+          data: { classTeacherId: null },
+        });
+      }
+    }
+
     if (subjectIds !== undefined && (req.user.role === 'SUPER_ADMIN' || req.user.role === 'ADMIN')) {
       await prisma.teacherSubject.deleteMany({ where: { teacherId: teacher.id } });
       if (Array.isArray(subjectIds) && subjectIds.length > 0) {

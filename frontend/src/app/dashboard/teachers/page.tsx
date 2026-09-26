@@ -236,6 +236,11 @@ export default function TeachersPage() {
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [editPhotoPreview, setEditPhotoPreview] = useState<string>('');
 
+  // Edit Modal Status & Retirement states
+  const [editIsActive, setEditIsActive] = useState<boolean>(true);
+  const [editRetirementDate, setEditRetirementDate] = useState<string>('');
+  const [editStatusReason, setEditStatusReason] = useState<string>('सरुवा (Transferred)');
+
   // Fetch subjects
   const { data: subjectsData } = useQuery({
     queryKey: ['subjects-all'],
@@ -590,6 +595,18 @@ export default function TeachersPage() {
     } else {
       data.subjectIds = [];
     }
+
+    // Handle Active vs Retired status
+    data.isActive = editIsActive;
+    if (editIsActive) {
+      data.dateOfRetirementBs = null;
+      data.statusReason = null;
+      data.exitRemarks = null;
+    } else {
+      data.dateOfRetirementBs = editRetirementDate || null;
+      data.statusReason = editStatusReason || null;
+    }
+
     editTeacherMutation.mutate({ id: editingTeacher.id, data });
   };
 
@@ -631,6 +648,9 @@ export default function TeachersPage() {
     setEditingTeacher(staff);
     setEditPhotoPreview(staff.photoUrl || '');
     setSelectedSubjectIds(staff.subjects?.map((s: any) => s.subjectId) || []);
+    setEditIsActive(staff.isActive !== false);
+    setEditRetirementDate(staff.dateOfRetirementBs || '');
+    setEditStatusReason(staff.statusReason || 'सरुवा (Transferred)');
   };
 
   const openAssignRoleModal = (staff?: any, preselectedRole?: string) => {
@@ -2812,9 +2832,9 @@ export default function TeachersPage() {
                 </div>
               </div>
 
-              {/* Service Dates: Joining & Retirement / Exit */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-gray-200">
-                <div>
+              {/* Service Dates & Status / Retirement Management */}
+              <div className="space-y-2.5">
+                <div className="p-3 bg-slate-50 rounded-xl border border-gray-200">
                   <label className="block font-bold text-gray-800 mb-1">Date of Joining (नियुक्ति/हाजिर मिति BS)</label>
                   <input
                     name="dateOfJoiningBs"
@@ -2824,15 +2844,86 @@ export default function TeachersPage() {
                     className="erp-input font-mono bg-white"
                   />
                 </div>
-                <div>
-                  <label className="block font-bold text-gray-800 mb-1">Date of Retirement / Exit (अवकाश/सरुवा मिति BS)</label>
-                  <input
-                    name="dateOfRetirementBs"
-                    type="text"
-                    defaultValue={editingTeacher.dateOfRetirementBs || ''}
-                    placeholder="उदा: २०८५-०४-०१"
-                    className="erp-input font-mono bg-white"
-                  />
+
+                {/* Active vs Retired Status Toggle Card */}
+                <div
+                  className={`p-3.5 rounded-xl border transition ${
+                    editIsActive
+                      ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                      : 'bg-amber-50/80 border-amber-200 text-amber-950'
+                  } space-y-2.5`}
+                >
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 font-bold text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editIsActive}
+                        onChange={(e) => {
+                          const active = e.target.checked;
+                          setEditIsActive(active);
+                          if (active) {
+                            setEditRetirementDate('');
+                            setEditStatusReason('');
+                          }
+                        }}
+                        className="rounded text-emerald-600 w-4 h-4 cursor-pointer"
+                      />
+                      <span>
+                        {editIsActive
+                          ? '✅ कार्यरत शिक्षक / कर्मचारी (Currently Active & Working)'
+                          : '🛑 अवकाश / सरुवा / विगत कर्मचारी (Retired / Transferred / Inactive)'}
+                      </span>
+                    </label>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                        editIsActive
+                          ? 'bg-emerald-200/80 text-emerald-900'
+                          : 'bg-amber-200/80 text-amber-900'
+                      }`}
+                    >
+                      {editIsActive ? 'सक्रिय (Active)' : 'अवकाश (Retired)'}
+                    </span>
+                  </div>
+
+                  {!editIsActive && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-amber-200/60">
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                          अवकाश / सरुवा कारण (Exit Reason):
+                        </label>
+                        <select
+                          value={editStatusReason}
+                          onChange={(e) => setEditStatusReason(e.target.value)}
+                          className="erp-input font-bold text-amber-950 bg-white"
+                        >
+                          <option value="सरुवा (Transferred)">🚚 सरुवा (Transferred)</option>
+                          <option value="अनिवार्य अवकाश (Compulsory Retirement)">🎖️ अनिवार्य अवकाश (Compulsory Retirement)</option>
+                          <option value="स्वैच्छिक अवकाश (Voluntary Retirement)">🕊️ स्वैच्छिक अवकाश (Voluntary Retirement)</option>
+                          <option value="राजीनामा (Resigned)">📄 राजीनामा (Resigned)</option>
+                          <option value="करार समाप्ति (Contract Expired)">⌛ करार समाप्ति (Contract Expired)</option>
+                          <option value="अन्य पूर्व कर्मचारी (Past Staff)">📦 अन्य पूर्व कर्मचारी (Other Past Record)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                          अवकाश / सरुवा मिति (Retirement Date BS):
+                        </label>
+                        <input
+                          type="text"
+                          value={editRetirementDate}
+                          onChange={(e) => setEditRetirementDate(e.target.value)}
+                          placeholder="उदा: २०८२-०४-०१"
+                          className="erp-input font-mono bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {editIsActive && editingTeacher.isActive === false && (
+                    <p className="text-[11px] text-emerald-800 font-nepali">
+                      💡 <b>नोट:</b> चेकबक्स लगाउनाले यो शिक्षकलाई अवकाशबाट हटाएर <b>पुनः कार्यरत (Active Staff)</b> बनाइनेछ र लगइन पोर्टल पुनः सक्रिय हुनेछ।
+                    </p>
+                  )}
                 </div>
               </div>
 
