@@ -339,6 +339,62 @@ export default function FinancialReportsPage() {
   const selectedPartyObj = parties.find((p: any) => p.id.toString() === selectedPartyId);
   const totalPaidToParty = partyLedgerEntries.reduce((s: number, e: any) => s + (e.amount || 0), 0);
 
+  // ── 5. ACCOUNTS PAYABLES & DUES COMPUTATION ──────────────────────────────
+  const computedPayablesList = useMemo(() => {
+    // 1. If auditStatementData has bills, use them
+    const apiBills = auditStatementData?.payablesSummary?.allBills || [];
+    if (apiBills.length > 0) return apiBills;
+
+    // 2. Otherwise compute dynamically from expenseEntries
+    if (!expenseEntries || expenseEntries.length === 0) return [];
+    const billMap = new Map();
+    const sorted = [...expenseEntries].sort((a: any, b: any) => (a.expenseDateBs || '').localeCompare(b.expenseDateBs || ''));
+
+    for (const e of sorted) {
+      if (!e.billNo && e.paymentMedium !== 'UNPAID_BILL' && e.amount > 0) continue;
+      const cleanBill = (e.billNo && e.billNo.trim()) || `REF-${e.id}`;
+      const pKey = `${e.partyId || e.paidTo || 'direct'}_${cleanBill}`;
+      
+      if (!billMap.has(pKey)) {
+        let parsedTotal = e.amount || 0;
+        const match = (e.description || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i) || 
+                      (e.remarks || '').match(/\[Total Bill:\s*(?:Rs\.|रू)?\s*([\d,.]+)\]/i);
+        if (match) {
+          parsedTotal = parseFloat(match[1].replace(/,/g, '')) || e.amount;
+        } else if (e.amount === 0 && e.description) {
+          const anyNumMatch = e.description.match(/(?:Rs\.?|रू\.?|रु\.?)\s*([\d,.]+)/i);
+          if (anyNumMatch) parsedTotal = parseFloat(anyNumMatch[1].replace(/,/g, '')) || 0;
+        }
+
+        billMap.set(pKey, {
+          id: e.id,
+          billNo: e.billNo || `REF-${e.id}`,
+          partyId: e.partyId,
+          partyName: e.party?.nameNepali ? `${e.party.nameNepali} (${e.party.name})` : (e.party?.name || e.paidTo || 'पार्टी/आपूर्तिकर्ता'),
+          panNo: e.party?.panNo || '',
+          headName: e.head?.nameNepali || e.head?.name || 'खर्च शीर्षक',
+          totalBillAmount: parsedTotal,
+          totalPaidAmount: 0,
+          remainingDue: 0,
+          billDateBs: e.expenseDateBs,
+          financialYear: e.financialYear?.year || '',
+        });
+      }
+      
+      const item = billMap.get(pKey);
+      item.totalPaidAmount += (e.amount || 0);
+    }
+
+    return Array.from(billMap.values()).map((b: any) => {
+      const remainingDue = Math.max(0, b.totalBillAmount - b.totalPaidAmount);
+      return {
+        ...b,
+        remainingDue,
+        status: remainingDue === 0 ? 'FULLY_PAID' : b.totalPaidAmount > 0 ? 'PARTIAL' : 'UNPAID',
+      };
+    });
+  }, [auditStatementData?.payablesSummary?.allBills, expenseEntries]);
+
   // ── Print Helper ──────────────────────────────────────────────────────────
 
   const handlePrint = () => {
@@ -742,7 +798,7 @@ export default function FinancialReportsPage() {
                   <div className="bg-purple-900 text-white px-4 py-2 rounded-t-lg font-extrabold text-xs flex justify-between items-center">
                     <span>अनुसूची ४: पार्टीगत तिर्न बाँकी दायित्व तथा बक्यौता लगत (Accounts Payable & Vendor Dues)</span>
                     <span className="font-mono text-amber-300">
-                      तिर्न बाँकी बक्यौता: रू {(auditStatementData.payablesSummary?.totalLiabilities || 0).toLocaleString()}
+                      तिर्न बाँकी बक्यौता: रू {computedPayablesList.reduce((s: number, b: any) => s + (b.remainingDue || 0), 0).toLocaleString()}
                     </span>
                   </div>
                   <table className="w-full text-left text-xs border border-gray-200">
@@ -759,14 +815,14 @@ export default function FinancialReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-700">
-                      {(auditStatementData.payablesSummary?.allBills || []).length === 0 ? (
+                      {computedPayablesList.length === 0 ? (
                         <tr>
                           <td colSpan={8} className="p-6 text-center text-gray-400">
                             कुनै तिर्न बाँकी बिल वा बक्यौता दायित्व भेटिएन।
                           </td>
                         </tr>
                       ) : (
-                        (auditStatementData.payablesSummary?.allBills || []).map((bill: any, idx: number) => (
+                        computedPayablesList.map((bill: any, idx: number) => (
                           <tr key={idx} className={bill.remainingDue > 0 ? 'bg-rose-50/30' : 'hover:bg-slate-50'}>
                             <td className="p-2 text-center font-mono text-gray-400">{idx + 1}</td>
                             <td className="p-2">
@@ -806,13 +862,13 @@ export default function FinancialReportsPage() {
                           कुल पार्टी तिर्न बाँकी बक्यौता दायित्व (TOTAL ACCOUNTS PAYABLE):
                         </td>
                         <td className="p-2.5 text-right font-mono">
-                          रू {(auditStatementData.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0).toLocaleString()}
+                          रू {computedPayablesList.reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0).toLocaleString()}
                         </td>
                         <td className="p-2.5 text-right font-mono text-emerald-700">
-                          रू {(auditStatementData.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0).toLocaleString()}
+                          रू {computedPayablesList.reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0).toLocaleString()}
                         </td>
                         <td className="p-2.5 text-right font-mono text-sm text-rose-700">
-                          रू {(auditStatementData.payablesSummary?.totalOutstandingVendorDues || 0).toLocaleString()}
+                          रू {computedPayablesList.reduce((s: number, b: any) => s + (b.remainingDue || 0), 0).toLocaleString()}
                         </td>
                         <td></td>
                       </tr>
@@ -974,7 +1030,7 @@ export default function FinancialReportsPage() {
             <div className="rounded-2xl border border-purple-100 bg-white p-4 shadow-2xs">
               <span className="text-xs font-bold uppercase text-purple-900">कुल दर्ता बिल रकम</span>
               <p className="text-2xl font-black text-[#1e3a5f] font-mono mt-1">
-                रू {(auditStatementData?.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0).toLocaleString()}
+                रू {computedPayablesList.reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0).toLocaleString()}
               </p>
               <p className="text-[11px] text-gray-400 mt-0.5">दर्ता भएका कुल आपूर्तिकर्ता बिलहरू</p>
             </div>
@@ -982,7 +1038,7 @@ export default function FinancialReportsPage() {
             <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-2xs">
               <span className="text-xs font-bold uppercase text-emerald-900">हालसम्म भुक्तान रकम</span>
               <p className="text-2xl font-black text-emerald-700 font-mono mt-1">
-                रू {(auditStatementData?.payablesSummary?.allBills || []).reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0).toLocaleString()}
+                रू {computedPayablesList.reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0).toLocaleString()}
               </p>
               <p className="text-[11px] text-gray-400 mt-0.5">विभिन्न किस्तामा चुक्ता भएको रकम</p>
             </div>
@@ -990,7 +1046,7 @@ export default function FinancialReportsPage() {
             <div className="rounded-2xl border border-rose-100 bg-white p-4 shadow-2xs">
               <span className="text-xs font-bold uppercase text-rose-900">तिर्न बाँकी कुल बक्यौता</span>
               <p className="text-2xl font-black text-rose-700 font-mono mt-1">
-                रू {(auditStatementData?.payablesSummary?.totalOutstandingVendorDues || 0).toLocaleString()}
+                रू {computedPayablesList.reduce((s: number, b: any) => s + (b.remainingDue || 0), 0).toLocaleString()}
               </p>
               <p className="text-[11px] text-gray-400 mt-0.5">बाँकी तिर्नुपर्ने दायित्व</p>
             </div>
@@ -1018,7 +1074,7 @@ export default function FinancialReportsPage() {
                 <option value="ALL">सबै पार्टी तथा विक्रेताहरू (All Parties)</option>
                 {parties.map((p: any) => (
                   <option key={p.id} value={p.id.toString()}>
-                    {p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
+                    {p.nameNepali ? `${p.nameNepali} (${p.name})` : p.name} {p.panNo ? `(PAN: ${p.panNo})` : ''}
                   </option>
                 ))}
               </select>
@@ -1058,10 +1114,9 @@ export default function FinancialReportsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {(() => {
-                  const allBills = auditStatementData?.payablesSummary?.allBills || [];
                   const filteredBills = payablePartyFilter === 'ALL'
-                    ? allBills
-                    : allBills.filter((b: any) => String(b.partyId) === String(payablePartyFilter));
+                    ? computedPayablesList
+                    : computedPayablesList.filter((b: any) => String(b.partyId) === String(payablePartyFilter));
 
                   if (filteredBills.length === 0) {
                     return (
@@ -1116,10 +1171,9 @@ export default function FinancialReportsPage() {
               </tbody>
               <tfoot className="bg-purple-950 text-white font-extrabold">
                 {(() => {
-                  const allBills = auditStatementData?.payablesSummary?.allBills || [];
                   const filteredBills = payablePartyFilter === 'ALL'
-                    ? allBills
-                    : allBills.filter((b: any) => String(b.partyId) === String(payablePartyFilter));
+                    ? computedPayablesList
+                    : computedPayablesList.filter((b: any) => String(b.partyId) === String(payablePartyFilter));
 
                   const totBill = filteredBills.reduce((s: number, b: any) => s + (b.totalBillAmount || 0), 0);
                   const totPaid = filteredBills.reduce((s: number, b: any) => s + (b.totalPaidAmount || 0), 0);
