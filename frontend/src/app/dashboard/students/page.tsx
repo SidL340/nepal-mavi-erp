@@ -55,6 +55,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState('');
   const [forceLoadAll, setForceLoadAll] = useState(false);
   const [batchYearFilter, setBatchYearFilter] = useState('');
+  const [analyticsYear, setAnalyticsYear] = useState('');
 
   // ── UPGRADE & PROMOTION PORTAL STATE ────────────────────────────────────
   const [promoteFromYear, setPromoteFromYear] = useState('');
@@ -196,9 +197,11 @@ export default function StudentsPage() {
 
   // Fetch Student Analytics
   const { data: analyticsData, isLoading: isAnalyticsLoading } = useQuery({
-    queryKey: ['student-analytics'],
+    queryKey: ['student-analytics', analyticsYear],
     queryFn: async () => {
-      const res = await api.get('/students/analytics');
+      const params = new URLSearchParams();
+      if (analyticsYear && analyticsYear !== 'all') params.append('academicYearId', analyticsYear);
+      const res = await api.get(`/students/analytics?${params.toString()}`);
       return res.data?.data;
     },
     enabled: activeTab === 'analytics',
@@ -1953,7 +1956,7 @@ export default function StudentsPage() {
           ) : (
             <>
               {/* Header Banner */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-[#1e3a5f] to-[#0f243e] p-5 rounded-2xl text-white shadow-md">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-[#1e3a5f] to-[#0f243e] p-5 rounded-2xl text-white shadow-md">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="p-2 bg-white/10 rounded-xl">
@@ -1961,18 +1964,38 @@ export default function StudentsPage() {
                     </span>
                     <div>
                       <h2 className="text-base font-extrabold tracking-wide">Student Demographics & Academic Analytics</h2>
-                      <p className="text-xs text-blue-100/80 font-nepali">विद्यार्थी जनसांख्यिकी, उत्तीर्ण दर, भाषागत तथा कक्षागत विस्तृत विश्लेषण</p>
+                      <p className="text-xs text-blue-100/80 font-nepali">विद्यार्थी जनसांख्यिकी, उत्तीर्ण दर, मातृभाषा तथा कक्षागत विस्तृत विश्लेषण</p>
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => queryClient.invalidateQueries({ queryKey: ['student-analytics'] })}
-                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition backdrop-blur-xs border border-white/10 shadow-xs"
-                  title="Reload Live Analytics Data"
-                >
-                  <RefreshCw size={13} />
-                  <span>Refresh Data</span>
-                </button>
+
+                <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+                  {/* Academic Year Filter Dropdown */}
+                  <div className="flex items-center gap-1.5 bg-white/10 border border-white/20 rounded-xl px-2.5 py-1 backdrop-blur-xs">
+                    <span className="text-[11px] font-bold text-blue-200">शैक्षिक सत्र:</span>
+                    <select
+                      value={analyticsYear}
+                      onChange={(e) => setAnalyticsYear(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-white focus:outline-hidden cursor-pointer"
+                    >
+                      <option value="" className="text-gray-900 bg-white">-- सबै / सक्रिय सत्र (Active Year) --</option>
+                      {academicYearsData?.map((ay: any) => (
+                        <option key={ay.id} value={ay.id} className="text-gray-900 bg-white">
+                          सत्र {ay.year} {ay.isActive ? '⭐ (चालू सत्र)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ['student-analytics'] })}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition backdrop-blur-xs border border-white/10 shadow-xs"
+                    title="Reload Live Analytics Data"
+                  >
+                    <RefreshCw size={13} />
+                    <span>Refresh Data</span>
+                  </button>
+                </div>
               </div>
 
               {/* ─── ROW 1: 5 KEY DEMOGRAPHIC & ACADEMIC KPI CARDS ─── */}

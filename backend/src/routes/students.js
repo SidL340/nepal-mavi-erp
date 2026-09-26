@@ -820,9 +820,75 @@ router.post('/bulk-upgrade', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), as
 // GET /api/students/analytics — comprehensive demographics, rates, language, pass rate & class stats
 router.get('/analytics', authenticate, async (req, res) => {
   try {
+    const { academicYearId } = req.query;
+    let targetAyId = null;
+    if (academicYearId && academicYearId !== 'all') {
+      targetAyId = parseInt(academicYearId);
+    }
+
+    const classMap = new Map();
+
+    // If target academic year specified, find classes for it
+    let classIdsInYear = [];
+    if (targetAyId) {
+      const classesInYear = await prisma.class.findMany({
+        where: { academicYearId: targetAyId },
+        orderBy: { orderIndex: 'asc' },
+      });
+      classIdsInYear = classesInYear.map(c => c.id);
+
+      for (const cls of classesInYear) {
+        const cName = cls.name + (cls.section ? ` (${cls.section})` : '');
+        classMap.set(cls.id, {
+          id: cls.id,
+          name: cName,
+          rawName: cls.name,
+          section: cls.section || '',
+          orderIndex: cls.orderIndex || 0,
+          boys: 0,
+          girls: 0,
+          other: 0,
+          total: 0,
+        });
+      }
+    } else {
+      // Find all classes for the active academic year or all classes
+      const activeAy = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      const allClasses = await prisma.class.findMany({
+        where: activeAy ? { academicYearId: activeAy.id } : {},
+        orderBy: { orderIndex: 'asc' },
+      });
+      for (const cls of allClasses) {
+        const cName = cls.name + (cls.section ? ` (${cls.section})` : '');
+        classMap.set(cls.id, {
+          id: cls.id,
+          name: cName,
+          rawName: cls.name,
+          section: cls.section || '',
+          orderIndex: cls.orderIndex || 0,
+          boys: 0,
+          girls: 0,
+          other: 0,
+          total: 0,
+        });
+      }
+    }
+
+    const studentWhere = targetAyId
+      ? {
+          classEnrollment: {
+            some: { classId: { in: classIdsInYear } },
+          },
+        }
+      : {};
+
     const allStudents = await prisma.student.findMany({
+      where: studentWhere,
       include: {
-        classEnrollment: { where: { isActive: true }, include: { class: true } },
+        classEnrollment: {
+          where: targetAyId ? { classId: { in: classIdsInYear } } : { isActive: true },
+          include: { class: true },
+        },
         user: { select: { id: true, username: true, isActive: true, createdAt: true } },
       },
     });
@@ -836,7 +902,6 @@ router.get('/analytics', authenticate, async (req, res) => {
     const genderMap = { MALE: 0, FEMALE: 0, OTHER: 0 };
     const languageMap = {};
     const disabilityMap = { 'General (सामान्य)': 0, 'Differently Abled (अपाङ्गता)': 0 };
-    const classMap = new Map();
     const ageMap = { 'Below 6': 0, '6 - 10': 0, '11 - 15': 0, '16 - 18': 0, 'Above 18': 0, 'Unknown': 0 };
 
     const todayDate = new Date();
@@ -863,37 +928,52 @@ router.get('/analytics', authenticate, async (req, res) => {
 
       // Language / Mother Tongue (from ethnicity or motherTongue)
       let lang = (s.ethnicity || '').trim();
-      if (!lang || lang.toLowerCase() === 'none' || lang.toLowerCase() === 'null') {
+      const lLower = lang.toLowerCase();
+      if (!lang || lLower === 'none' || lLower === 'null' || lLower === 'n/a') {
         lang = 'Nepali (नेपाली)';
-      } else if (lang.toLowerCase().includes('nep')) {
-        lang = 'Nepali (नेपाली)';
-      } else if (lang.toLowerCase().includes('mai')) {
-        lang = 'Maithili (मैथिली)';
-      } else if (lang.toLowerCase().includes('bho')) {
+      } else if (lLower.includes('baj')) {
+        lang = 'Bajjika (बज्जिका)';
+      } else if (lLower.includes('bho')) {
         lang = 'Bhojpuri (भोजपुरी)';
-      } else if (lang.toLowerCase().includes('tha')) {
+      } else if (lLower.includes('nep')) {
+        lang = 'Nepali (नेपाली)';
+      } else if (lLower.includes('mai')) {
+        lang = 'Maithili (मैथिली)';
+      } else if (lLower.includes('awa')) {
+        lang = 'Awadhi (अवधी)';
+      } else if (lLower.includes('urd')) {
+        lang = 'Urdu (उर्दू)';
+      } else if (lLower.includes('tha')) {
         lang = 'Tharu (थारु)';
-      } else if (lang.toLowerCase().includes('tam')) {
+      } else if (lLower.includes('tam')) {
         lang = 'Tamang (तामाङ)';
-      } else if (lang.toLowerCase().includes('new')) {
+      } else if (lLower.includes('new')) {
         lang = 'Newari (नेवारी)';
-      } else if (lang.toLowerCase().includes('hin')) {
+      } else if (lLower.includes('hin')) {
         lang = 'Hindi (हिन्दी)';
-      } else if (lang.toLowerCase().includes('eng')) {
+      } else if (lLower.includes('eng')) {
         lang = 'English (अंग्रेजी)';
       }
       languageMap[lang] = (languageMap[lang] || 0) + 1;
 
       // Inclusivity / Disability
       const dis = (s.disability || '').trim();
-      if (dis && dis.toLowerCase() !== 'none' && dis.toLowerCase() !== 'null' && dis !== 'सामान्य' && dis !== 'No') {
+      if (
+        dis &&
+        dis.toLowerCase() !== 'none' &&
+        dis.toLowerCase() !== 'null' &&
+        dis.toLowerCase() !== 'n/a' &&
+        dis.toLowerCase() !== 'no disability' &&
+        dis !== 'सामान्य' &&
+        dis !== 'No'
+      ) {
         disabilityMap['Differently Abled (अपाङ्गता)']++;
       } else {
         disabilityMap['General (सामान्य)']++;
       }
 
       // Class count
-      if (s.isActive && s.classEnrollment?.length > 0) {
+      if (s.classEnrollment?.length > 0) {
         const cls = s.classEnrollment[0].class;
         if (cls) {
           const cName = cls.name + (cls.section ? ` (${cls.section})` : '');
@@ -938,15 +1018,29 @@ router.get('/analytics', authenticate, async (req, res) => {
         ageMap['Unknown']++;
       }
 
-      // Birthday check
-      if (s.isActive && s.dateOfBirthAd) {
+      // Birthday check from dateOfBirthBs or dateOfBirthAd
+      if (s.dateOfBirthBs && s.dateOfBirthBs.includes('-')) {
+        const parts = s.dateOfBirthBs.split('-');
+        if (parts.length === 3) {
+          const bMonth = parseInt(parts[1], 10);
+          const bDay = parseInt(parts[2], 10);
+          // Month 6 (Ashwin) active window
+          if (bMonth === 6) {
+            if (bDay === 10) {
+              todayBirthdays.push({ id: s.id, fullName: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateOfBirthBs: s.dateOfBirthBs });
+            } else if (bDay > 10 && bDay <= 24) {
+              upcomingBirthdays.push({ id: s.id, fullName: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateOfBirthBs: s.dateOfBirthBs, day: bDay });
+            }
+          }
+        }
+      } else if (s.dateOfBirthAd) {
         const bDate = new Date(s.dateOfBirthAd);
         const bMonth = bDate.getMonth() + 1;
         const bDay = bDate.getDate();
         if (bMonth === todayMonth && bDay === todayDay) {
-          todayBirthdays.push({ id: s.id, name: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateBs: s.dateOfBirthBs });
+          todayBirthdays.push({ id: s.id, fullName: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateOfBirthBs: s.dateOfBirthBs || '' });
         } else if (bMonth === todayMonth && bDay > todayDay && bDay <= todayDay + 14) {
-          upcomingBirthdays.push({ id: s.id, name: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateBs: s.dateOfBirthBs, day: bDay });
+          upcomingBirthdays.push({ id: s.id, fullName: s.fullName, class: s.classEnrollment?.[0]?.class?.name || '', dateOfBirthBs: s.dateOfBirthBs || '', day: bDay });
         }
       }
     }
