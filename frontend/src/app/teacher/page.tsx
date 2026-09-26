@@ -39,6 +39,23 @@ import {
   Trophy,
   Laptop,
   Trash2,
+  ShieldAlert,
+  Wrench,
+  Search,
+  Plus,
+  Edit2,
+  Medal,
+  Flag,
+  Flame,
+  Activity,
+  FlaskConical,
+  Compass,
+  FileBarChart,
+  ClipboardList,
+  Sliders,
+  UserMinus,
+  ChevronRight,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -82,7 +99,11 @@ export default function TeacherPortalPage() {
     | 'incharge_exam'
     | 'incharge_library'
     | 'incharge_account'
+    | 'incharge_discipline'
+    | 'incharge_eca'
     | 'incharge_coordinator'
+    | 'incharge_lab'
+    | 'incharge_special'
     | 'notices'
   >((tabFromUrl as any) || 'overview');
 
@@ -122,6 +143,241 @@ export default function TeacherPortalPage() {
     return new Date().getDay() + 1; // 1 (Sun) to 7 (Sat)
   });
   const [routineViewMode, setRoutineViewMode] = useState<'day' | 'week'>('day');
+
+  // ─── 1. DISCIPLINE INCHARGE STATE ───
+  const [disciplineIncidents, setDisciplineIncidents] = useState<any[]>([
+    {
+      id: 1,
+      studentName: 'Aachal Kumari',
+      classId: '8',
+      className: 'Class 8',
+      dateBs: todayBS(),
+      category: 'UNIFORM',
+      categoryLabel: 'पोशाक उल्लंघन (Improper Uniform)',
+      severity: 'LOW',
+      action: 'Verbal Warning (सचेत गराइएको)',
+      parentCalled: false,
+      notes: 'विद्यालय पोशाक तथा जुत्ता पूरा नभएको, भोलि पूर्ण पोशाकमा आउन निर्देशन।',
+      status: 'RESOLVED',
+    },
+    {
+      id: 2,
+      studentName: 'Rohan Shah',
+      classId: '10',
+      className: 'Class 10',
+      dateBs: todayBS(),
+      category: 'TRUANCY',
+      categoryLabel: 'कक्षा छाडेर भागेको (Bunking / Truancy)',
+      severity: 'HIGH',
+      action: 'Parent Called (अभिभावक बोलाइएको)',
+      parentCalled: true,
+      notes: 'चौथो घण्टीपछि विद्यालय पर्खाल नाघेर गएको, अभिभावकलाई फोन गरी जानकारी दिइएको।',
+      status: 'PENDING_REVIEW',
+    },
+    {
+      id: 3,
+      studentName: 'Bikash Patel',
+      classId: '9',
+      className: 'Class 9',
+      dateBs: '2083-05-12',
+      category: 'FIGHTING',
+      categoryLabel: 'झैझगडा / अभद्र व्यवहार (Misconduct)',
+      severity: 'MEDIUM',
+      action: 'Written Apology & Counseling (लिखित माफीनामा)',
+      parentCalled: true,
+      notes: 'साथीसँग बेन्च विवादमा हातपात गरेको, सम्झाइबुझाई लिखित प्रतिबद्धता गराइएको।',
+      status: 'RESOLVED',
+    },
+  ]);
+  const [disciplineSearch, setDisciplineSearch] = useState('');
+  const [disciplineCategoryFilter, setDisciplineCategoryFilter] = useState('ALL');
+  const [isAddIncidentModalOpen, setIsAddIncidentModalOpen] = useState(false);
+  const [incidentStudent, setIncidentStudent] = useState('');
+  const [incidentClassId, setIncidentClassId] = useState('');
+  const [incidentCategory, setIncidentCategory] = useState('UNIFORM');
+  const [incidentSeverity, setIncidentSeverity] = useState('LOW');
+  const [incidentAction, setIncidentAction] = useState('Verbal Warning (सचेत गराइएको)');
+  const [incidentParentCalled, setIncidentParentCalled] = useState(false);
+  const [incidentNotes, setIncidentNotes] = useState('');
+
+  // ─── 2. SPORTS & ECA INCHARGE STATE ───
+  const [houseScores, setHouseScores] = useState({
+    RED: 440,
+    BLUE: 410,
+    GREEN: 485,
+    YELLOW: 425,
+  });
+  const [ecaEvents, setEcaEvents] = useState<any[]>([
+    {
+      id: 1,
+      name: 'अन्तर-सदन वक्तृत्वकला प्रतियोगिता (Inter-House Speech)',
+      topic: 'नेपालमा प्राविधिक शिक्षाको महत्त्व र आवश्यकता',
+      dateBs: '2083-05-08',
+      category: 'LITERARY',
+      firstWinner: 'अन्जली यादव (Grade 10, Green House)',
+      secondWinner: 'रोशन महतो (Grade 9, Red House)',
+      thirdWinner: 'सुस्मिता कुँवर (Grade 8, Yellow House)',
+      status: 'COMPLETED',
+    },
+    {
+      id: 2,
+      name: 'शुक्रबारे अन्तर-कक्षा हाजिरीजवाफ (Friday Quiz Contest)',
+      topic: 'सामान्य ज्ञान तथा विज्ञान प्रविधि',
+      dateBs: '2083-05-15',
+      category: 'QUIZ',
+      firstWinner: 'Class 10 A (Blue House Team)',
+      secondWinner: 'Class 9 B (Green House Team)',
+      thirdWinner: 'Class 8 (Red House Team)',
+      status: 'COMPLETED',
+    },
+    {
+      id: 3,
+      name: 'अन्तर-सदन भलिबल रनिङ शिल्ड प्रतियोगिता (Annual Volleyball Shield)',
+      topic: 'सिनियर छात्र भलिबल टुर्नामेन्ट',
+      dateBs: '2083-05-22',
+      category: 'SPORTS',
+      firstWinner: 'Green House (हरियो सदन)',
+      secondWinner: 'Red House (रातो सदन)',
+      thirdWinner: 'Yellow House (पहेंलो सदन)',
+      status: 'UPCOMING',
+    },
+  ]);
+  const [isAddEcaEventModalOpen, setIsAddEcaEventModalOpen] = useState(false);
+  const [ecaEventName, setEcaEventName] = useState('');
+  const [ecaEventTopic, setEcaEventTopic] = useState('');
+  const [ecaEventDateBs, setEcaEventDateBs] = useState(todayBS());
+  const [ecaCategory, setEcaCategory] = useState('SPORTS');
+  const [ecaWinner1, setEcaWinner1] = useState('');
+  const [ecaWinner2, setEcaWinner2] = useState('');
+  const [ecaWinner3, setEcaWinner3] = useState('');
+
+  // Sports Equipment Inventory
+  const [sportsItems, setSportsItems] = useState<any[]>([
+    { id: 1, name: 'Cosco Football (Size 5)', category: 'Football', totalQty: 6, availableQty: 4, inUse: 2, condition: 'Good (राम्रो)' },
+    { id: 2, name: 'Spikewell Volleyball & Net Set', category: 'Volleyball', totalQty: 5, availableQty: 3, inUse: 2, condition: 'Good (राम्रो)' },
+    { id: 3, name: 'Yonex Badminton Racket & Shuttles', category: 'Badminton', totalQty: 10, availableQty: 8, inUse: 2, condition: 'Fair (मध्यम)' },
+    { id: 4, name: 'Stag Table Tennis Board & Bats', category: 'Table Tennis', totalQty: 4, availableQty: 4, inUse: 0, condition: 'Excellent' },
+    { id: 5, name: 'Tournament Wooden Chess Sets', category: 'Chess', totalQty: 8, availableQty: 7, inUse: 1, condition: 'Good (राम्रो)' },
+    { id: 6, name: 'Carrom Board (Large) with Striker', category: 'Carrom', totalQty: 4, availableQty: 3, inUse: 1, condition: 'Good (राम्रो)' },
+    { id: 7, name: 'Digital Stopwatch & Whistles', category: 'Track & Field', totalQty: 6, availableQty: 6, inUse: 0, condition: 'Working' },
+    { id: 8, name: 'Emergency Sports First-Aid Kit', category: 'Medical', totalQty: 2, availableQty: 2, inUse: 0, condition: 'Fully Stocked' },
+  ]);
+
+  // ─── 3. ACADEMIC COORDINATOR STATE ───
+  const [substitutions, setSubstitutions] = useState<any[]>([
+    {
+      id: 1,
+      dateBs: todayBS(),
+      absentTeacher: 'रामप्रसाद यादव (Maths)',
+      classId: '10',
+      className: 'Class 10 A',
+      periodNo: 3,
+      assignedTeacher: 'सन्तोष कुमार झा',
+      subjectToTeach: 'अनिवार्य गणित (अभ्यास ५.२ रिभिजन)',
+      status: 'CONFIRMED',
+    },
+    {
+      id: 2,
+      dateBs: todayBS(),
+      absentTeacher: 'अनिता श्रेष्ठ (English)',
+      classId: '8',
+      className: 'Class 8',
+      periodNo: 5,
+      assignedTeacher: 'दिनेश पटेल',
+      subjectToTeach: 'English Grammar (Tense practice)',
+      status: 'CONFIRMED',
+    },
+  ]);
+  const [isAddSubModalOpen, setIsAddSubModalOpen] = useState(false);
+  const [subAbsentTeacher, setSubAbsentTeacher] = useState('');
+  const [subClassId, setSubClassId] = useState('');
+  const [subPeriodNo, setSubPeriodNo] = useState<number>(1);
+  const [subAssignedTeacher, setSubAssignedTeacher] = useState('');
+  const [subSubject, setSubSubject] = useState('');
+  const [coordSelectedClassId, setCoordSelectedClassId] = useState<string>('');
+
+  // ─── 4. LAB & IT INCHARGE STATE ───
+  const [labSubTab, setLabSubTab] = useState<'science' | 'computer' | 'maintenance'>('science');
+  const [scienceChemicals, setScienceChemicals] = useState<any[]>([
+    { id: 1, name: 'Hydrochloric Acid (HCl 35%)', formula: 'HCl', stock: '2.5 Litres', shelfLife: '2085 BS', hazard: 'Corrosive (खतरनाक)', status: 'SAFE' },
+    { id: 2, name: 'Sulphuric Acid (H2SO4 Concentrated)', formula: 'H2SO4', stock: '1.5 Litres', shelfLife: '2085 BS', hazard: 'Corrosive', status: 'LOCKED' },
+    { id: 3, name: 'Sodium Hydroxide Pellets (NaOH)', formula: 'NaOH', stock: '800 Grams', shelfLife: '2086 BS', hazard: 'Basic/Caustic', status: 'SAFE' },
+    { id: 4, name: 'Blue & Red Litmus Paper Strips', formula: 'Indicator', stock: '12 Packs', shelfLife: '2087 BS', hazard: 'Non-Hazardous', status: 'AVAILABLE' },
+    { id: 5, name: 'Compound Optical Microscopes (1000x)', formula: 'Optics', stock: '8 Units', shelfLife: 'Good', hazard: 'Precision', status: 'ALL_WORKING' },
+    { id: 6, name: 'Borosilicate Test Tubes & Beakers', formula: 'Glassware', stock: '65 Pieces', shelfLife: 'N/A', hazard: 'Fragile', status: 'AVAILABLE' },
+    { id: 7, name: 'Physics Prism, Convex/Concave Lenses', formula: 'Optics', stock: '14 Sets', shelfLife: 'Good', hazard: 'Fragile', status: 'AVAILABLE' },
+    { id: 8, name: 'Human Skeleton & Anatomy Chart Model', formula: 'Biology', stock: '2 Models', shelfLife: 'Good', hazard: 'None', status: 'IN_PLACE' },
+  ]);
+
+  const [pcWorkstations, setPcWorkstations] = useState<any[]>([
+    { id: 'PC-01', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-02', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-03', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-04', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-05', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-06', cpu: 'Core i3 9th Gen / 4GB RAM', os: 'Windows 10', status: 'MAINTENANCE', internet: 'Offline (RAM upgrade)', userGroup: 'Students' },
+    { id: 'PC-07', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-08', cpu: 'Core i5 10th Gen / 8GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Fast (100 Mbps)', userGroup: 'Students' },
+    { id: 'PC-TEACHER', cpu: 'Core i7 11th Gen / 16GB RAM', os: 'Windows 11 Pro', status: 'ONLINE', internet: 'Master Server', userGroup: 'Lab Instructor' },
+    { id: 'PROJECTOR-01', cpu: 'BenQ Full HD Smart Projector', os: 'Android TV', status: 'ONLINE', internet: 'WiFi Connected', userGroup: 'Lab Screen' },
+    { id: 'PRINTER-01', cpu: 'EPSON L3150 Wi-Fi Tank Printer', os: 'Network Driver', status: 'ONLINE', internet: 'Active (Ink 85%)', userGroup: 'Printing' },
+  ]);
+
+  const [labPracticalBookings, setLabPracticalBookings] = useState<any[]>([
+    {
+      id: 1,
+      dateBs: todayBS(),
+      classId: '10',
+      className: 'Class 10',
+      labType: 'SCIENCE',
+      periodNo: 4,
+      topic: 'Preparation of Oxygen Gas (O2) in Laboratory & Test with burning splinter',
+      teacher: 'दिनेश पटेल',
+    },
+    {
+      id: 2,
+      dateBs: todayBS(),
+      classId: '9',
+      className: 'Class 9',
+      labType: 'COMPUTER',
+      periodNo: 6,
+      topic: 'HTML Table, Form Design & CSS Basics',
+      teacher: 'कम्प्युटर शिक्षक',
+    },
+  ]);
+  const [isBookLabModalOpen, setIsBookLabModalOpen] = useState(false);
+  const [bookClassId, setBookClassId] = useState('');
+  const [bookLabType, setBookLabType] = useState('SCIENCE');
+  const [bookPeriodNo, setBookPeriodNo] = useState(1);
+  const [bookTopic, setBookTopic] = useState('');
+  const [bookTeacher, setBookTeacher] = useState(user?.teacher?.fullName || 'Teacher');
+
+  // ─── 5. SPECIAL INCHARGE STATE ───
+  const [specialCommitteeTab, setSpecialCommitteeTab] = useState<'canteen' | 'infrastructure' | 'events' | 'pta'>('canteen');
+  const [committeeMinutes, setCommitteeMinutes] = useState<any[]>([
+    {
+      id: 1,
+      dateBs: '2083-05-10',
+      committee: 'दिवा खाजा तथा क्यान्टिन समिति (Canteen Committee)',
+      title: 'दिवा खाजा गुणस्तर अनुगमन तथा साप्ताहिक मेन्यु निर्धारण',
+      attendees: 'प्रधानाध्यापक, संयोजक, अभिभावक प्रतिनिधि, भान्छे प्रमुख',
+      decisions: 'साप्ताहिक खाजामा ताजा गेडागुडी, अण्डा र हलुवा अनिवार्य समावेश गर्ने। पिउने पानी फिल्टर हरेक १५ दिनमा सफा गर्ने।',
+    },
+    {
+      id: 2,
+      dateBs: '2083-05-02',
+      committee: 'भौतिक पूर्वाधार तथा मर्मत समिति (Infrastructure Committee)',
+      title: 'वर्षायामको पानी निकास तथा कक्षा ९ को छाना मर्मत',
+      attendees: 'समिति प्रमुख, विद्यालय इन्जिनियर, वडा प्रतिनिधि',
+      decisions: 'कक्षा ९ को ढलान वाटरप्रूफिङ गर्ने र नयाँ खेलकुद मैदान निकास नाली निर्माण सुरु गर्ने।',
+    },
+  ]);
+  const [isAddMinuteModalOpen, setIsAddMinuteModalOpen] = useState(false);
+  const [minuteDateBs, setMinuteDateBs] = useState(todayBS());
+  const [minuteCommittee, setMinuteCommittee] = useState('दिवा खाजा तथा क्यान्टिन समिति');
+  const [minuteTitle, setMinuteTitle] = useState('');
+  const [minuteAttendees, setMinuteAttendees] = useState('');
+  const [minuteDecisions, setMinuteDecisions] = useState('');
 
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [isProblemModalOpen, setIsProblemModalOpen] = useState(false);
@@ -624,10 +880,23 @@ export default function TeacherPortalPage() {
     inchargeRolesList.includes('ACCOUNTANT') ||
     inchargeRolesList.includes('ACCOUNT') ||
     user?.role === 'ACCOUNTANT';
-  const hasCoordinatorIncharge = inchargeRolesList.includes('ACADEMIC_COORDINATOR');
-  const hasDisciplineIncharge = inchargeRolesList.includes('DISCIPLINE_INCHARGE');
-  const hasEcaIncharge = inchargeRolesList.includes('ECA_INCHARGE');
-  const hasLabIncharge = inchargeRolesList.includes('LAB_INCHARGE');
+  const hasCoordinatorIncharge =
+    inchargeRolesList.includes('ACADEMIC_COORDINATOR') ||
+    inchargeRolesList.includes('COORDINATOR');
+  const hasDisciplineIncharge =
+    inchargeRolesList.includes('DISCIPLINE_INCHARGE') ||
+    inchargeRolesList.includes('DISCIPLINE');
+  const hasEcaIncharge =
+    inchargeRolesList.includes('ECA_INCHARGE') ||
+    inchargeRolesList.includes('ECA') ||
+    inchargeRolesList.includes('SPORTS');
+  const hasLabIncharge =
+    inchargeRolesList.includes('LAB_INCHARGE') ||
+    inchargeRolesList.includes('LAB') ||
+    inchargeRolesList.includes('IT');
+  const hasSpecialIncharge =
+    inchargeRolesList.includes('OTHER') ||
+    inchargeRolesList.includes('SPECIAL');
   const hasAnyInchargeRole =
     inchargeRolesList.length > 0 ||
     ['ADMIN', 'SUPER_ADMIN', 'ACCOUNTANT', 'LIBRARIAN'].includes(user?.role || '');
@@ -849,7 +1118,35 @@ export default function TeacherPortalPage() {
             </button>
           )}
 
-          {(hasCoordinatorIncharge || hasDisciplineIncharge || hasEcaIncharge || hasLabIncharge) && (
+          {hasDisciplineIncharge && (
+            <button
+              onClick={() => switchTab('incharge_discipline')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_discipline'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-rose-300'
+                  : 'bg-rose-50 text-rose-900 hover:bg-rose-100 border-rose-200'
+              }`}
+            >
+              <ShieldCheck size={15} className={activeTab === 'incharge_discipline' ? 'text-amber-400' : 'text-rose-600'} />
+              <span>Discipline Desk (अनुशासन प्रमुख)</span>
+            </button>
+          )}
+
+          {hasEcaIncharge && (
+            <button
+              onClick={() => switchTab('incharge_eca')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_eca'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-amber-300'
+                  : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border-amber-200'
+              }`}
+            >
+              <Trophy size={15} className={activeTab === 'incharge_eca' ? 'text-amber-400' : 'text-amber-600'} />
+              <span>Sports & ECA (खेलकुद तथा क्रियाकलाप)</span>
+            </button>
+          )}
+
+          {hasCoordinatorIncharge && (
             <button
               onClick={() => switchTab('incharge_coordinator')}
               className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
@@ -859,7 +1156,35 @@ export default function TeacherPortalPage() {
               }`}
             >
               <Layers size={15} className={activeTab === 'incharge_coordinator' ? 'text-amber-400' : 'text-indigo-600'} />
-              <span>Incharge Coordination (विभागीय समन्वय)</span>
+              <span>Academic Coordinator (शैक्षिक संयोजक)</span>
+            </button>
+          )}
+
+          {hasLabIncharge && (
+            <button
+              onClick={() => switchTab('incharge_lab')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_lab'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-cyan-300'
+                  : 'bg-cyan-50 text-cyan-900 hover:bg-cyan-100 border-cyan-200'
+              }`}
+            >
+              <Laptop size={15} className={activeTab === 'incharge_lab' ? 'text-amber-400' : 'text-cyan-600'} />
+              <span>Lab & IT Incharge (प्रयोगशाला तथा IT)</span>
+            </button>
+          )}
+
+          {hasSpecialIncharge && (
+            <button
+              onClick={() => switchTab('incharge_special')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 border ${
+                activeTab === 'incharge_special'
+                  ? 'bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-xs ring-2 ring-slate-300'
+                  : 'bg-slate-100 text-slate-900 hover:bg-slate-200 border-slate-300'
+              }`}
+            >
+              <Sparkles size={15} className={activeTab === 'incharge_special' ? 'text-amber-400' : 'text-slate-600'} />
+              <span>Special Duties (विशेष जिम्मेवारी)</span>
             </button>
           )}
         </div>
@@ -930,6 +1255,34 @@ export default function TeacherPortalPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                {hasExamIncharge && (
+                  <div className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-purple-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                        परीक्षा प्रमुख
+                      </span>
+                      <Award size={16} className="text-purple-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Exam Controller Desk</p>
+                    <p className="text-[10px] text-gray-500">परीक्षा तालिका, सिट प्लानिङ र लब्धाङ्क</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_exam')}
+                        className="flex-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
+                      </button>
+                      <Link
+                        href="/dashboard/exams"
+                        className="rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-[11px] font-bold px-2 py-1.5 text-center transition"
+                        title="Open Full Screen Exam Dashboard"
+                      >
+                        Exams ↗
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
                 {hasLibraryIncharge && (
                   <div className="rounded-xl border border-blue-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-blue-400 transition">
                     <div className="flex items-center justify-between">
@@ -986,50 +1339,106 @@ export default function TeacherPortalPage() {
                   </div>
                 )}
 
-                {hasExamIncharge && (
-                  <div className="rounded-xl border border-purple-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-purple-400 transition">
+                {hasDisciplineIncharge && (
+                  <div className="rounded-xl border border-rose-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-rose-400 transition">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-                        परीक्षा प्रमुख
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
+                        अनुशासन प्रमुख
                       </span>
-                      <Award size={16} className="text-purple-600" />
+                      <ShieldCheck size={16} className="text-rose-600" />
                     </div>
-                    <p className="text-xs font-bold text-gray-900">Exam Controller Desk</p>
-                    <p className="text-[10px] text-gray-500">परीक्षा तालिका, सिट प्लानिङ र लब्धाङ्क</p>
+                    <p className="text-xs font-bold text-gray-900">Discipline & Conduct</p>
+                    <p className="text-[10px] text-gray-500">आचारसंहिता, घटना दर्ता र परामर्श</p>
                     <div className="flex items-center gap-1.5 pt-1">
                       <button
-                        onClick={() => setActiveTab('incharge_exam')}
-                        className="flex-1 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                        onClick={() => setActiveTab('incharge_discipline')}
+                        className="w-full rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
                       >
                         Open In Portal →
                       </button>
-                      <Link
-                        href="/dashboard/exams"
-                        className="rounded-lg bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-[11px] font-bold px-2 py-1.5 text-center transition"
-                        title="Open Full Screen Exam Dashboard"
-                      >
-                        Exams ↗
-                      </Link>
                     </div>
                   </div>
                 )}
 
-                {(hasCoordinatorIncharge || hasDisciplineIncharge || hasEcaIncharge || hasLabIncharge) && (
+                {hasEcaIncharge && (
+                  <div className="rounded-xl border border-amber-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-amber-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                        खेलकुद तथा ECA प्रमुख
+                      </span>
+                      <Trophy size={16} className="text-amber-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Sports & ECA Hub</p>
+                    <p className="text-[10px] text-gray-500">सदन अंक, शुक्रबारे ECA र खेलकुद सामान</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_eca')}
+                        className="w-full rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {hasCoordinatorIncharge && (
                   <div className="rounded-xl border border-indigo-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-indigo-400 transition">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                        विभागीय समन्वय
+                        शैक्षिक संयोजक
                       </span>
                       <Layers size={16} className="text-indigo-600" />
                     </div>
-                    <p className="text-xs font-bold text-gray-900">Departmental Duties</p>
-                    <p className="text-[10px] text-gray-500">अनुशासन, खेलकुद तथा प्रयोगशाला कार्यहरू</p>
+                    <p className="text-xs font-bold text-gray-900">Academic Coordinator</p>
+                    <p className="text-[10px] text-gray-500">सट्टा शिक्षक, रुटिन र पाठ्यक्रम प्रगति</p>
                     <div className="flex items-center gap-1.5 pt-1">
                       <button
                         onClick={() => setActiveTab('incharge_coordinator')}
                         className="w-full rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
                       >
-                        View Assigned Duties →
+                        Open In Portal →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {hasLabIncharge && (
+                  <div className="rounded-xl border border-cyan-200 bg-white p-3.5 shadow-2xs space-y-2 hover:border-cyan-400 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded">
+                        प्रयोगशाला तथा IT प्रमुख
+                      </span>
+                      <Laptop size={16} className="text-cyan-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Science & Computer Lab</p>
+                    <p className="text-[10px] text-gray-500">कम्प्युटर, विज्ञान उपकरण र प्रयोगात्मक कक्षा</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_lab')}
+                        className="w-full rounded-lg bg-cyan-700 hover:bg-cyan-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {hasSpecialIncharge && (
+                  <div className="rounded-xl border border-slate-300 bg-white p-3.5 shadow-2xs space-y-2 hover:border-slate-500 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                        विशेष जिम्मेवारी
+                      </span>
+                      <Sparkles size={16} className="text-slate-600" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-900">Special Portfolio</p>
+                    <p className="text-[10px] text-gray-500">क्यान्टिन, निर्माण तथा समिति बैठकहरू</p>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => setActiveTab('incharge_special')}
+                        className="w-full rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold py-1.5 text-center cursor-pointer transition"
+                      >
+                        Open In Portal →
                       </button>
                     </div>
                   </div>
@@ -2994,125 +3403,239 @@ export default function TeacherPortalPage() {
         </div>
       )}
 
-      {/* ─── TAB: COORDINATION & SPECIAL INCHARGE SUB-PORTAL ────────────────── */}
-      {activeTab === 'incharge_coordinator' && (
+      {/* ─── TAB: DISCIPLINE INCHARGE SUB-PORTAL (अनुशासन प्रमुख) ──────────── */}
+      {activeTab === 'incharge_discipline' && (
         <div className="space-y-6">
           {/* Header Console Banner */}
-          <div className="rounded-2xl bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="rounded-2xl bg-gradient-to-r from-rose-900 via-pink-950 to-slate-900 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-indigo-950 font-black text-xs rounded-lg mb-2 shadow-xs">
-                <Layers size={14} />
-                <span>विभागीय तथा शैक्षिक समन्वय कक्ष (Department Coordination Console)</span>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-rose-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <ShieldCheck size={14} />
+                <span>विद्यार्थी आचारसंहिता तथा अनुशासन कक्ष (Student Discipline & Conduct Console)</span>
               </div>
               <h2 className="text-xl font-extrabold">
-                {teacherDetails.inchargeTitle || 'Academic & Incharge Coordinator'}
+                {teacherDetails.inchargeTitle || 'Discipline Incharge (अनुशासन प्रमुख)'}
               </h2>
-              <p className="text-xs text-indigo-200 mt-1">
-                शैक्षिक योजना, घण्टी तालिका समन्वय, अनुशासन तथा अतिरिक्त क्रियाकलाप अनुगमन
+              <p className="text-xs text-rose-200 mt-1">
+                दैनिक पोशाक निरीक्षण, समयपालना, आचारसंहिता उल्लंघन अभिलेख, विद्यार्थी परामर्श तथा अभिभावक सम्पर्क
               </p>
             </div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 bg-white text-indigo-950 hover:bg-indigo-50 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0"
-            >
-              <span>Full ERP Modules (प्रशासनिक पहुँच)</span>
-              <ArrowRight size={14} />
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAddIncidentModalOpen(true)}
+                className="inline-flex items-center gap-2 bg-amber-400 text-rose-950 hover:bg-amber-300 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Log Incident (घटना दर्ता)</span>
+              </button>
+            </div>
           </div>
 
-          {/* Quick Launch Cards for Coordinator */}
+          {/* Quick Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link
-              href="/dashboard/classes/routine"
-              className="p-4 rounded-2xl border border-indigo-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-700 group-hover:scale-110 transition">
-                  <Clock size={20} />
-                </div>
-                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                  रुटिन
-                </span>
+            <div className="p-4 rounded-2xl border border-rose-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-rose-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">कुल घटना दर्ता</span>
+                <ShieldAlert size={18} />
               </div>
-              <h3 className="font-extrabold text-sm text-gray-900">Master Class Routines</h3>
-              <p className="text-[11px] text-gray-500 font-nepali">
-                सम्पूर्ण विद्यालयको कक्षा तथा शिक्षक घण्टी तालिका
-              </p>
-            </Link>
+              <p className="text-2xl font-black text-gray-900">{disciplineIncidents.length}</p>
+              <p className="text-[11px] text-gray-400">यस शैक्षिक सत्रमा दर्ता भएका केसहरू</p>
+            </div>
 
-            <Link
-              href="/dashboard/teachers"
-              className="p-4 rounded-2xl border border-purple-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <div className="p-2.5 rounded-xl bg-purple-50 text-purple-700 group-hover:scale-110 transition">
-                  <Users size={20} />
-                </div>
-                <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-                  शिक्षक
-                </span>
+            <div className="p-4 rounded-2xl border border-amber-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-amber-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">अभिभावक बोलाई</span>
+                <PhoneCall size={18} />
               </div>
-              <h3 className="font-extrabold text-sm text-gray-900">Faculty & Staff Directory</h3>
-              <p className="text-[11px] text-gray-500 font-nepali">
-                शिक्षक तथा कर्मचारी नामावली र जिम्मेवारी
+              <p className="text-2xl font-black text-amber-700">
+                {disciplineIncidents.filter((i) => i.parentCalled).length}
               </p>
-            </Link>
+              <p className="text-[11px] text-gray-400">अभिभावकसँग प्रत्यक्ष छलफल भएको</p>
+            </div>
 
-            <Link
-              href="/dashboard/students"
-              className="p-4 rounded-2xl border border-blue-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700 group-hover:scale-110 transition">
-                  <GraduationCap size={20} />
-                </div>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                  विद्यार्थी
-                </span>
+            <div className="p-4 rounded-2xl border border-emerald-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-emerald-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">समाधान भएका केसहरू</span>
+                <CheckCircle2 size={18} />
               </div>
-              <h3 className="font-extrabold text-sm text-gray-900">Student Directory & Classes</h3>
-              <p className="text-[11px] text-gray-500 font-nepali">
-                कक्षागत विद्यार्थी सूची, EMIS तथा प्रोफाइल
+              <p className="text-2xl font-black text-emerald-700">
+                {disciplineIncidents.filter((i) => i.status === 'RESOLVED').length}
               </p>
-            </Link>
+              <p className="text-[11px] text-gray-400">परामर्श तथा सुधार पश्चात बन्द</p>
+            </div>
 
-            <Link
-              href="/dashboard/notices"
-              className="p-4 rounded-2xl border border-amber-100 bg-white shadow-2xs hover:shadow-md transition group space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <div className="p-2.5 rounded-xl bg-amber-50 text-amber-700 group-hover:scale-110 transition">
-                  <Send size={20} />
-                </div>
-                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                  सूचना
-                </span>
+            <div className="p-4 rounded-2xl border border-blue-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-blue-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">दैनिक गेट निरीक्षण</span>
+                <UserCheck size={18} />
               </div>
-              <h3 className="font-extrabold text-sm text-gray-900">Broadcast Notice / SMS</h3>
-              <p className="text-[11px] text-gray-500 font-nepali">
-                विद्यालयव्यापी सूचना तथा SMS सम्प्रेषण
-              </p>
-            </Link>
+              <p className="text-2xl font-black text-blue-700">सञ्चालनमा</p>
+              <p className="text-[11px] text-gray-400">पोशाक तथा समयपालना अनुगमन</p>
+            </div>
           </div>
 
-          {/* Coordination Duties / Tasks */}
-          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-2xs space-y-3">
+          {/* Incident Log & Actions Table */}
+          <div className="rounded-2xl border border-rose-100 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                  <ShieldAlert size={18} className="text-rose-600" />
+                  <span>Student Misconduct & Counseling Registry (अनुशासन तथा परामर्श अभिलेख)</span>
+                </h3>
+                <p className="text-xs text-gray-500">विद्यार्थीहरूको कमजोरी सुधारका लागि गरिएका निर्णयहरू</p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search student or issue..."
+                    value={disciplineSearch}
+                    onChange={(e) => setDisciplineSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 border rounded-xl text-xs font-medium w-48 focus:ring-1 focus:ring-rose-500"
+                  />
+                </div>
+                <select
+                  value={disciplineCategoryFilter}
+                  onChange={(e) => setDisciplineCategoryFilter(e.target.value)}
+                  className="px-3 py-1.5 border rounded-xl text-xs font-bold bg-slate-50"
+                >
+                  <option value="ALL">All Categories (सबै विधा)</option>
+                  <option value="UNIFORM">पोशाक (Uniform)</option>
+                  <option value="TRUANCY">कक्षा बङ्क (Truancy)</option>
+                  <option value="FIGHTING">झैझगडा (Fighting)</option>
+                  <option value="HOMEWORK">गृहकार्य (Homework)</option>
+                  <option value="OTHER">अन्य (Other)</option>
+                </select>
+                <button
+                  onClick={() => setIsAddIncidentModalOpen(true)}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Plus size={14} />
+                  <span>New Entry</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-gray-700 border-b border-gray-200">
+                    <th className="p-3 font-bold">मिति (Date BS)</th>
+                    <th className="p-3 font-bold">विद्यार्थी (Student)</th>
+                    <th className="p-3 font-bold">कक्षा (Class)</th>
+                    <th className="p-3 font-bold">प्रकृति (Category)</th>
+                    <th className="p-3 font-bold">गम्भीरता (Severity)</th>
+                    <th className="p-3 font-bold">कारबाही / परामर्श (Action)</th>
+                    <th className="p-3 font-bold">अभिभावक</th>
+                    <th className="p-3 font-bold">स्थिति (Status)</th>
+                    <th className="p-3 font-bold text-right">कार्य (Action)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {disciplineIncidents
+                    .filter((inc) => {
+                      if (disciplineCategoryFilter !== 'ALL' && inc.category !== disciplineCategoryFilter) return false;
+                      if (
+                        disciplineSearch &&
+                        !inc.studentName.toLowerCase().includes(disciplineSearch.toLowerCase()) &&
+                        !inc.notes.toLowerCase().includes(disciplineSearch.toLowerCase())
+                      ) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map((inc) => (
+                      <tr key={inc.id} className="hover:bg-rose-50/30 transition">
+                        <td className="p-3 font-mono font-bold text-gray-700">{inc.dateBs}</td>
+                        <td className="p-3 font-extrabold text-gray-900">{inc.studentName}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 font-bold text-slate-800">
+                            {inc.className}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold text-rose-900">{inc.categoryLabel}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                              inc.severity === 'HIGH'
+                                ? 'bg-rose-100 text-rose-800'
+                                : inc.severity === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {inc.severity}
+                          </span>
+                        </td>
+                        <td className="p-3 font-medium text-gray-800">
+                          <div>{inc.action}</div>
+                          {inc.notes && <div className="text-[10px] text-gray-500 mt-0.5">{inc.notes}</div>}
+                        </td>
+                        <td className="p-3">
+                          {inc.parentCalled ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
+                              <PhoneCall size={12} />
+                              <span>सम्पर्क भयो</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-gray-400">भएको छैन</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              inc.status === 'RESOLVED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {inc.status === 'RESOLVED' ? 'समाधान (Resolved)' : 'निगरानीमा (Review)'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => {
+                              setDisciplineIncidents((prev) =>
+                                prev.map((item) =>
+                                  item.id === inc.id
+                                    ? { ...item, status: item.status === 'RESOLVED' ? 'PENDING_REVIEW' : 'RESOLVED' }
+                                    : item
+                                )
+                              );
+                              toast.success('Incident status updated!');
+                            }}
+                            className="text-[10px] font-bold px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                          >
+                            Toggle Status
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Discipline Tasks & Guidelines */}
+          <div className="rounded-2xl border border-rose-100 bg-white p-5 shadow-2xs space-y-3">
             <div className="flex items-center justify-between border-b pb-2.5">
-              <h3 className="font-extrabold text-sm text-indigo-950 flex items-center gap-2">
-                <CheckSquare size={16} className="text-indigo-700" />
-                <span>Coordinator Duties & Responsibilities (समन्वय कार्यहरू)</span>
+              <h3 className="font-extrabold text-sm text-rose-950 flex items-center gap-2">
+                <CheckSquare size={16} className="text-rose-700" />
+                <span>Discipline Incharge Duties & Action Directives (अनुशासन कार्यहरू)</span>
               </h3>
-              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                {myTasksData?.filter((t: any) => t.category === 'ACADEMIC' && t.status !== 'COMPLETED').length} Pending
+              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
+                {myTasksData?.filter((t: any) => t.category === 'DISCIPLINE' && t.status !== 'COMPLETED').length} Pending
               </span>
             </div>
 
             <div className="space-y-2">
-              {myTasksData?.filter((t: any) => t.category === 'ACADEMIC' || t.category === 'GENERAL').length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-6">कुनै समन्वय कार्य तोकिएको छैन।</p>
+              {myTasksData?.filter((t: any) => t.category === 'DISCIPLINE').length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">कुनै अनुशासन कार्य तोकिएको छैन।</p>
               ) : (
                 myTasksData
-                  ?.filter((t: any) => t.category === 'ACADEMIC' || t.category === 'GENERAL')
+                  ?.filter((t: any) => t.category === 'DISCIPLINE')
                   .map((task: any) => {
                     const isDone = task.status === 'COMPLETED';
                     return (
@@ -3133,7 +3656,7 @@ export default function TeacherPortalPage() {
                                   status: isDone ? 'PENDING' : 'COMPLETED',
                                 })
                               }
-                              className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                              className="mt-0.5 rounded text-rose-600 focus:ring-rose-500 h-4 w-4 cursor-pointer"
                             />
                             <div>
                               <span className={`font-bold text-sm block ${isDone ? 'line-through text-gray-500' : 'text-gray-900'}`}>
@@ -3144,7 +3667,7 @@ export default function TeacherPortalPage() {
                               )}
                             </div>
                           </label>
-                          <span className="text-[10px] font-mono font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded shrink-0">
+                          <span className="text-[10px] font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded shrink-0">
                             Due: {task.dueDateBs}
                           </span>
                         </div>
@@ -3152,6 +3675,708 @@ export default function TeacherPortalPage() {
                     );
                   })
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: SPORTS & ECA INCHARGE SUB-PORTAL (खेलकुद तथा अतिरिक्त क्रियाकलाप) ─── */}
+      {activeTab === 'incharge_eca' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-amber-700 via-orange-800 to-slate-900 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-amber-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <Trophy size={14} />
+                <span>खेलकुद तथा अतिरिक्त क्रियाकलाप कक्ष (Sports & ECA Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Sports & ECA Incharge (खेलकुद तथा क्रियाकलाप प्रमुख)'}
+              </h2>
+              <p className="text-xs text-amber-200 mt-1">
+                सदन व्यवस्थापन, खेलकुद प्रतियोगिता, शुक्रबारे अतिरिक्त क्रियाकलाप, सामग्री अभिलेख तथा पुरस्कार वितरण
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAddEcaEventModalOpen(true)}
+                className="inline-flex items-center gap-2 bg-white text-amber-950 hover:bg-amber-50 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Plan ECA Event (नयाँ कार्यक्रम)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 4 Houses Leaderboard Cards */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                <Medal size={18} className="text-amber-600" />
+                <span>Four Houses Standings & Points (चार सदन अंक तालिका 2083/84)</span>
+              </h3>
+              <span className="text-xs text-gray-500">Live House Points Tally</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Red House */}
+              <div className="rounded-2xl border-2 border-red-200 bg-gradient-to-b from-red-50 to-white p-4 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-red-600 text-white">
+                    रातो सदन (Red)
+                  </span>
+                  <Flame size={20} className="text-red-600" />
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-3xl font-black text-red-950">{houseScores.RED}</span>
+                  <span className="text-[11px] font-bold text-red-700">Points</span>
+                </div>
+                <div className="text-[11px] text-gray-600 space-y-0.5 pt-1 border-t border-red-100">
+                  <p><b>Captain:</b> सुजल साह (Gr 10)</p>
+                  <p><b>Motto:</b> Courage & Passion</p>
+                </div>
+                <div className="flex items-center gap-1.5 pt-2">
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, RED: s.RED + 10 }));
+                      toast.success('+10 Points awarded to Red House!');
+                    }}
+                    className="flex-1 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold cursor-pointer"
+                  >
+                    +10 Pts
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, RED: Math.max(0, s.RED - 5) }));
+                      toast.error('-5 Points penalty for Red House!');
+                    }}
+                    className="px-2 py-1 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 text-[10px] font-bold cursor-pointer"
+                  >
+                    -5 Pts
+                  </button>
+                </div>
+              </div>
+
+              {/* Blue House */}
+              <div className="rounded-2xl border-2 border-blue-200 bg-gradient-to-b from-blue-50 to-white p-4 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-600 text-white">
+                    नीलो सदन (Blue)
+                  </span>
+                  <Compass size={20} className="text-blue-600" />
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-3xl font-black text-blue-950">{houseScores.BLUE}</span>
+                  <span className="text-[11px] font-bold text-blue-700">Points</span>
+                </div>
+                <div className="text-[11px] text-gray-600 space-y-0.5 pt-1 border-t border-blue-100">
+                  <p><b>Captain:</b> प्रिया ठाकुर (Gr 10)</p>
+                  <p><b>Motto:</b> Wisdom & Unity</p>
+                </div>
+                <div className="flex items-center gap-1.5 pt-2">
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, BLUE: s.BLUE + 10 }));
+                      toast.success('+10 Points awarded to Blue House!');
+                    }}
+                    className="flex-1 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold cursor-pointer"
+                  >
+                    +10 Pts
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, BLUE: Math.max(0, s.BLUE - 5) }));
+                      toast.error('-5 Points penalty for Blue House!');
+                    }}
+                    className="px-2 py-1 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 text-[10px] font-bold cursor-pointer"
+                  >
+                    -5 Pts
+                  </button>
+                </div>
+              </div>
+
+              {/* Green House */}
+              <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-50 to-white p-4 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white">
+                    हरियो सदन (Green) 🏆
+                  </span>
+                  <Trophy size={20} className="text-emerald-600" />
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-3xl font-black text-emerald-950">{houseScores.GREEN}</span>
+                  <span className="text-[11px] font-bold text-emerald-700">Leader (अग्रणी)</span>
+                </div>
+                <div className="text-[11px] text-gray-600 space-y-0.5 pt-1 border-t border-emerald-100">
+                  <p><b>Captain:</b> अन्जली यादव (Gr 10)</p>
+                  <p><b>Motto:</b> Growth & Harmony</p>
+                </div>
+                <div className="flex items-center gap-1.5 pt-2">
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, GREEN: s.GREEN + 10 }));
+                      toast.success('+10 Points awarded to Green House!');
+                    }}
+                    className="flex-1 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer"
+                  >
+                    +10 Pts
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, GREEN: Math.max(0, s.GREEN - 5) }));
+                      toast.error('-5 Points penalty for Green House!');
+                    }}
+                    className="px-2 py-1 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-[10px] font-bold cursor-pointer"
+                  >
+                    -5 Pts
+                  </button>
+                </div>
+              </div>
+
+              {/* Yellow House */}
+              <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-white p-4 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-500 text-slate-900">
+                    पहेंलो सदन (Yellow)
+                  </span>
+                  <Sparkles size={20} className="text-amber-600" />
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-3xl font-black text-amber-950">{houseScores.YELLOW}</span>
+                  <span className="text-[11px] font-bold text-amber-700">Points</span>
+                </div>
+                <div className="text-[11px] text-gray-600 space-y-0.5 pt-1 border-t border-amber-100">
+                  <p><b>Captain:</b> अमित महतो (Gr 10)</p>
+                  <p><b>Motto:</b> Honor & Excellence</p>
+                </div>
+                <div className="flex items-center gap-1.5 pt-2">
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, YELLOW: s.YELLOW + 10 }));
+                      toast.success('+10 Points awarded to Yellow House!');
+                    }}
+                    className="flex-1 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-900 text-[10px] font-bold cursor-pointer"
+                  >
+                    +10 Pts
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHouseScores((s) => ({ ...s, YELLOW: Math.max(0, s.YELLOW - 5) }));
+                      toast.error('-5 Points penalty for Yellow House!');
+                    }}
+                    className="px-2 py-1 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 text-[10px] font-bold cursor-pointer"
+                  >
+                    -5 Pts
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Friday ECA Planner & Results */}
+          <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                  <Flag size={18} className="text-amber-600" />
+                  <span>Friday ECA & Annual Sports Events (शुक्रबारे अतिरिक्त क्रियाकलाप अभिलेख)</span>
+                </h3>
+                <p className="text-xs text-gray-500">वक्तृत्वकला, हाजिरीजवाफ, चित्रकला, खेलकुद तथा विजेता नामावली</p>
+              </div>
+              <button
+                onClick={() => setIsAddEcaEventModalOpen(true)}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-[#1e3a5f] rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Plus size={14} />
+                <span>Add Event / Winners</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {ecaEvents.map((evt) => (
+                <div key={evt.id} className="p-4 rounded-2xl border border-gray-200 bg-slate-50/50 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                        📅 {evt.dateBs}
+                      </span>
+                      <h4 className="font-extrabold text-sm text-gray-900 mt-1.5">{evt.name}</h4>
+                      {evt.topic && <p className="text-[11px] text-gray-500 italic mt-0.5">विषय: {evt.topic}</p>}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs border-t border-gray-200/80 pt-2 font-medium">
+                    <div className="flex items-center gap-1.5 text-amber-900">
+                      <span>🥇</span>
+                      <span><b>1st:</b> {evt.firstWinner || 'TBD'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <span>🥈</span>
+                      <span><b>2nd:</b> {evt.secondWinner || 'TBD'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-amber-800">
+                      <span>🥉</span>
+                      <span><b>3rd:</b> {evt.thirdWinner || 'TBD'}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sports Inventory Tracker */}
+          <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                <Activity size={18} className="text-amber-600" />
+                <span>Sports Goods & Equipment Inventory (खेलकुद सामग्री अभिलेख)</span>
+              </h3>
+              <span className="text-xs text-gray-500">उपकरण संख्या तथा मौज्दात</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {sportsItems.map((item) => (
+                <div key={item.id} className="p-3 rounded-xl border border-gray-100 bg-slate-50/70 space-y-1 text-xs">
+                  <div className="flex items-center justify-between font-bold text-gray-900">
+                    <span>{item.name}</span>
+                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px]">
+                      {item.category}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-gray-600 pt-1">
+                    <span>कुल: <b>{item.totalQty}</b></span>
+                    <span>उपलब्ध: <b className="text-emerald-700">{item.availableQty}</b></span>
+                    <span>जारी: <b className="text-rose-700">{item.inUse}</b></span>
+                  </div>
+                  <p className="text-[10px] text-gray-400">स्थिति: {item.condition}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: ACADEMIC COORDINATOR SUB-PORTAL (शैक्षिक संयोजक) ───────────── */}
+      {activeTab === 'incharge_coordinator' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-indigo-900 via-slate-900 to-purple-950 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-indigo-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <Layers size={14} />
+                <span>शैक्षिक समन्वय तथा अनुगमन कक्ष (Academic Coordination Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Academic Coordinator (शैक्षिक संयोजक)'}
+              </h2>
+              <p className="text-xs text-indigo-200 mt-1">
+                मास्टर घण्टी तालिका, दैनिक सट्टा शिक्षक व्यवस्थापन, पाठ्यक्रम प्रगति अनुगमन तथा शिक्षक दैनिक डायरी रुजु
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAddSubModalOpen(true)}
+                className="inline-flex items-center gap-2 bg-amber-400 text-indigo-950 hover:bg-amber-300 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Assign Substitute (सट्टा शिक्षक तोक्नुहोस्)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl border border-indigo-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-indigo-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">कुल सक्रिय कक्षाहरू</span>
+                <School size={18} />
+              </div>
+              <p className="text-2xl font-black text-gray-900">{classesData?.length || 13}</p>
+              <p className="text-[11px] text-gray-400">शिशु कक्षा (ECD) देखि कक्षा १२ सम्म</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-purple-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-purple-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">आजको सट्टा शिक्षक</span>
+                <Users size={18} />
+              </div>
+              <p className="text-2xl font-black text-purple-800">{substitutions.length}</p>
+              <p className="text-[11px] text-gray-400">अनुपस्थित शिक्षकको स्थानमा खटाइएको</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-emerald-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-emerald-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">पाठ्यक्रम प्रगति औसत</span>
+                <FileBarChart size={18} />
+              </div>
+              <p className="text-2xl font-black text-emerald-700">74%</p>
+              <p className="text-[11px] text-gray-400">दोस्रो त्रैमासिक लक्ष्य अनुसार</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-amber-100 bg-white shadow-2xs space-y-1">
+              <div className="flex items-center justify-between text-amber-600">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">दैनिक डायरी प्रविष्टि</span>
+                <BookOpen size={18} />
+              </div>
+              <p className="text-2xl font-black text-amber-700">नियमित</p>
+              <p className="text-[11px] text-gray-400">शिक्षक दैनिक लग अनुगमन</p>
+            </div>
+          </div>
+
+          {/* Teacher Substitution & Proxy Desk */}
+          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                  <Users size={18} className="text-indigo-600" />
+                  <span>Teacher Substitution & Proxy Arrangement (सट्टा शिक्षक व्यवस्थापन)</span>
+                </h3>
+                <p className="text-xs text-gray-500">बिदामा बसेका शिक्षकको घण्टीमा अन्य शिक्षकको कार्यविभाजन</p>
+              </div>
+              <button
+                onClick={() => setIsAddSubModalOpen(true)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Plus size={14} />
+                <span>Assign Proxy</span>
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-gray-700 border-b border-gray-200">
+                    <th className="p-3 font-bold">मिति (Date BS)</th>
+                    <th className="p-3 font-bold">कक्षा (Class)</th>
+                    <th className="p-3 font-bold">घण्टी (Period)</th>
+                    <th className="p-3 font-bold">अनुपस्थित शिक्षक (Absent)</th>
+                    <th className="p-3 font-bold">खटाइएका सट्टा शिक्षक (Substitute)</th>
+                    <th className="p-3 font-bold">सिकाउने विषय / कार्य (Subject/Task)</th>
+                    <th className="p-3 font-bold">स्थिति</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {substitutions.map((sub) => (
+                    <tr key={sub.id} className="hover:bg-indigo-50/30 transition">
+                      <td className="p-3 font-mono font-bold text-gray-700">{sub.dateBs}</td>
+                      <td className="p-3 font-extrabold text-indigo-950">{sub.className}</td>
+                      <td className="p-3 font-bold text-gray-800">घण्टी {sub.periodNo}</td>
+                      <td className="p-3 text-rose-700 font-bold">{sub.absentTeacher}</td>
+                      <td className="p-3 text-emerald-800 font-extrabold flex items-center gap-1">
+                        <CheckCircle2 size={13} className="text-emerald-600" />
+                        <span>{sub.assignedTeacher}</span>
+                      </td>
+                      <td className="p-3 text-gray-700">{sub.subjectToTeach}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                          {sub.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Syllabus Progress Tracking */}
+          <div className="rounded-2xl border border-indigo-100 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                  <FileBarChart size={18} className="text-indigo-600" />
+                  <span>Syllabus Completion Tracking (पाठ्यक्रम प्रगति अनुगमन)</span>
+                </h3>
+                <p className="text-xs text-gray-500">कक्षागत तथा विषयगत पाठ्यभार सम्पन्न प्रतिशत</p>
+              </div>
+              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                2nd Term Target: 75%
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl border border-gray-200 bg-slate-50 space-y-2">
+                <div className="flex justify-between text-xs font-bold text-gray-900">
+                  <span>Class 10 - Compulsory Maths</span>
+                  <span className="text-emerald-700">78%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-emerald-600 h-2 rounded-full" style={{ width: '78%' }}></div>
+                </div>
+                <p className="text-[10px] text-gray-500">Unit 11 of 14 Completed • Teacher: रामप्रसाद यादव</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-gray-200 bg-slate-50 space-y-2">
+                <div className="flex justify-between text-xs font-bold text-gray-900">
+                  <span>Class 10 - Science & Tech</span>
+                  <span className="text-indigo-700">72%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-indigo-600 h-2 rounded-full" style={{ width: '72%' }}></div>
+                </div>
+                <p className="text-[10px] text-gray-500">Unit 13 of 18 Completed • Teacher: दिनेश पटेल</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-gray-200 bg-slate-50 space-y-2">
+                <div className="flex justify-between text-xs font-bold text-gray-900">
+                  <span>Class 9 - English</span>
+                  <span className="text-blue-700">80%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '80%' }}></div>
+                </div>
+                <p className="text-[10px] text-gray-500">Unit 12 of 15 Completed • Teacher: अनिता श्रेष्ठ</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: LAB & IT INCHARGE SUB-PORTAL (प्रयोगशाला तथा IT प्रमुख) ─────── */}
+      {activeTab === 'incharge_lab' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-cyan-900 via-teal-950 to-slate-900 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-cyan-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <Laptop size={14} />
+                <span>विज्ञान तथा कम्प्युटर प्रयोगशाला कक्ष (Science & IT Lab Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Science & IT Lab Incharge (प्रयोगशाला प्रमुख)'}
+              </h2>
+              <p className="text-xs text-cyan-200 mt-1">
+                रसायन, भौतिक तथा जीव विज्ञान उपकरण व्यवस्थापन, कम्प्युटर ल्याब, इन्टरनेट तथा प्रयोगात्मक कक्षा तालिका
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsBookLabModalOpen(true)}
+                className="inline-flex items-center gap-2 bg-amber-400 text-cyan-950 hover:bg-amber-300 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Book Practical Lab (प्रयोगात्मक कक्षा दर्ता)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-nav: Science Lab vs Computer Lab */}
+          <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+            <button
+              onClick={() => setLabSubTab('science')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+                labSubTab === 'science'
+                  ? 'bg-cyan-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <FlaskConical size={15} />
+              <span>Science Laboratory (विज्ञान प्रयोगशाला)</span>
+            </button>
+            <button
+              onClick={() => setLabSubTab('computer')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+                labSubTab === 'computer'
+                  ? 'bg-cyan-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <Laptop size={15} />
+              <span>Computer & IT Lab (कम्प्युटर ल्याब)</span>
+            </button>
+          </div>
+
+          {labSubTab === 'science' ? (
+            <div className="space-y-6">
+              {/* Science Chemicals & Glassware Registry */}
+              <div className="rounded-2xl border border-cyan-100 bg-white p-5 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                      <FlaskConical size={18} className="text-cyan-700" />
+                      <span>Chemicals & Apparatus Inventory (रसायन तथा प्रयोगशाला उपकरण अभिलेख)</span>
+                    </h3>
+                    <p className="text-xs text-gray-500">एसिड, बेस, सूक्ष्मदर्शक यन्त्र तथा भौतिक उपकरण मौज्दात</p>
+                  </div>
+                  <span className="text-xs font-bold bg-cyan-50 text-cyan-800 px-2.5 py-1 rounded-lg">
+                    {scienceChemicals.length} Items Listed
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {scienceChemicals.map((chem) => (
+                    <div key={chem.id} className="p-3 rounded-xl border border-gray-200 bg-slate-50 space-y-1.5 text-xs">
+                      <div className="flex items-start justify-between">
+                        <span className="font-extrabold text-gray-900">{chem.name}</span>
+                      </div>
+                      <p className="text-[11px] font-mono text-cyan-800">Formula/Type: {chem.formula}</p>
+                      <div className="flex items-center justify-between text-[11px] text-gray-600 pt-1 border-t">
+                        <span>Stock: <b>{chem.stock}</b></span>
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-900 text-[9px] font-black">
+                          {chem.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lab Bookings Register */}
+              <div className="rounded-2xl border border-cyan-100 bg-white p-5 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                    <Calendar size={18} className="text-cyan-700" />
+                    <span>Practical Sessions Scheduled (प्रयोगात्मक कक्षा तालिका)</span>
+                  </h3>
+                  <button
+                    onClick={() => setIsBookLabModalOpen(true)}
+                    className="text-xs font-bold text-cyan-700 hover:underline cursor-pointer"
+                  >
+                    + Book Lab Session
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {labPracticalBookings.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-3 rounded-xl bg-cyan-50/40 border border-cyan-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                    >
+                      <div>
+                        <span className="font-extrabold text-cyan-950 text-sm">{b.topic}</span>
+                        <div className="flex items-center gap-3 text-[11px] text-gray-600 mt-0.5">
+                          <span>📅 मिति: {b.dateBs}</span>
+                          <span>🏫 {b.className}</span>
+                          <span>⏰ घण्टी: {b.periodNo}</span>
+                          <span>👨‍🏫 शिक्षक: {b.teacher}</span>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-cyan-700 text-white shrink-0 self-start sm:self-auto">
+                        {b.labType} LAB
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Computer Workstations Grid */}
+              <div className="rounded-2xl border border-cyan-100 bg-white p-5 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                      <Laptop size={18} className="text-cyan-700" />
+                      <span>Computer Lab PC Status & Workstations (कम्प्युटर कार्यस्थल स्थिति)</span>
+                    </h3>
+                    <p className="text-xs text-gray-500">२४ वटा विद्यार्थी कम्प्युटर, शिक्षक मास्टर PC र स्मार्ट प्रोजेक्टर</p>
+                  </div>
+                  <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg">
+                    Internet: High Speed (Active)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {pcWorkstations.map((pc) => (
+                    <div
+                      key={pc.id}
+                      className={`p-3 rounded-xl border text-center space-y-1 text-xs transition ${
+                        pc.status === 'ONLINE'
+                          ? 'border-emerald-200 bg-emerald-50/40'
+                          : 'border-amber-200 bg-amber-50/40'
+                      }`}
+                    >
+                      <div className="flex justify-center">
+                        <Laptop
+                          size={24}
+                          className={pc.status === 'ONLINE' ? 'text-emerald-600' : 'text-amber-600'}
+                        />
+                      </div>
+                      <p className="font-extrabold text-gray-900">{pc.id}</p>
+                      <span
+                        className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-black ${
+                          pc.status === 'ONLINE'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-amber-600 text-white'
+                        }`}
+                      >
+                        {pc.status}
+                      </span>
+                      <p className="text-[10px] text-gray-500 truncate">{pc.cpu}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── TAB: SPECIAL INCHARGE SUB-PORTAL (विशेष जिम्मेवारी तथा समिति) ──────── */}
+      {activeTab === 'incharge_special' && (
+        <div className="space-y-6">
+          {/* Header Console Banner */}
+          <div className="rounded-2xl bg-gradient-to-r from-slate-800 via-gray-900 to-slate-950 text-white p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-slate-950 font-black text-xs rounded-lg mb-2 shadow-xs">
+                <Sparkles size={14} />
+                <span>विशेष जिम्मेवारी तथा समिति कार्य कक्ष (Special Responsibilities Console)</span>
+              </div>
+              <h2 className="text-xl font-extrabold">
+                {teacherDetails.inchargeTitle || 'Special Committee Incharge (विशेष जिम्मेवारी)'}
+              </h2>
+              <p className="text-xs text-slate-300 mt-1">
+                खाजा तथा क्यान्टिन समिति, पूर्वाधार निर्माण तथा मर्मत, वार्षिकोत्सव तथा विशेष बैठक निर्णय अभिलेख
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsAddMinuteModalOpen(true)}
+                className="inline-flex items-center gap-2 bg-amber-400 text-slate-950 hover:bg-amber-300 px-4 py-2.5 rounded-xl text-xs font-black shadow-xs transition shrink-0 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Record Minute (निर्णय दर्ता)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Committee Meeting Minutes Book */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-extrabold text-sm text-gray-900 flex items-center gap-2">
+                  <ClipboardList size={18} className="text-slate-700" />
+                  <span>Committee Meeting Minutes & Decisions (समिति बैठक तथा निर्णय पुस्तिका)</span>
+                </h3>
+                <p className="text-xs text-gray-500">विशेष समितिहरूका निर्णयहरू र कार्यान्वयन स्थिति</p>
+              </div>
+              <button
+                onClick={() => setIsAddMinuteModalOpen(true)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Plus size={14} />
+                <span>New Minute</span>
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {committeeMinutes.map((min) => (
+                <div key={min.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-2 text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 pb-2">
+                    <div>
+                      <span className="font-extrabold text-sm text-slate-900">{min.title}</span>
+                      <p className="text-[11px] text-slate-600 font-bold mt-0.5">{min.committee}</p>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded self-start sm:self-auto">
+                      📅 मिति: {min.dateBs}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-gray-700 space-y-1">
+                    <p><b>उपस्थिति:</b> {min.attendees}</p>
+                    <p><b>प्रमुख निर्णयहरू:</b> {min.decisions}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -3542,6 +4767,688 @@ export default function TeacherPortalPage() {
                   className="rounded-xl bg-rose-600 hover:bg-rose-700 px-5 py-2 font-bold text-white disabled:opacity-60"
                 >
                   {reportProblemMutation.isPending ? 'Submitting...' : 'Submit Report to Admin (प्रतिवेदन बुझाउनुहोस्)'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: LOG DISCIPLINE INCIDENT ───────────────────────────────── */}
+      {isAddIncidentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-rose-950 flex items-center gap-2">
+                <ShieldAlert size={18} className="text-rose-600" />
+                <span>Log Student Incident / Misconduct (अनुशासन उल्लंघन दर्ता)</span>
+              </h3>
+              <button onClick={() => setIsAddIncidentModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const matchedClass = classesData?.find((c: any) => String(c.id) === String(incidentClassId));
+                const categoryLabelsMap: Record<string, string> = {
+                  UNIFORM: 'पोशाक उल्लंघन (Improper Uniform)',
+                  TRUANCY: 'कक्षा बङ्क / भगौडा (Truancy)',
+                  FIGHTING: 'झैझगडा / अभद्र व्यवहार (Misconduct)',
+                  HOMEWORK: 'गृहकार्य नगरेको (No Homework)',
+                  OTHER: 'अन्य आचरण समस्या (Other)',
+                };
+                const newInc = {
+                  id: Date.now(),
+                  studentName: incidentStudent,
+                  classId: incidentClassId,
+                  className: matchedClass ? `${matchedClass.name} ${matchedClass.section || ''}` : 'Class',
+                  dateBs: todayBS(),
+                  category: incidentCategory,
+                  categoryLabel: categoryLabelsMap[incidentCategory] || incidentCategory,
+                  severity: incidentSeverity,
+                  action: incidentAction,
+                  parentCalled: incidentParentCalled,
+                  notes: incidentNotes,
+                  status: 'PENDING_REVIEW',
+                };
+                setDisciplineIncidents((prev) => [newInc, ...prev]);
+                toast.success('Discipline incident logged successfully!');
+                setIsAddIncidentModalOpen(false);
+                setIncidentStudent('');
+                setIncidentClassId('');
+                setIncidentNotes('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">विद्यार्थीको पुरा नाम (Student Full Name) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Patel"
+                  value={incidentStudent}
+                  onChange={(e) => setIncidentStudent(e.target.value)}
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">कक्षा (Class) *</label>
+                  <select
+                    required
+                    value={incidentClassId}
+                    onChange={(e) => setIncidentClassId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">Select Class</option>
+                    {classesData?.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.section ? `(${c.section})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">विधा / प्रकृति (Category) *</label>
+                  <select
+                    value={incidentCategory}
+                    onChange={(e) => setIncidentCategory(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="UNIFORM">पोशाक (Improper Uniform)</option>
+                    <option value="TRUANCY">कक्षा बङ्क (Truancy / Bunking)</option>
+                    <option value="FIGHTING">झैझगडा (Fighting / Abuse)</option>
+                    <option value="HOMEWORK">गृहकार्य (Homework Default)</option>
+                    <option value="OTHER">अन्य (Other Misconduct)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">गम्भीरता स्तर (Severity) *</label>
+                  <select
+                    value={incidentSeverity}
+                    onChange={(e) => setIncidentSeverity(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="LOW">सामान्य (Low / First Offense)</option>
+                    <option value="MEDIUM">मध्यम (Medium / Repeated)</option>
+                    <option value="HIGH">गम्भीर (High / Severe)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">लिएको निर्णय / परामर्श (Action) *</label>
+                  <select
+                    value={incidentAction}
+                    onChange={(e) => setIncidentAction(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="Verbal Warning (सचेत गराइएको)">Verbal Warning (सचेत गराइएको)</option>
+                    <option value="Written Apology (लिखित प्रतिबद्धता)">Written Apology (लिखित प्रतिबद्धता)</option>
+                    <option value="Parent Called (अभिभावक बोलाई)">Parent Called (अभिभावक बोलाई)</option>
+                    <option value="Counseling Session (विशेष परामर्श)">Counseling Session (विशेष परामर्श)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">विवरण तथा कैफियत (Incident Details & Notes)</label>
+                <textarea
+                  rows={3}
+                  placeholder="घटनाको संक्षिप्त विवरण, विद्यार्थीको प्रतिक्रिया..."
+                  value={incidentNotes}
+                  onChange={(e) => setIncidentNotes(e.target.value)}
+                  className="erp-input leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="incParent"
+                  checked={incidentParentCalled}
+                  onChange={(e) => setIncidentParentCalled(e.target.checked)}
+                  className="rounded text-rose-600 h-4 w-4 cursor-pointer"
+                />
+                <label htmlFor="incParent" className="font-bold text-rose-900 cursor-pointer">
+                  अभिभावकलाई फोन सम्पर्क गरियो (Parent contacted via Phone)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddIncidentModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold text-gray-600"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                >
+                  दर्ता गर्नुहोस् (Save Incident)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ADD ECA EVENT / WINNERS ─────────────────────────────────── */}
+      {isAddEcaEventModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-amber-950 flex items-center gap-2">
+                <Trophy size={18} className="text-amber-600" />
+                <span>Plan ECA Event & Record Winners (अतिरिक्त क्रियाकलाप तथा विजेता)</span>
+              </h3>
+              <button onClick={() => setIsAddEcaEventModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const newEvt = {
+                  id: Date.now(),
+                  name: ecaEventName,
+                  topic: ecaEventTopic,
+                  dateBs: ecaEventDateBs,
+                  category: ecaCategory,
+                  firstWinner: ecaWinner1,
+                  secondWinner: ecaWinner2,
+                  thirdWinner: ecaWinner3,
+                  status: 'COMPLETED',
+                };
+                setEcaEvents((prev) => [newEvt, ...prev]);
+                toast.success('ECA event and results recorded!');
+                setIsAddEcaEventModalOpen(false);
+                setEcaEventName('');
+                setEcaEventTopic('');
+                setEcaWinner1('');
+                setEcaWinner2('');
+                setEcaWinner3('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">कार्यक्रमको नाम (Event Name) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. शुक्रबारे हाजिरीजवाफ / वक्तृत्वकला / चित्रकला"
+                  value={ecaEventName}
+                  onChange={(e) => setEcaEventName(e.target.value)}
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">मिति (Date BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={ecaEventDateBs}
+                    onChange={(e) => setEcaEventDateBs(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">विधा (Category) *</label>
+                  <select
+                    value={ecaCategory}
+                    onChange={(e) => setEcaCategory(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="SPORTS">खेलकुद (Sports & Athletics)</option>
+                    <option value="LITERARY">साहित्यिक (Speech / Essay / Poetry)</option>
+                    <option value="QUIZ">हाजिरीजवाफ (General Quiz)</option>
+                    <option value="CULTURAL">सांस्कृतिक (Dance / Song / Drama)</option>
+                    <option value="ART">चित्रकला (Drawing / Art)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">कार्यक्रमको शीर्षक / विषय (Topic / Theme)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. वातावरणीय संरक्षण र हाम्रो दायित्व"
+                  value={ecaEventTopic}
+                  onChange={(e) => setEcaEventTopic(e.target.value)}
+                  className="erp-input font-medium"
+                />
+              </div>
+
+              <div className="space-y-2 border-t border-gray-100 pt-2">
+                <p className="font-bold text-gray-800">विजेताहरूको विवरण (Winners Podium):</p>
+                <div>
+                  <label className="block text-[11px] font-bold text-amber-900 mb-0.5">🥇 प्रथम स्थान (1st Place):</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. अञ्जु साह (Grade 10, Green House)"
+                    value={ecaWinner1}
+                    onChange={(e) => setEcaWinner1(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-0.5">🥈 द्वितीय स्थान (2nd Place):</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. सन्तोष यादव (Grade 9, Red House)"
+                    value={ecaWinner2}
+                    onChange={(e) => setEcaWinner2(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-amber-800 mb-0.5">🥉 तृतीय स्थान (3rd Place):</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. कविता कुँवर (Grade 8, Yellow House)"
+                    value={ecaWinner3}
+                    onChange={(e) => setEcaWinner3(e.target.value)}
+                    className="erp-input"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddEcaEventModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold text-gray-600"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-[#1e3a5f] font-black rounded-xl shadow-xs cursor-pointer"
+                >
+                  सुरक्षित गर्नुहोस् (Save Event)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ASSIGN TEACHER SUBSTITUTION / PROXY ─────────────────────── */}
+      {isAddSubModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-indigo-950 flex items-center gap-2">
+                <Layers size={18} className="text-indigo-600" />
+                <span>Assign Teacher Substitution (सट्टा शिक्षक कार्यविभाजन)</span>
+              </h3>
+              <button onClick={() => setIsAddSubModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const matchedClass = classesData?.find((c: any) => String(c.id) === String(subClassId));
+                const newSub = {
+                  id: Date.now(),
+                  dateBs: todayBS(),
+                  absentTeacher: subAbsentTeacher,
+                  classId: subClassId,
+                  className: matchedClass ? `${matchedClass.name} ${matchedClass.section || ''}` : 'Class',
+                  periodNo: subPeriodNo,
+                  assignedTeacher: subAssignedTeacher,
+                  subjectToTeach: subSubject,
+                  status: 'CONFIRMED',
+                };
+                setSubstitutions((prev) => [newSub, ...prev]);
+                toast.success('Teacher substitution assigned successfully!');
+                setIsAddSubModalOpen(false);
+                setSubAbsentTeacher('');
+                setSubAssignedTeacher('');
+                setSubSubject('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">कक्षा (Class) *</label>
+                  <select
+                    required
+                    value={subClassId}
+                    onChange={(e) => setSubClassId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">Select Class</option>
+                    {classesData?.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.section ? `(${c.section})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">घण्टी (Period No.) *</label>
+                  <select
+                    value={subPeriodNo}
+                    onChange={(e) => setSubPeriodNo(parseInt(e.target.value) || 1)}
+                    className="erp-input font-bold"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                      <option key={p} value={p}>
+                        घण्टी {p} (Period {p})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-rose-700 mb-1">अनुपस्थित शिक्षकको नाम (Absent Teacher) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. रामप्रसाद यादव"
+                  value={subAbsentTeacher}
+                  onChange={(e) => setSubAbsentTeacher(e.target.value)}
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-emerald-800 mb-1">खटाइने सट्टा शिक्षक (Substitute Teacher) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. दिनेश पटेल"
+                  value={subAssignedTeacher}
+                  onChange={(e) => setSubAssignedTeacher(e.target.value)}
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">सिकाउने विषय तथा निर्देशन (Subject & Task) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. गणित अभ्यास ५.२ कक्षाकार्य तथा रिभिजन"
+                  value={subSubject}
+                  onChange={(e) => setSubSubject(e.target.value)}
+                  className="erp-input"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold text-gray-600"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                >
+                  तोक्नुहोस् (Assign Proxy)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: BOOK LAB PRACTICAL SESSION ──────────────────────────────── */}
+      {isBookLabModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-cyan-950 flex items-center gap-2">
+                <Laptop size={18} className="text-cyan-700" />
+                <span>Book Practical Lab Session (प्रयोगात्मक कक्षा दर्ता)</span>
+              </h3>
+              <button onClick={() => setIsBookLabModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const matchedClass = classesData?.find((c: any) => String(c.id) === String(bookClassId));
+                const newBooking = {
+                  id: Date.now(),
+                  dateBs: todayBS(),
+                  classId: bookClassId,
+                  className: matchedClass ? `${matchedClass.name} ${matchedClass.section || ''}` : 'Class',
+                  labType: bookLabType,
+                  periodNo: bookPeriodNo,
+                  topic: bookTopic,
+                  teacher: bookTeacher,
+                };
+                setLabPracticalBookings((prev) => [newBooking, ...prev]);
+                toast.success('Practical Lab session booked successfully!');
+                setIsBookLabModalOpen(false);
+                setBookTopic('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">प्रयोगशाला प्रकार (Lab Type) *</label>
+                  <select
+                    value={bookLabType}
+                    onChange={(e) => setBookLabType(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="SCIENCE">विज्ञान प्रयोगशाला (Science Lab)</option>
+                    <option value="COMPUTER">कम्प्युटर ल्याब (Computer Lab)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">कक्षा (Target Class) *</label>
+                  <select
+                    required
+                    value={bookClassId}
+                    onChange={(e) => setBookClassId(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="">Select Class</option>
+                    {classesData?.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.section ? `(${c.section})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">घण्टी (Period No.) *</label>
+                  <select
+                    value={bookPeriodNo}
+                    onChange={(e) => setBookPeriodNo(parseInt(e.target.value) || 1)}
+                    className="erp-input font-bold"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+                      <option key={p} value={p}>
+                        घण्टी {p} (Period {p})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">प्रयोग गराउने शिक्षक (Teacher)</label>
+                  <input
+                    type="text"
+                    value={bookTeacher}
+                    onChange={(e) => setBookTeacher(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">प्रयोगात्मक शीर्षक तथा सामग्री (Practical Experiment / Topic) *</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="e.g. अम्ल, क्षार र लवणको लिटमस परीक्षण तथा सुचकको प्रयोग..."
+                  value={bookTopic}
+                  onChange={(e) => setBookTopic(e.target.value)}
+                  className="erp-input leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsBookLabModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold text-gray-600"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-700 hover:bg-cyan-800 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                >
+                  दर्ता गर्नुहोस् (Book Session)
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: RECORD COMMITTEE MEETING MINUTE ─────────────────────────── */}
+      {isAddMinuteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="font-extrabold text-base text-slate-950 flex items-center gap-2">
+                <ClipboardList size={18} className="text-slate-700" />
+                <span>Record Committee Minute (समिति बैठक निर्णय दर्ता)</span>
+              </h3>
+              <button onClick={() => setIsAddMinuteModalOpen(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const newMin = {
+                  id: Date.now(),
+                  dateBs: minuteDateBs,
+                  committee: minuteCommittee,
+                  title: minuteTitle,
+                  attendees: minuteAttendees,
+                  decisions: minuteDecisions,
+                };
+                setCommitteeMinutes((prev) => [newMin, ...prev]);
+                toast.success('Committee meeting minute recorded successfully!');
+                setIsAddMinuteModalOpen(false);
+                setMinuteTitle('');
+                setMinuteAttendees('');
+                setMinuteDecisions('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">समिति (Committee) *</label>
+                  <select
+                    value={minuteCommittee}
+                    onChange={(e) => setMinuteCommittee(e.target.value)}
+                    className="erp-input font-bold"
+                  >
+                    <option value="दिवा खाजा तथा क्यान्टिन समिति">दिवा खाजा तथा क्यान्टिन समिति</option>
+                    <option value="भौतिक पूर्वाधार तथा मर्मत समिति">भौतिक पूर्वाधार तथा मर्मत समिति</option>
+                    <option value="अभिभावक-शिक्षक सम्बन्ध समिति (PTA)">अभिभावक-शिक्षक सम्बन्ध समिति (PTA)</option>
+                    <option value="वार्षिकोत्सव तथा विशेष कार्यक्रम समिति">वार्षिकोत्सव तथा कार्यक्रम समिति</option>
+                    <option value="अन्य विशेष समिति">अन्य विशेष समिति</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">बैठक मिति (Date BS) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={minuteDateBs}
+                    onChange={(e) => setMinuteDateBs(e.target.value)}
+                    className="erp-input font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">बैठकको मुख्य विषय / एजेन्डा (Agenda / Title) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. दिवा खाजा गुणस्तर अनुगमन तथा सरसफाइ"
+                  value={minuteTitle}
+                  onChange={(e) => setMinuteTitle(e.target.value)}
+                  className="erp-input font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">उपस्थित सदस्यहरू (Attendees) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. प्रधानाध्यापक, समिति संयोजक, अभिभावक प्रतिनिधि, शिक्षक"
+                  value={minuteAttendees}
+                  onChange={(e) => setMinuteAttendees(e.target.value)}
+                  className="erp-input"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 mb-1">प्रमुख निर्णयहरू (Key Decisions Made) *</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="बैठकमा भएका सर्वसम्मत निर्णयहरू तथा कार्यदिशा..."
+                  value={minuteDecisions}
+                  onChange={(e) => setMinuteDecisions(e.target.value)}
+                  className="erp-input leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddMinuteModalOpen(false)}
+                  className="px-4 py-2 border rounded-xl font-bold text-gray-600"
+                >
+                  रद्द (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                >
+                  निर्णय सुरक्षित गर्नुहोस् (Save Minute)
                 </button>
               </div>
             </form>
