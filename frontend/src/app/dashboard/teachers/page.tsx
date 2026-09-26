@@ -988,6 +988,16 @@ export default function TeachersPage() {
                                       {isNonTeaching ? <Briefcase size={9} /> : <GraduationCap size={9} />}
                                       <span>{isNonTeaching ? 'कर्मचारी' : 'शिक्षक'}</span>
                                     </span>
+                                    {staff.gender && (
+                                      <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[9px] font-bold bg-slate-100 text-slate-700">
+                                        {staff.gender === 'MALE' ? 'पुरुष' : staff.gender === 'FEMALE' ? 'महिला' : staff.gender}
+                                      </span>
+                                    )}
+                                    {staff.bloodGroup && (
+                                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.2 text-[9px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200">
+                                        🩸 {staff.bloodGroup}
+                                      </span>
+                                    )}
                                     {!staff.isActive && (
                                       <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
                                         विगत / सरुवा (Past)
@@ -997,9 +1007,10 @@ export default function TeachersPage() {
                                   {staff.fullNameNepali && (
                                     <p className="text-[11px] text-gray-500 font-nepali">{staff.fullNameNepali}</p>
                                   )}
-                                  {staff.panNo && (
-                                    <p className="text-[9.5px] font-mono text-gray-400">PAN: {staff.panNo}</p>
-                                  )}
+                                  <div className="flex items-center gap-2 flex-wrap text-[9.5px] font-mono text-gray-400">
+                                    {staff.panNo && <span>PAN: {staff.panNo}</span>}
+                                    {staff.dateOfBirthBs && <span>🎂 जन्म: {staff.dateOfBirthBs}</span>}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -1032,6 +1043,16 @@ export default function TeachersPage() {
                                   <BookOpen size={10} />
                                   <span>{staff.subjects.map((s: any) => s.subject?.name || s.subjectId).join(', ')}</span>
                                 </div>
+                              )}
+                              {staff.dateOfJoiningBs && (
+                                <p className="text-[9.5px] text-gray-500 font-mono mt-0.5">
+                                  📅 हाजिर: {staff.dateOfJoiningBs}
+                                </p>
+                              )}
+                              {staff.dateOfRetirementBs && !staff.isActive && (
+                                <p className="text-[9.5px] text-amber-700 font-mono mt-0.5">
+                                  🛑 अवकाश/सरुवा: {staff.dateOfRetirementBs}
+                                </p>
                               )}
                             </td>
 
@@ -2270,6 +2291,46 @@ export default function TeachersPage() {
                 </div>
               </div>
 
+              {/* Personal Details: Gender (Compulsory *), Blood Group, Date of Birth (BS) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">
+                    Gender (लिङ्ग) <span className="text-rose-600 font-extrabold">*</span>
+                  </label>
+                  <select required name="gender" className="erp-input font-bold text-[#1e3a5f] bg-white">
+                    <option value="">-- चयन गर्नुहोस् (Select) * --</option>
+                    <option value="MALE">पुरुष (Male)</option>
+                    <option value="FEMALE">महिला (Female)</option>
+                    <option value="OTHER">अन्य (Other)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Blood Group (रक्त समूह)</label>
+                  <select name="bloodGroup" className="erp-input font-semibold bg-white">
+                    <option value="">-- छैन / Select --</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Date of Birth (जन्म मिति BS)</label>
+                  <input
+                    name="dateOfBirthBs"
+                    type="text"
+                    placeholder="उदा: २०४०-०५-१५"
+                    className="erp-input font-mono bg-white"
+                  />
+                </div>
+              </div>
+
               {/* Post / Designation Selection */}
               <div>
                 <label className="block font-bold text-gray-700 mb-1">
@@ -2333,8 +2394,20 @@ export default function TeachersPage() {
                   <input name="email" type="email" placeholder="staff@school.edu.np" className="erp-input" />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Date of Joining (BS)</label>
-                  <input name="dateOfJoiningBs" type="text" placeholder="2075-04-01" className="erp-input font-mono" />
+                  <label className="block font-bold text-gray-700 mb-1">Citizenship No (नागरिकता नं.)</label>
+                  <input name="citizenshipNo" type="text" placeholder="नागरिकता नं." className="erp-input font-mono" />
+                </div>
+              </div>
+
+              {/* Service Dates: Joining & Retirement / Exit */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-gray-200">
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Date of Joining (नियुक्ति/हाजिर मिति BS)</label>
+                  <input name="dateOfJoiningBs" type="text" placeholder="उदा: २०७५-०४-०१" className="erp-input font-mono bg-white" />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Date of Retirement / Exit (अवकाश/सरुवा मिति BS)</label>
+                  <input name="dateOfRetirementBs" type="text" placeholder="उदा: २०८५-०४-०१" className="erp-input font-mono bg-white" />
                 </div>
               </div>
 
@@ -2544,6 +2617,56 @@ export default function TeachersPage() {
                 </div>
               </div>
 
+              {/* Personal Details: Gender (Compulsory *), Blood Group, Date of Birth (BS) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">
+                    Gender (लिङ्ग) <span className="text-rose-600 font-extrabold">*</span>
+                  </label>
+                  <select
+                    required
+                    name="gender"
+                    defaultValue={editingTeacher.gender || ''}
+                    className="erp-input font-bold text-[#1e3a5f] bg-white"
+                  >
+                    <option value="">-- चयन गर्नुहोस् (Select) * --</option>
+                    <option value="MALE">पुरुष (Male)</option>
+                    <option value="FEMALE">महिला (Female)</option>
+                    <option value="OTHER">अन्य (Other)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Blood Group (रक्त समूह)</label>
+                  <select
+                    name="bloodGroup"
+                    defaultValue={editingTeacher.bloodGroup || ''}
+                    className="erp-input font-semibold bg-white"
+                  >
+                    <option value="">-- छैन / Select --</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Date of Birth (जन्म मिति BS)</label>
+                  <input
+                    name="dateOfBirthBs"
+                    type="text"
+                    defaultValue={editingTeacher.dateOfBirthBs || ''}
+                    placeholder="उदा: २०४०-०५-१५"
+                    className="erp-input font-mono bg-white"
+                  />
+                </div>
+              </div>
+
               {/* Post & Incharge Selection */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -2646,11 +2769,70 @@ export default function TeachersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Date of Joining (BS)</label>
+                  <label className="block font-bold text-gray-700 mb-1">Citizenship No (नागरिकता नं.)</label>
+                  <input
+                    name="citizenshipNo"
+                    type="text"
+                    defaultValue={editingTeacher.citizenshipNo || ''}
+                    placeholder="नागरिकता नं."
+                    className="erp-input font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Service Dates: Joining & Retirement / Exit */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-gray-200">
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Date of Joining (नियुक्ति/हाजिर मिति BS)</label>
                   <input
                     name="dateOfJoiningBs"
                     type="text"
                     defaultValue={editingTeacher.dateOfJoiningBs || ''}
+                    placeholder="उदा: २०७५-०४-०१"
+                    className="erp-input font-mono bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-800 mb-1">Date of Retirement / Exit (अवकाश/सरुवा मिति BS)</label>
+                  <input
+                    name="dateOfRetirementBs"
+                    type="text"
+                    defaultValue={editingTeacher.dateOfRetirementBs || ''}
+                    placeholder="उदा: २०८५-०४-०१"
+                    className="erp-input font-mono bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Financial IDs */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">PAN Number</label>
+                  <input
+                    name="panNo"
+                    type="text"
+                    defaultValue={editingTeacher.panNo || ''}
+                    placeholder="PAN 102938475"
+                    className="erp-input font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Sanchaya Kosh (SSK) No</label>
+                  <input
+                    name="sanchayaKoshNo"
+                    type="text"
+                    defaultValue={editingTeacher.sanchayaKoshNo || ''}
+                    placeholder="SSK Number"
+                    className="erp-input font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">Nagarik Lagani Kosh (CIT)</label>
+                  <input
+                    name="nagarikLaganiKoshNo"
+                    type="text"
+                    defaultValue={editingTeacher.nagarikLaganiKoshNo || ''}
+                    placeholder="CIT Number"
                     className="erp-input font-mono"
                   />
                 </div>

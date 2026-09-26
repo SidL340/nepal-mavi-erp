@@ -25,6 +25,7 @@ app.use('/uploads', express.static(path.resolve(uploadDir)));
 // ── ROUTES ─────────────────────────────────────────────────────────────────
 app.use('/api/auth',       require('./routes/auth'));
 app.use('/api/school',     require('./routes/school'));
+app.use('/api/bank-accounts', require('./routes/school'));
 app.use('/api/students',   require('./routes/students'));
 app.use('/api/teachers',   require('./routes/teachers'));
 app.use('/api/classes',    require('./routes/classes'));

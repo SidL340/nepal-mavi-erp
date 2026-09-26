@@ -94,7 +94,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), async (req, res) => {
   try {
     const {
-      fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
+      fullName, fullNameNepali, gender, bloodGroup, dateOfBirthBs, address, phone, email,
       panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
       type, taha, shreni, post, designation, photoUrl,
       isTeachingStaff,
@@ -126,7 +126,7 @@ router.post('/', authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'), 
       });
       const teacher = await tx.teacher.create({
         data: {
-          userId: user.id, fullName, fullNameNepali, gender, dateOfBirthBs, address, phone, email,
+          userId: user.id, fullName, fullNameNepali, gender, bloodGroup: bloodGroup || null, dateOfBirthBs, address, phone, email,
           panNo, sanchayaKoshNo, nagarikLaganiKoshNo, citizenshipNo,
           type: type || 'RASTRIYA',
           isTeachingStaff: isTeachingStaff !== undefined ? Boolean(isTeachingStaff) : (shreni !== 'NON_TEACHING'),

@@ -95,6 +95,7 @@ model Teacher {
   fullNameNepali      String?
   photoUrl            String?
   gender              String?
+  bloodGroup          String?
   dateOfBirthBs       String?
   dateOfBirthAd       DateTime?
   address             String?

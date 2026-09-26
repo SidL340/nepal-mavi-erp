@@ -211,10 +211,17 @@ export default function PayrollPage() {
   const { data: bankAccountsData } = useQuery({
     queryKey: ['bank-accounts-all'],
     queryFn: async () => {
-      const res = await api.get('/bank-accounts');
+      const res = await api.get('/school/bank-accounts');
       return res.data?.data || [];
     },
   });
+
+  // Auto-select first bank account when available
+  useEffect(() => {
+    if (bankAccountsData && bankAccountsData.length > 0 && !disburseForm.bankAccountId) {
+      setDisburseForm((prev) => ({ ...prev, bankAccountId: bankAccountsData[0].id.toString() }));
+    }
+  }, [bankAccountsData, disburseForm.bankAccountId]);
 
   // ── 5. Fetch School Profile for Header & Prints ────────────────────────
   const { data: schoolProfile } = useQuery({
