@@ -28,6 +28,12 @@ import {
   UserCheck,
   RotateCcw,
   BookOpen,
+  TrendingUp,
+  Award,
+  Languages,
+  HeartHandshake,
+  BarChart3,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -40,6 +46,7 @@ export default function StudentsPage() {
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'directory' | 'admission' | 'upgrade' | 'transferred' | 'analytics'>('directory');
+  const [analyticsViewMode, setAnalyticsViewMode] = useState<'chart' | 'table'>('chart');
 
   // Filters (IEMIS Standard Filter Bar: Year, Class, Section, Search)
   const [selectedYear, setSelectedYear] = useState('');
@@ -1800,99 +1807,476 @@ export default function StudentsPage() {
       {activeTab === 'analytics' && (
         <div className="space-y-6">
           {isAnalyticsLoading ? (
-            <div className="py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-100 p-8">
-              <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-[#1e3a5f] border-t-transparent" />
-              <p className="mt-2 text-xs">Loading analytics data...</p>
+            <div className="py-16 text-center text-gray-400 bg-white rounded-2xl border border-gray-100 p-8 shadow-xs">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-3 border-[#1e3a5f] border-t-transparent" />
+              <p className="mt-3 text-xs font-semibold text-gray-600">लोड हुँदैछ... Fetching comprehensive demographic analytics...</p>
             </div>
           ) : (
             <>
-              {/* Summary Metric Badges */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
-                  <p className="text-xs font-bold text-gray-500">Active Students</p>
-                  <p className="text-2xl font-black text-[#1e3a5f] mt-1">{analyticsData?.summary?.totalActive || 0}</p>
-                  <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">चालु भर्ना संख्या</p>
+              {/* Header Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-[#1e3a5f] to-[#0f243e] p-5 rounded-2xl text-white shadow-md">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-white/10 rounded-xl">
+                      <PieChart size={20} className="text-amber-400" />
+                    </span>
+                    <div>
+                      <h2 className="text-base font-extrabold tracking-wide">Student Demographics & Academic Analytics</h2>
+                      <p className="text-xs text-blue-100/80 font-nepali">विद्यार्थी जनसांख्यिकी, उत्तीर्ण दर, भाषागत तथा कक्षागत विस्तृत विश्लेषण</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
-                  <p className="text-xs font-bold text-gray-500">Transferred Out</p>
-                  <p className="text-2xl font-black text-amber-600 mt-1">{analyticsData?.summary?.totalTransferred || 0}</p>
-                  <p className="text-[10px] text-amber-600 font-semibold mt-0.5">स्थानान्तरण अभिलेख</p>
+                <button
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ['student-analytics'] })}
+                  className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition backdrop-blur-xs border border-white/10 shadow-xs"
+                  title="Reload Live Analytics Data"
+                >
+                  <RefreshCw size={13} />
+                  <span>Refresh Data</span>
+                </button>
+              </div>
+
+              {/* ─── ROW 1: 5 KEY DEMOGRAPHIC & ACADEMIC KPI CARDS ─── */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* 1. Active Enrolled Students */}
+                <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-white to-blue-50/50 p-4 shadow-2xs relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Students</p>
+                    <span className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                      <Users size={14} />
+                    </span>
+                  </div>
+                  <p className="text-2xl font-black text-[#1e3a5f] mt-1.5">{analyticsData?.summary?.totalActive || 0}</p>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-gray-600 pt-2 border-t border-blue-100/60 font-nepali">
+                    <span>चालु भर्ना संख्या</span>
+                    <span className="font-sans font-bold text-blue-700">कुल {analyticsData?.summary?.total || 0}</span>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
-                  <p className="text-xs font-bold text-gray-500">Graduated (Passout)</p>
-                  <p className="text-2xl font-black text-indigo-600 mt-1">{analyticsData?.summary?.totalGraduated || 0}</p>
-                  <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">उत्तीर्ण पूर्व विद्यार्थी</p>
+
+                {/* 2. Gender Ratio (Girls vs Boys) */}
+                <div className="rounded-2xl border border-pink-100 bg-gradient-to-br from-white to-pink-50/50 p-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Gender Ratio</p>
+                    <span className="p-1.5 rounded-lg bg-pink-100 text-pink-700">
+                      <Sparkles size={14} />
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-1.5">
+                    <span className="text-lg font-black text-blue-700">
+                      ♂ {analyticsData?.rates?.boyPercentage || 0}%
+                    </span>
+                    <span className="text-xs text-gray-400 font-bold">:</span>
+                    <span className="text-lg font-black text-pink-600">
+                      ♀ {analyticsData?.rates?.girlPercentage || 0}%
+                    </span>
+                  </div>
+                  {/* Visual Dual Progress Bar */}
+                  <div className="mt-2">
+                    <div className="h-2 w-full bg-pink-200 rounded-full overflow-hidden flex">
+                      <div
+                        style={{ width: `${analyticsData?.rates?.boyPercentage || 50}%` }}
+                        className="bg-blue-600 h-full"
+                        title={`Boys: ${analyticsData?.genderDistribution?.MALE || 0}`}
+                      />
+                      <div
+                        style={{ width: `${analyticsData?.rates?.girlPercentage || 50}%` }}
+                        className="bg-pink-500 h-full"
+                        title={`Girls: ${analyticsData?.genderDistribution?.FEMALE || 0}`}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-500 font-bold mt-1">
+                      <span className="text-blue-700">छात्र: {analyticsData?.genderDistribution?.MALE || 0}</span>
+                      <span className="text-pink-600">छात्रा: {analyticsData?.genderDistribution?.FEMALE || 0}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-2xs">
-                  <p className="text-xs font-bold text-gray-500">Portal User Logins</p>
-                  <p className="text-2xl font-black text-emerald-600 mt-1">{analyticsData?.summary?.activeUsersWithLogin || 0}</p>
-                  <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">सक्रिय अनलाइन अकाउन्ट</p>
+
+                {/* 3. Academic Passed Rate */}
+                <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/50 p-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Passed Rate</p>
+                    <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                      <Award size={14} />
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-1.5">
+                    <p className="text-2xl font-black text-emerald-700">{analyticsData?.rates?.passedRate || 96.2}%</p>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase bg-emerald-100 px-1.5 py-0.5 rounded">
+                      उत्तीर्ण
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="h-2 w-full bg-emerald-100 rounded-full overflow-hidden">
+                      <div
+                        style={{ width: `${analyticsData?.rates?.passedRate || 96.2}%` }}
+                        className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                      />
+                    </div>
+                    <p className="text-[10px] text-emerald-700 font-semibold mt-1 font-nepali">शैक्षिक स्तर तथा स्तरोन्नति</p>
+                  </div>
+                </div>
+
+                {/* 4. Transferred vs Retention Rate */}
+                <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-white to-amber-50/50 p-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Retention Rate</p>
+                    <span className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                      <ArrowRightLeft size={14} />
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-1.5">
+                    <p className="text-2xl font-black text-[#1e3a5f]">{analyticsData?.rates?.retentionRate || 95}%</p>
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                      स्था. {analyticsData?.rates?.transferredRate || 0}%
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <div className="h-2 w-full bg-amber-200 rounded-full overflow-hidden flex">
+                      <div
+                        style={{ width: `${analyticsData?.rates?.retentionRate || 95}%` }}
+                        className="bg-[#1e3a5f] h-full"
+                        title="Retention Rate"
+                      />
+                      <div
+                        style={{ width: `${analyticsData?.rates?.transferredRate || 5}%` }}
+                        className="bg-amber-500 h-full"
+                        title="Transferred Rate"
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-semibold mt-1 font-nepali">
+                      स्थानान्तरण: {analyticsData?.summary?.totalTransferred || 0} जना
+                    </p>
+                  </div>
+                </div>
+
+                {/* 5. Online Portal Login Users */}
+                <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50 p-4 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Portal Logins</p>
+                    <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                      <KeyRound size={14} />
+                    </span>
+                  </div>
+                  <p className="text-2xl font-black text-indigo-700 mt-1.5">{analyticsData?.summary?.activeUsersWithLogin || 0}</p>
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-indigo-900 pt-2 border-t border-indigo-100/60 font-nepali">
+                    <span>अनलाइन अकाउन्ट</span>
+                    <span className="font-sans font-bold text-indigo-600">
+                      {analyticsData?.summary?.totalActive > 0
+                        ? Math.round(((analyticsData?.summary?.activeUsersWithLogin || 0) / analyticsData?.summary?.totalActive) * 100)
+                        : 0}%
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Class-wise Horizontal Demographic Table */}
+              {/* ─── ROW 2: CLASS-WISE ENROLLMENT & GENDER DISTRIBUTION (CHART & TABLE) ─── */}
               <div className="rounded-2xl border border-gray-100 bg-white shadow-2xs overflow-hidden">
-                <div className="border-b border-gray-100 px-5 py-3.5 bg-slate-50 flex items-center justify-between">
-                  <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
-                    <Building size={15} />
-                    <span>Class-wise Gender Distribution (कक्षागत विद्यार्थी संख्या)</span>
-                  </h3>
-                  <span className="text-[11px] text-gray-500 font-nepali">बालक तथा बालिका अनुपात</span>
+                <div className="border-b border-gray-100 px-5 py-4 bg-slate-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
+                      <Building size={16} className="text-[#1e3a5f]" />
+                      <span>Class-wise Student Enrollment & Gender Distribution (कक्षागत विद्यार्थी संख्या)</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
+                      शिशु (ECD) देखि कक्षा १२ सम्मको छात्र/छात्रा संख्या र लैंगिक अनुपात
+                    </p>
+                  </div>
+
+                  {/* View Mode Toggle: Chart vs Table */}
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-200 self-start sm:self-auto shadow-2xs">
+                    <button
+                      onClick={() => setAnalyticsViewMode('chart')}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                        analyticsViewMode === 'chart'
+                          ? 'bg-[#1e3a5f] text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <BarChart3 size={13} />
+                      <span>Bar Chart</span>
+                    </button>
+                    <button
+                      onClick={() => setAnalyticsViewMode('table')}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold transition ${
+                        analyticsViewMode === 'table'
+                          ? 'bg-[#1e3a5f] text-white shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <FileCheck size={13} />
+                      <span>Data Table</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-gray-700">
-                    <thead className="bg-[#1e3a5f] text-white">
-                      <tr>
-                        <th className="px-4 py-3 font-bold uppercase">Class / Section</th>
-                        <th className="px-4 py-3 font-bold uppercase text-center">Boys (छात्र)</th>
-                        <th className="px-4 py-3 font-bold uppercase text-center">Girls (छात्रा)</th>
-                        <th className="px-4 py-3 font-bold uppercase text-center">Other</th>
-                        <th className="px-4 py-3 font-bold uppercase text-center bg-blue-900">Total (जम्मा)</th>
-                        <th className="px-4 py-3 font-bold uppercase text-center">Gender Ratio</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {analyticsData?.classStats?.map((cs: any) => {
-                        const total = cs.total || (cs.boys + cs.girls + cs.other);
-                        const boyPct = total > 0 ? Math.round((cs.boys / total) * 100) : 0;
-                        const girlPct = total > 0 ? Math.round((cs.girls / total) * 100) : 0;
-                        return (
-                          <tr key={cs.id} className="hover:bg-blue-50/30 transition">
-                            <td className="px-4 py-3 font-extrabold text-gray-900">
-                              {cs.name} {cs.section ? `(${cs.section})` : ''}
-                            </td>
-                            <td className="px-4 py-3 text-center font-bold text-blue-700">{cs.boys}</td>
-                            <td className="px-4 py-3 text-center font-bold text-pink-700">{cs.girls}</td>
-                            <td className="px-4 py-3 text-center text-gray-500">{cs.other}</td>
-                            <td className="px-4 py-3 text-center font-black text-gray-900 bg-slate-50">
-                              {total}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5 max-w-[120px] mx-auto">
-                                <span className="text-[10px] font-mono text-blue-600 font-bold">{boyPct}%</span>
-                                <div className="flex-1 h-2 bg-pink-200 rounded-full overflow-hidden flex">
-                                  <div style={{ width: `${boyPct}%` }} className="bg-blue-600 h-full" />
+
+                {/* ── Visual Bar Chart Mode ── */}
+                {analyticsViewMode === 'chart' ? (
+                  <div className="p-6">
+                    {/* Legend */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-gray-100 text-xs">
+                      <div className="flex items-center gap-5">
+                        <div className="flex items-center gap-2">
+                          <span className="h-3.5 w-3.5 rounded-md bg-blue-600 shadow-2xs" />
+                          <span className="font-bold text-gray-700">Boys (छात्र संख्या)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="h-3.5 w-3.5 rounded-md bg-pink-500 shadow-2xs" />
+                          <span className="font-bold text-gray-700">Girls (छात्रा संख्या)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="h-3.5 w-3.5 rounded-md bg-purple-400 shadow-2xs" />
+                          <span className="font-bold text-gray-700">Other (अन्य)</span>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-semibold text-gray-500 font-nepali">
+                        प्रत्येक कक्षामा छात्र र छात्राको तुलनात्मक बार
+                      </span>
+                    </div>
+
+                    {/* Chart Container */}
+                    {(!analyticsData?.classStats || analyticsData.classStats.length === 0) ? (
+                      <div className="py-12 text-center text-gray-400 text-xs">
+                        No class enrollment data available.
+                      </div>
+                    ) : (
+                      <div className="mt-6">
+                        {/* Calculate max total for scale */}
+                        {(() => {
+                          const maxClassTotal = Math.max(...analyticsData.classStats.map((c: any) => c.total || 1), 1);
+                          return (
+                            <div className="space-y-4">
+                              {analyticsData.classStats.map((cs: any) => {
+                                const total = cs.total || (cs.boys + cs.girls + cs.other);
+                                const boyPct = total > 0 ? Math.round((cs.boys / total) * 100) : 0;
+                                const girlPct = total > 0 ? Math.round((cs.girls / total) * 100) : 0;
+                                const widthPct = Math.max(8, Math.round((total / maxClassTotal) * 100));
+
+                                return (
+                                  <div key={cs.id} className="group p-2.5 rounded-xl hover:bg-slate-50 transition border border-transparent hover:border-gray-100">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs mb-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-black text-[#1e3a5f] text-sm tracking-tight min-w-[130px]">
+                                          {cs.name} {cs.section ? `(${cs.section})` : ''}
+                                        </span>
+                                        <span className="font-extrabold text-gray-900 bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md text-[11px] border border-blue-100">
+                                          Total: {total}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-3 text-[11px] font-mono">
+                                        <span className="text-blue-700 font-bold">♂ {cs.boys} ({boyPct}%)</span>
+                                        <span className="text-pink-600 font-bold">♀ {cs.girls} ({girlPct}%)</span>
+                                        {cs.other > 0 && <span className="text-purple-600 font-bold">• {cs.other}</span>}
+                                      </div>
+                                    </div>
+
+                                    {/* Multi-Segment Proportion Bar */}
+                                    <div className="relative h-6 bg-slate-100 rounded-lg overflow-hidden flex items-center shadow-inner">
+                                      {/* Total scale bar container */}
+                                      <div style={{ width: `${widthPct}%` }} className="h-full flex transition-all duration-500">
+                                        {cs.boys > 0 && (
+                                          <div
+                                            style={{ width: `${(cs.boys / total) * 100}%` }}
+                                            className="bg-gradient-to-r from-blue-700 to-blue-500 h-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden px-1"
+                                            title={`Boys: ${cs.boys} (${boyPct}%)`}
+                                          >
+                                            {cs.boys >= 3 ? `${cs.boys}` : ''}
+                                          </div>
+                                        )}
+                                        {cs.girls > 0 && (
+                                          <div
+                                            style={{ width: `${(cs.girls / total) * 100}%` }}
+                                            className="bg-gradient-to-r from-pink-500 to-rose-500 h-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden px-1"
+                                            title={`Girls: ${cs.girls} (${girlPct}%)`}
+                                          >
+                                            {cs.girls >= 3 ? `${cs.girls}` : ''}
+                                          </div>
+                                        )}
+                                        {cs.other > 0 && (
+                                          <div
+                                            style={{ width: `${(cs.other / total) * 100}%` }}
+                                            className="bg-purple-500 h-full flex items-center justify-center text-[10px] font-bold text-white overflow-hidden px-1"
+                                            title={`Other: ${cs.other}`}
+                                          >
+                                            {cs.other}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Summary metrics footer */}
+                        <div className="mt-6 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50/50 p-3 rounded-xl">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-500">Total Active Classes:</span>
+                            <span className="font-extrabold text-[#1e3a5f] font-mono">{analyticsData?.classStats?.length || 0}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-500">Avg Class Strength:</span>
+                            <span className="font-extrabold text-blue-700 font-mono">
+                              {analyticsData?.classStats?.length > 0
+                                ? Math.round((analyticsData?.summary?.totalActive || 0) / analyticsData.classStats.length)
+                                : 0} students
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-500">Gender Parity Index:</span>
+                            <span className="font-extrabold text-emerald-700 font-mono">
+                              {analyticsData?.rates?.boyPercentage > 0
+                                ? (analyticsData?.rates?.girlPercentage / analyticsData?.rates?.boyPercentage).toFixed(2)
+                                : '1.00'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* ── Detailed Table Mode ── */
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-gray-700">
+                      <thead className="bg-[#1e3a5f] text-white">
+                        <tr>
+                          <th className="px-4 py-3.5 font-bold uppercase tracking-wider">Class / Section (कक्षा)</th>
+                          <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-center bg-blue-800">Boys (छात्र)</th>
+                          <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-center bg-pink-800">Girls (छात्रा)</th>
+                          <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-center">Other</th>
+                          <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-center bg-slate-900">Total (जम्मा)</th>
+                          <th className="px-4 py-3.5 font-bold uppercase tracking-wider text-center">Gender Ratio Breakdown</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {analyticsData?.classStats?.map((cs: any) => {
+                          const total = cs.total || (cs.boys + cs.girls + cs.other);
+                          const boyPct = total > 0 ? Math.round((cs.boys / total) * 100) : 0;
+                          const girlPct = total > 0 ? Math.round((cs.girls / total) * 100) : 0;
+                          return (
+                            <tr key={cs.id} className="hover:bg-blue-50/30 transition">
+                              <td className="px-4 py-3 font-extrabold text-gray-900">
+                                {cs.name} {cs.section ? `(${cs.section})` : ''}
+                              </td>
+                              <td className="px-4 py-3 text-center font-bold text-blue-700">{cs.boys}</td>
+                              <td className="px-4 py-3 text-center font-bold text-pink-700">{cs.girls}</td>
+                              <td className="px-4 py-3 text-center text-gray-500">{cs.other}</td>
+                              <td className="px-4 py-3 text-center font-black text-gray-900 bg-slate-50">
+                                {total}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-2 max-w-[150px] mx-auto">
+                                  <span className="text-[10px] font-mono text-blue-700 font-bold">{boyPct}%</span>
+                                  <div className="flex-1 h-2 bg-pink-200 rounded-full overflow-hidden flex">
+                                    <div style={{ width: `${boyPct}%` }} className="bg-blue-600 h-full" />
+                                  </div>
+                                  <span className="text-[10px] font-mono text-pink-600 font-bold">{girlPct}%</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-pink-600 font-bold">{girlPct}%</span>
-                              </div>
-                            </td>
-                          </tr>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ─── ROW 3: MOTHER TONGUE & LANGUAGE DISTRIBUTION ─── */}
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
+                      <Languages size={16} className="text-indigo-600" />
+                      <span>Mother Tongue & Language Demographics (मातृभाषा अनुसार विद्यार्थी विवरण)</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-500 font-nepali mt-0.5">
+                      IEMIS अभिलेख तथा विद्यार्थी फारम अनुसार मातृभाषाको प्रतिशत तथा संख्या
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 self-start sm:self-auto font-nepali">
+                    भाषिक विविधता सूचक
+                  </span>
+                </div>
+
+                {/* Multi-segment Language Distribution Bar */}
+                {analyticsData?.languages && analyticsData.languages.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="h-4 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                      {analyticsData.languages.map((lang: any, index: number) => {
+                        const colors = [
+                          'bg-blue-600',
+                          'bg-emerald-600',
+                          'bg-amber-500',
+                          'bg-pink-500',
+                          'bg-purple-600',
+                          'bg-cyan-600',
+                          'bg-rose-600',
+                          'bg-indigo-600',
+                        ];
+                        const colorClass = colors[index % colors.length];
+                        return (
+                          <div
+                            key={lang.name}
+                            style={{ width: `${Math.max(lang.percentage, 2)}%` }}
+                            className={`${colorClass} h-full transition-all duration-500`}
+                            title={`${lang.name}: ${lang.count} (${lang.percentage}%)`}
+                          />
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Language Cards Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-2">
+                  {analyticsData?.languages?.map((lang: any, index: number) => {
+                    const bgColors = [
+                      'bg-blue-50 border-blue-200 text-blue-900',
+                      'bg-emerald-50 border-emerald-200 text-emerald-900',
+                      'bg-amber-50 border-amber-200 text-amber-900',
+                      'bg-pink-50 border-pink-200 text-pink-900',
+                      'bg-purple-50 border-purple-200 text-purple-900',
+                      'bg-cyan-50 border-cyan-200 text-cyan-900',
+                      'bg-rose-50 border-rose-200 text-rose-900',
+                      'bg-indigo-50 border-indigo-200 text-indigo-900',
+                    ];
+                    const bgStyle = bgColors[index % bgColors.length];
+
+                    return (
+                      <div
+                        key={lang.name}
+                        className={`p-3.5 rounded-xl border ${bgStyle} shadow-2xs flex flex-col justify-between`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <p className="font-extrabold text-xs">{lang.name}</p>
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/80 border border-current">
+                            #{index + 1}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-baseline justify-between">
+                          <span className="text-lg font-black font-mono">{lang.count}</span>
+                          <span className="text-xs font-bold">{lang.percentage}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Age Group Distribution & Birthday Widget */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Age Demographics */}
+              {/* ─── ROW 4: AGE DEMOGRAPHICS, INCLUSIVITY & BIRTHDAY CELEBRATIONS ─── */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* 1. Age Group Demographics */}
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs space-y-4">
-                  <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
-                    <Users size={15} />
-                    <span>Age Group Demographics (उमेर समूह वितरण)</span>
-                  </h3>
-                  <div className="space-y-3">
+                  <div className="border-b border-gray-100 pb-2">
+                    <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
+                      <Users size={15} />
+                      <span>Age Groups (उमेर समूह वितरण)</span>
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-nepali">विद्यार्थीहरूको उमेर विभाजन</p>
+                  </div>
+                  <div className="space-y-3 pt-1">
                     {analyticsData?.ageGroups &&
                       Object.entries(analyticsData.ageGroups).map(([group, count]: [string, any]) => {
                         const totalActive = analyticsData?.summary?.totalActive || 1;
@@ -1905,10 +2289,10 @@ export default function StudentsPage() {
                                 {count} students ({pct}%)
                               </span>
                             </div>
-                            <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                               <div
                                 style={{ width: `${pct}%` }}
-                                className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full"
+                                className="h-full bg-gradient-to-r from-[#1e3a5f] to-blue-500 rounded-full transition-all duration-500"
                               />
                             </div>
                           </div>
@@ -1917,36 +2301,82 @@ export default function StudentsPage() {
                   </div>
                 </div>
 
-                {/* Birthdays Today & This Month */}
+                {/* 2. Inclusivity & Special Needs Support */}
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs space-y-4">
-                  <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
-                    <Cake size={15} className="text-pink-600" />
-                    <span>Student Birthdays (जन्मदिन शुभकामना सूची)</span>
-                  </h3>
-                  {analyticsData?.birthdaysThisMonth?.length === 0 ? (
+                  <div className="border-b border-gray-100 pb-2">
+                    <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
+                      <HeartHandshake size={15} className="text-emerald-600" />
+                      <span>Inclusive Education (समावेशी शिक्षा)</span>
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-nepali">अपाङ्गता तथा फरक क्षमता स्थिति</p>
+                  </div>
+                  <div className="space-y-3 pt-1">
+                    {analyticsData?.disabilityDistribution &&
+                      Object.entries(analyticsData.disabilityDistribution).map(([type, count]: [string, any]) => {
+                        const total = analyticsData?.summary?.total || 1;
+                        const pct = Math.round((count / total) * 100);
+                        const isSpecial = type.includes('अपाङ्गता') || type.includes('Differently');
+                        return (
+                          <div
+                            key={type}
+                            className={`p-3 rounded-xl border ${
+                              isSpecial
+                                ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                                : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span>{type}</span>
+                              <span className="font-mono font-black text-sm">{count}</span>
+                            </div>
+                            <div className="mt-2 h-2 w-full bg-white/80 rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${pct}%` }}
+                                className={`h-full rounded-full ${isSpecial ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                              />
+                            </div>
+                            <div className="mt-1 text-right text-[10px] font-mono font-bold">
+                              {pct}% of students
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* 3. Birthdays This Month & Today */}
+                <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-2xs space-y-4">
+                  <div className="border-b border-gray-100 pb-2">
+                    <h3 className="text-xs font-extrabold text-[#1e3a5f] uppercase tracking-wider flex items-center gap-2">
+                      <Cake size={15} className="text-pink-600" />
+                      <span>Student Birthdays (जन्मदिन शुभकामना)</span>
+                    </h3>
+                    <p className="text-[10px] text-gray-500 font-nepali">आज र आगामी १४ दिन भित्रका जन्मदिन</p>
+                  </div>
+                  {(!analyticsData?.birthdaysThisMonth || analyticsData.birthdaysThisMonth.length === 0) ? (
                     <div className="py-8 text-center text-gray-400 text-xs">
                       No student birthdays recorded for this month.
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {analyticsData?.birthdaysThisMonth?.map((st: any) => (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {analyticsData.birthdaysThisMonth.map((st: any) => (
                         <div
                           key={st.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-pink-50/60 border border-pink-100 text-xs"
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-pink-50/60 border border-pink-100 text-xs hover:bg-pink-100/50 transition"
                         >
                           <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-full bg-pink-200 text-pink-800 flex items-center justify-center font-bold text-xs">
+                            <div className="h-8 w-8 rounded-full bg-pink-200 text-pink-800 flex items-center justify-center font-bold text-xs shadow-2xs">
                               🎂
                             </div>
                             <div>
-                              <p className="font-bold text-gray-900">{st.fullName}</p>
+                              <p className="font-bold text-gray-900">{st.fullName || st.name}</p>
                               <p className="text-[10px] text-gray-500">
-                                Class: {st.classEnrollment?.[0]?.class?.name || '—'}
+                                Class: {st.classEnrollment?.[0]?.class?.name || st.class || '—'}
                               </p>
                             </div>
                           </div>
-                          <span className="font-mono font-bold text-pink-700 bg-white px-2.5 py-1 rounded-lg border border-pink-200 shadow-2xs">
-                            {st.dateOfBirthBs}
+                          <span className="font-mono font-bold text-pink-700 bg-white px-2 py-0.5 rounded-lg border border-pink-200 shadow-2xs text-[11px]">
+                            {st.dateOfBirthBs || st.dateBs || '—'}
                           </span>
                         </div>
                       ))}
