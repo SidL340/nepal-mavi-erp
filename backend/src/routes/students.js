@@ -17,17 +17,38 @@ function generatePassword(length = 8) {
 // GET /api/students — list all with filters
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { classId, search, page, limit } = req.query;
+    const { academicYearId, classId, className, section, search, page, limit } = req.query;
     const where = { isActive: true };
-    if (search) {
+    if (search && search.trim()) {
+      const q = search.trim();
       where.OR = [
-        { fullName: { contains: search } },
-        { studentId: { contains: search } },
-        { fatherName: { contains: search } },
+        { fullName: { contains: q, mode: 'insensitive' } },
+        { fullNameNepali: { contains: q, mode: 'insensitive' } },
+        { studentId: { contains: q, mode: 'insensitive' } },
+        { emisId: { contains: q, mode: 'insensitive' } },
+        { fatherName: { contains: q, mode: 'insensitive' } },
+        { motherName: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { guardianContact: { contains: q, mode: 'insensitive' } },
       ];
     }
+
+    const enrollmentFilter = {};
+    if (academicYearId) {
+      enrollmentFilter.class = { academicYearId: parseInt(academicYearId) };
+    }
     if (classId) {
-      where.classEnrollment = { some: { classId: parseInt(classId), isActive: true } };
+      enrollmentFilter.classId = parseInt(classId);
+    }
+    if (className) {
+      enrollmentFilter.class = { ...(enrollmentFilter.class || {}), name: { contains: className.trim(), mode: 'insensitive' } };
+    }
+    if (section && section !== 'All' && section !== 'all') {
+      enrollmentFilter.class = { ...(enrollmentFilter.class || {}), section: { equals: section.trim(), mode: 'insensitive' } };
+    }
+
+    if (Object.keys(enrollmentFilter).length > 0) {
+      where.classEnrollment = { some: enrollmentFilter };
     }
 
     const isAll = !limit || limit === 'all';
@@ -35,11 +56,19 @@ router.get('/', authenticate, async (req, res) => {
     const parsedPage = page ? parseInt(page) : 1;
     const skip = isAll ? 0 : (parsedPage - 1) * parsedLimit;
 
+    const enrollmentIncludeWhere = academicYearId
+      ? { class: { academicYearId: parseInt(academicYearId) } }
+      : { isActive: true };
+
     const [students, total] = await Promise.all([
       prisma.student.findMany({
         where,
         include: {
-          classEnrollment: { where: { isActive: true }, include: { class: true } },
+          classEnrollment: {
+            where: enrollmentIncludeWhere,
+            include: { class: { include: { academicYear: true } } },
+            orderBy: { id: 'desc' },
+          },
           user: { select: { username: true, isActive: true } },
         },
         skip,
@@ -75,7 +104,7 @@ router.get('/', authenticate, async (req, res) => {
     return res.json({ success: true, data: students, total, page: parsedPage, limit: parsedLimit });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: false, message: 'Server error.' });
+    return res.status(500).json({ success: false, message: 'Server error: ' + err.message });
   }
 });
 
@@ -240,6 +269,8 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet);
     let explicitClassId = req.body.classId ? parseInt(req.body.classId) : null;
+    let targetAyId = req.body.academicYearId ? parseInt(req.body.academicYearId) : null;
+    const treatNoEmisAsTransferred = req.body.treatNoEmisAsTransferred === 'true' || req.body.treatNoEmisAsTransferred === true;
 
     // Delete temp file
     try { require('fs').unlinkSync(req.file.path); } catch (e) {}
@@ -248,17 +279,34 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
       return res.status(400).json({ success: false, message: 'Excel sheet is empty.' });
     }
 
-    const results = { created: 0, updated: 0, skipped: 0, errors: [] };
+    // Resolve target Academic Year
+    let targetAy = null;
+    if (targetAyId) {
+      targetAy = await prisma.academicYear.findUnique({ where: { id: targetAyId } });
+    }
+    if (!targetAy) {
+      targetAy = await prisma.academicYear.findFirst({ where: { isActive: true } });
+      if (!targetAy) {
+        targetAy = await prisma.academicYear.findFirst({ orderBy: { id: 'desc' } });
+      }
+    }
+    const academicYearId = targetAy ? targetAy.id : 1;
+    const isActiveYear = targetAy?.isActive === true;
+    const academicYearName = targetAy?.year || '2081';
+
+    const results = {
+      created: 0,
+      updated: 0,
+      upgradedOrEnrolled: 0,
+      transferred: 0,
+      skipped: 0,
+      total: rows.length,
+      academicYear: academicYearName,
+      errors: [],
+    };
     const affectedClassIds = new Set();
 
-    // Get Active Academic Year
-    let activeYear = await prisma.academicYear.findFirst({ where: { isActive: true } });
-    if (!activeYear) {
-      activeYear = await prisma.academicYear.findFirst({ orderBy: { id: 'desc' } });
-    }
-    const academicYearId = activeYear ? activeYear.id : 1;
-
-    // Load existing classes for fast lookup
+    // Load existing classes for fast lookup under this Academic Year
     const existingClasses = await prisma.class.findMany({
       where: { academicYearId },
     });
@@ -295,7 +343,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
         return classLookup.get(keyNoSec);
       }
 
-      // Auto-create class on the fly
+      // Auto-create class on the fly for this academic year
       const newClass = await prisma.class.create({
         data: {
           name: normalizedName,
@@ -317,42 +365,36 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
       .map(r => String(r['Student Id'] || r['Student ID'] || r['IEMIS Code'] || r['studentId'] || '').trim())
       .filter(Boolean);
 
-    // Batch query existing student IDs
+    // Batch query existing students by studentId OR emisId
     const existingList = await prisma.student.findMany({
-      where: { studentId: { in: candidateIds } },
-      include: { classEnrollment: { where: { isActive: true } } },
+      where: {
+        OR: [
+          { studentId: { in: candidateIds } },
+          { emisId: { in: candidateIds } },
+        ],
+      },
+      include: {
+        user: { select: { id: true, username: true, isActive: true } },
+        classEnrollment: { include: { class: true } },
+      },
     });
-    const existingMap = new Map(existingList.map(s => [s.studentId, s]));
+
+    const existingMap = new Map();
+    for (const s of existingList) {
+      if (s.studentId) existingMap.set(s.studentId.trim(), s);
+      if (s.emisId) existingMap.set(s.emisId.trim(), s);
+    }
 
     // Process rows
     for (const row of rows) {
       try {
-        const emisId      = String(row['Student Id'] || row['Student ID'] || row['IEMIS Code'] || row['studentId'] || '').trim();
-        const fullName    = String(row['FullName'] || row['Full Name'] || row['Name'] || '').trim();
+        const rawEmisId = String(row['Student Id'] || row['Student ID'] || row['IEMIS Code'] || row['studentId'] || '').trim();
+        const fullName  = String(row['FullName'] || row['Full Name'] || row['Name'] || '').trim();
         if (!fullName) { results.skipped++; continue; }
 
-        const studentId = emisId || `STU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        const hasEmisId = Boolean(rawEmisId);
         const targetClassId = await resolveClassId(row);
         const rollNo = row['S.N'] || row['Roll No'] || row['rollNo'] || null;
-
-        if (existingMap.has(studentId)) {
-          // If student already exists, update/assign their class enrollment if not yet assigned
-          const existingStudent = existingMap.get(studentId);
-          if (targetClassId && (!existingStudent.classEnrollment || existingStudent.classEnrollment.length === 0)) {
-            await prisma.classEnrollment.create({
-              data: {
-                studentId: existingStudent.id,
-                classId: targetClassId,
-                rollNo: rollNo ? parseInt(rollNo) : null,
-                isActive: true,
-              },
-            });
-            results.updated++;
-          } else {
-            results.skipped++;
-          }
-          continue;
-        }
 
         const fatherName      = String(row['Father Name'] || '').trim() || null;
         const motherName      = String(row['Mother Name'] || '').trim() || null;
@@ -364,8 +406,128 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
         const motherTongue    = String(row['Mother Tongue'] || '').trim() || null;
         const disabilityType  = String(row['Disability Type'] || '').trim() || null;
 
+        // CASE 1: Student has NO EMIS ID and treatNoEmisAsTransferred is true -> Mark as TRANSFERRED / Past Student
+        if (!hasEmisId && treatNoEmisAsTransferred) {
+          const transferId = `TRF-${academicYearName.replace(/[^0-9]/g, '').slice(0, 4) || 'PAST'}-${Date.now().toString().slice(-4)}${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+
+          const user = await prisma.user.create({
+            data: { username: transferId, passwordHash: defaultPasswordHash, role: 'STUDENT', isActive: false },
+          });
+
+          const student = await prisma.student.create({
+            data: {
+              userId: user.id,
+              studentId: transferId,
+              fullName,
+              fatherName,
+              motherName,
+              guardianName,
+              guardianContact,
+              gender,
+              address: permAddress,
+              dateOfBirthBs: dob,
+              ethnicity: motherTongue,
+              disability: disabilityType,
+              status: 'TRANSFERRED',
+              isActive: false,
+              transferReason: `विगत सत्र (${academicYearName}) अभिलेख / सरुवा (No EMIS ID recorded)`,
+              transferDateBs: targetAy?.endDateBs || dob || null,
+            },
+          });
+
+          if (targetClassId) {
+            await prisma.classEnrollment.create({
+              data: {
+                studentId: student.id,
+                classId: targetClassId,
+                rollNo: rollNo ? parseInt(rollNo) : null,
+                isActive: false,
+              },
+            });
+          }
+
+          results.transferred++;
+          continue;
+        }
+
+        // CASE 2: Student has EMIS ID or auto-gen ID
+        const studentId = rawEmisId || `STU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        const existingStudent = existingMap.get(studentId) || (rawEmisId ? existingMap.get(rawEmisId) : null);
+
+        if (existingStudent) {
+          // Existing student profile matched! Enrich missing details and link to this academic year class
+          const updateData = {};
+          if (!existingStudent.fatherName && fatherName) updateData.fatherName = fatherName;
+          if (!existingStudent.motherName && motherName) updateData.motherName = motherName;
+          if (!existingStudent.guardianName && guardianName) updateData.guardianName = guardianName;
+          if (!existingStudent.guardianContact && guardianContact) updateData.guardianContact = guardianContact;
+          if (!existingStudent.gender && gender) updateData.gender = gender;
+          if (!existingStudent.address && permAddress) updateData.address = permAddress;
+          if (!existingStudent.dateOfBirthBs && dob) updateData.dateOfBirthBs = dob;
+          if (!existingStudent.ethnicity && motherTongue) updateData.ethnicity = motherTongue;
+          if (!existingStudent.disability && disabilityType) updateData.disability = disabilityType;
+          if (!existingStudent.emisId && rawEmisId) updateData.emisId = rawEmisId;
+
+          if (Object.keys(updateData).length > 0) {
+            await prisma.student.update({
+              where: { id: existingStudent.id },
+              data: updateData,
+            });
+          }
+
+          if (targetClassId) {
+            // Check if enrollment exists in this class
+            const existingEnrollment = await prisma.classEnrollment.findUnique({
+              where: {
+                studentId_classId: {
+                  studentId: existingStudent.id,
+                  classId: targetClassId,
+                },
+              },
+            });
+
+            if (!existingEnrollment) {
+              if (isActiveYear) {
+                // If importing active year, deactivate other class enrollments for this student
+                await prisma.classEnrollment.updateMany({
+                  where: { studentId: existingStudent.id, isActive: true },
+                  data: { isActive: false },
+                });
+              }
+
+              affectedClassIds.add(targetClassId);
+              await prisma.classEnrollment.create({
+                data: {
+                  studentId: existingStudent.id,
+                  classId: targetClassId,
+                  rollNo: rollNo ? parseInt(rollNo) : null,
+                  isActive: isActiveYear,
+                },
+              });
+              results.upgradedOrEnrolled++;
+            } else {
+              if (rollNo && existingEnrollment.rollNo !== parseInt(rollNo)) {
+                await prisma.classEnrollment.update({
+                  where: { id: existingEnrollment.id },
+                  data: { rollNo: parseInt(rollNo) },
+                });
+              }
+              results.updated++;
+            }
+          } else {
+            results.updated++;
+          }
+          continue;
+        }
+
+        // CASE 3: Completely new student
         const user = await prisma.user.create({
-          data: { username: studentId, passwordHash: defaultPasswordHash, role: 'STUDENT' },
+          data: {
+            username: studentId,
+            passwordHash: defaultPasswordHash,
+            role: 'STUDENT',
+            isActive: isActiveYear,
+          },
         });
 
         const student = await prisma.student.create({
@@ -377,14 +539,20 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
             motherName,
             guardianName,
             guardianContact,
-            emisId,
+            emisId: rawEmisId || null,
             gender,
             address: permAddress,
             dateOfBirthBs: dob,
             ethnicity: motherTongue,
             disability: disabilityType,
+            status: isActiveYear ? 'ACTIVE' : 'ACTIVE',
+            isActive: isActiveYear,
           },
         });
+
+        // Add to map for subsequent occurrences in same file
+        existingMap.set(studentId, student);
+        if (rawEmisId) existingMap.set(rawEmisId, student);
 
         if (targetClassId) {
           affectedClassIds.add(targetClassId);
@@ -393,7 +561,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
               studentId: student.id,
               classId: targetClassId,
               rollNo: rollNo ? parseInt(rollNo) : null,
-              isActive: true,
+              isActive: isActiveYear,
             },
           });
         }
@@ -408,7 +576,7 @@ router.post('/bulk-import', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), upl
     for (const cId of affectedClassIds) {
       try {
         const enrollments = await prisma.classEnrollment.findMany({
-          where: { classId: cId, isActive: true },
+          where: { classId: cId },
           include: { student: { select: { fullName: true, emisId: true } } },
         });
         enrollments.sort((a, b) => {
