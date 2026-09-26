@@ -162,6 +162,7 @@ export default function TeachersPage() {
   // Incharge Assign Modal
   const [isAssignRoleModalOpen, setIsAssignRoleModalOpen] = useState(false);
   const [selectedStaffForRole, setSelectedStaffForRole] = useState<any>(null);
+  const [selectedRoleContext, setSelectedRoleContext] = useState<string>('');
   const [targetInchargeRoles, setTargetInchargeRoles] = useState<string[]>([]);
   const [targetInchargeTitle, setTargetInchargeTitle] = useState('');
   const [syncUserRole, setSyncUserRole] = useState(true);
@@ -576,17 +577,43 @@ export default function TeachersPage() {
     setSelectedSubjectIds(staff.subjects?.map((s: any) => s.subjectId) || []);
   };
 
-  const openAssignRoleModal = (staff: any) => {
-    setSelectedStaffForRole(staff);
-    const existingRoles = staff.inchargeRole
-      ? staff.inchargeRole.split(',').map((r: string) => r.trim()).filter(Boolean)
-      : [];
-    setTargetInchargeRoles(existingRoles);
-    setTargetInchargeTitle(staff.inchargeTitle || '');
+  const openAssignRoleModal = (staff?: any, preselectedRole?: string) => {
+    const targetStaff = staff || (allTeachers.length > 0 ? allTeachers[0] : null);
+    setSelectedStaffForRole(targetStaff);
+    setSelectedRoleContext(preselectedRole || '');
+
+    if (targetStaff) {
+      let existingRoles = targetStaff.inchargeRole
+        ? targetStaff.inchargeRole.split(',').map((r: string) => r.trim()).filter(Boolean)
+        : [];
+      if (preselectedRole && !existingRoles.includes(preselectedRole)) {
+        existingRoles = [...existingRoles, preselectedRole];
+      }
+      setTargetInchargeRoles(existingRoles);
+      setTargetInchargeTitle(targetStaff.inchargeTitle || '');
+    } else {
+      setTargetInchargeRoles(preselectedRole ? [preselectedRole] : []);
+      setTargetInchargeTitle('');
+    }
+
     setSyncUserRole(true);
     setAutoCreateTasks(true);
     setInchargeDueDateBs(todayBS());
     setIsAssignRoleModalOpen(true);
+  };
+
+  const handleSwitchStaffForRole = (teacherId: number) => {
+    const found = allTeachers.find((t: any) => t.id === teacherId);
+    if (!found) return;
+    setSelectedStaffForRole(found);
+    let existingRoles = found.inchargeRole
+      ? found.inchargeRole.split(',').map((r: string) => r.trim()).filter(Boolean)
+      : [];
+    if (selectedRoleContext && !existingRoles.includes(selectedRoleContext)) {
+      existingRoles = [...existingRoles, selectedRoleContext];
+    }
+    setTargetInchargeRoles(existingRoles);
+    setTargetInchargeTitle(found.inchargeTitle || '');
   };
 
   const openTaskModal = (task?: any, defaultTeacherId?: number) => {
@@ -1407,10 +1434,7 @@ export default function TeachersPage() {
               </p>
             </div>
             <button
-              onClick={() => {
-                if (allTeachers.length > 0) openAssignRoleModal(allTeachers[0]);
-                else toast.error('No staff registered yet.');
-              }}
+              onClick={() => openAssignRoleModal()}
               className="bg-white text-purple-950 hover:bg-purple-50 font-extrabold px-4 py-2 rounded-xl text-xs shadow-xs transition self-start sm:self-auto cursor-pointer"
             >
               + Assign Incharge Roles
@@ -1447,20 +1471,10 @@ export default function TeachersPage() {
                     <div className="py-4 text-center text-gray-400 bg-slate-50/50 rounded-xl border border-dashed border-gray-200 text-xs">
                       <p className="font-medium">No one assigned yet (हाल रिक्त)</p>
                       <button
-                        onClick={() => {
-                          if (allTeachers.length > 0) {
-                            setSelectedStaffForRole(allTeachers[0]);
-                            const existing = allTeachers[0].inchargeRole
-                              ? allTeachers[0].inchargeRole.split(',').map((r: string) => r.trim()).filter(Boolean)
-                              : [];
-                            setTargetInchargeRoles(existing.includes(roleKey) ? existing : [...existing, roleKey]);
-                            setTargetInchargeTitle(allTeachers[0].inchargeTitle || '');
-                            setIsAssignRoleModalOpen(true);
-                          }
-                        }}
+                        onClick={() => openAssignRoleModal(undefined, roleKey)}
                         className="mt-1.5 text-xs font-bold text-purple-700 hover:underline cursor-pointer"
                       >
-                        + Assign Staff
+                        + Assign Staff (कर्मचारी तोक्नुहोस्)
                       </button>
                     </div>
                   ) : (
@@ -1497,7 +1511,7 @@ export default function TeachersPage() {
 
                             <div className="flex flex-col gap-1">
                               <button
-                                onClick={() => openAssignRoleModal(member)}
+                                onClick={() => openAssignRoleModal(member, roleKey)}
                                 className="p-1 rounded-md text-gray-500 hover:bg-slate-200 text-right text-[10px] font-bold"
                                 title="Edit Role Assignment"
                               >
@@ -1513,6 +1527,17 @@ export default function TeachersPage() {
                           </div>
                         );
                       })}
+
+                      <div className="pt-2 border-t border-slate-100 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => openAssignRoleModal(undefined, roleKey)}
+                          className="text-[11px] font-bold text-purple-700 hover:text-purple-900 hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus size={12} />
+                          <span>+ Add Staff to {cfg.nepali}</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1783,11 +1808,51 @@ export default function TeachersPage() {
             </div>
 
             <div className="space-y-4 text-xs">
-              {/* Select Multiple Roles */}
+              {/* 1. Select Staff Member Dropdown */}
+              <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-purple-950 text-xs">
+                    १. कर्मचारी छनौट गर्नुहोस् (Select Teacher / Staff): *
+                  </label>
+                  {selectedStaffForRole && (
+                    <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                      ID: #{selectedStaffForRole.id}
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedStaffForRole?.id || ''}
+                  onChange={(e) => handleSwitchStaffForRole(parseInt(e.target.value, 10))}
+                  className="w-full rounded-xl border border-purple-300 p-2.5 text-xs font-bold text-gray-900 bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs"
+                >
+                  {allTeachers.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.fullName} {t.fullNameNepali ? `(${t.fullNameNepali})` : ''} — {t.shreni === 'NON_TEACHING' ? 'गैर-शैक्षिक कर्मचारी' : 'शिक्षक'} ({t.post || 'शिक्षक'})
+                    </option>
+                  ))}
+                </select>
+                {selectedStaffForRole && (
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-purple-900 flex-wrap">
+                    <span className="font-semibold">पद: {selectedStaffForRole.post || 'शिक्षक'}</span>
+                    <span>•</span>
+                    <span>वर्ग: {selectedStaffForRole.shreni === 'NON_TEACHING' ? 'गैर-शैक्षिक कर्मचारी' : 'शिक्षक'}</span>
+                    {selectedStaffForRole.inchargeRole && (
+                      <>
+                        <span>•</span>
+                        <span className="font-bold text-emerald-800">
+                          हालका जिम्मेवारी: {selectedStaffForRole.inchargeRole}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Select Multiple Roles */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block font-bold text-gray-700">
-                    Select Incharge Roles (विशेष पद / भूमिका छान्नुहोस् — बहु-चयन):
+                    २. विशेष जिम्मेवारी छान्नुहोस् (Select Incharge Roles — बहु-चयन):
                   </label>
                   {targetInchargeRoles.length > 0 && (
                     <button
