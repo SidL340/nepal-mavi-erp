@@ -78,6 +78,96 @@ export default function PayrollPage() {
   const [bulkRows, setBulkRows] = useState<Record<number, any>>({});
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<number[]>([]);
   const [searchStaff, setSearchStaff] = useState<string>('');
+  const [staffSortOrder, setStaffSortOrder] = useState<'hierarchy' | 'id' | 'name'>('hierarchy');
+
+  // Official Nepal School Staff Hierarchy Rank Helper (मर्यादाक्रम)
+  const getStaffRank = (t: any): number => {
+    if (!t) return 99;
+    const isPrincipal = Boolean(
+      (
+        t.inchargeRole === 'PRINCIPAL' ||
+        t.post === 'प्रधानाध्यापक (Headmaster / Principal)' ||
+        t.post === 'प्रधानाध्यापक' ||
+        t.post?.toLowerCase() === 'principal' ||
+        t.post?.toLowerCase() === 'headmaster'
+      ) &&
+      !t.post?.includes('सहायक') &&
+      !t.post?.includes('Assistant') &&
+      !t.inchargeRole?.includes('VICE')
+    );
+    if (isPrincipal) return 10;
+
+    if (
+      t.post?.includes('सहायक प्रधानाध्यापक') ||
+      t.post?.toLowerCase().includes('assistant headmaster') ||
+      t.post?.toLowerCase().includes('vice principal')
+    ) {
+      return 20;
+    }
+
+    const taha = (t.taha || '').toLowerCase();
+    const post = (t.post || '').toLowerCase();
+    const shreni = (t.shreni || '').toLowerCase();
+
+    const isSecondary =
+      taha.includes('माध्यमिक') ||
+      taha.includes('मा.वि.') ||
+      taha.includes('secondary') ||
+      post.includes('मा.वि.') ||
+      post.includes('माध्यमिक') ||
+      post.includes('secondary');
+    if (isSecondary) {
+      if (shreni.includes('प्रथम') || shreni.includes('1st') || shreni.includes('first')) return 31;
+      if (shreni.includes('द्वितीय') || shreni.includes('2nd') || shreni.includes('second')) return 32;
+      return 33;
+    }
+
+    const isLowerSecondary =
+      taha.includes('निम्न') ||
+      taha.includes('नि.मा.वि.') ||
+      taha.includes('lower secondary') ||
+      post.includes('नि.मा.वि.') ||
+      post.includes('निम्न माध्यमिक') ||
+      post.includes('lower secondary');
+    if (isLowerSecondary) {
+      if (shreni.includes('प्रथम') || shreni.includes('1st') || shreni.includes('first')) return 41;
+      if (shreni.includes('द्वितीय') || shreni.includes('2nd') || shreni.includes('second')) return 42;
+      return 43;
+    }
+
+    const isPrimary =
+      taha.includes('प्राथमिक') ||
+      taha.includes('प्रा.वि.') ||
+      taha.includes('primary') ||
+      post.includes('प्रा.वि.') ||
+      post.includes('प्राथमिक') ||
+      post.includes('primary');
+    if (isPrimary) {
+      if (shreni.includes('प्रथम') || shreni.includes('1st') || shreni.includes('first')) return 51;
+      if (shreni.includes('द्वितीय') || shreni.includes('2nd') || shreni.includes('second')) return 52;
+      return 53;
+    }
+
+    const isEcd =
+      taha.includes('बालविकास') ||
+      taha.includes('ecd') ||
+      taha.includes('पूर्व प्राथमिक') ||
+      post.includes('बालविकास') ||
+      post.includes('ecd') ||
+      post.includes('nursery');
+    if (isEcd) return 60;
+
+    if (t.isTeachingStaff !== false && t.shreni !== 'NON_TEACHING') {
+      return 70;
+    }
+
+    if (post.includes('लेखा') || post.includes('accountant')) return 81;
+    if (post.includes('सहायक') || post.includes('assistant') || post.includes('प्रशासन') || post.includes('operator')) return 82;
+    if (post.includes('सहयोगी') || post.includes('परिचर') || post.includes('helper') || post.includes('peon')) return 85;
+    if (post.includes('पाले') || post.includes('guard') || post.includes('चालक') || post.includes('सफाइ')) return 86;
+
+    return 90;
+  };
 
   // Modals & Single Slips
   const [selectedSlip, setSelectedSlip] = useState<any>(null);
@@ -259,7 +349,15 @@ export default function PayrollPage() {
     const initialRows: Record<number, any> = {};
     const allIds: number[] = [];
 
-    teachersData.forEach((teacher: any) => {
+    // Sort by official hierarchy rank order (Principal first, then Secondary, Lower Sec, Primary, Non-Teaching)
+    const sortedTeachers = (teachersData || []).slice().sort((a: any, b: any) => {
+      const rankA = getStaffRank(a);
+      const rankB = getStaffRank(b);
+      if (rankA !== rankB) return rankA - rankB;
+      return a.id - b.id;
+    });
+
+    sortedTeachers.forEach((teacher: any) => {
       allIds.push(teacher.id);
 
       // Match salary scale if available
@@ -426,9 +524,9 @@ export default function PayrollPage() {
     }));
   };
 
-  // Filtered displayed staff (including active vs past/transferred)
+  // Filtered displayed staff (including active vs past/transferred, sorted by hierarchy/ID)
   const displayedStaff = useMemo(() => {
-    return (teachersData || []).filter((t: any) => {
+    const list = (teachersData || []).filter((t: any) => {
       if (staffStatusFilter === 'ACTIVE' && t.isActive === false) return false;
       if (staffStatusFilter === 'INACTIVE' && t.isActive !== false) return false;
       if (selectedCategory === 'TEACHING' && t.shreni === 'NON_TEACHING') return false;
@@ -446,7 +544,23 @@ export default function PayrollPage() {
       }
       return true;
     });
-  }, [teachersData, staffStatusFilter, selectedCategory, filterType, searchStaff]);
+
+    return list.slice().sort((a: any, b: any) => {
+      if (staffSortOrder === 'hierarchy') {
+        const rankA = getStaffRank(a);
+        const rankB = getStaffRank(b);
+        if (rankA !== rankB) return rankA - rankB;
+        return a.id - b.id;
+      }
+      if (staffSortOrder === 'id') {
+        return a.id - b.id;
+      }
+      if (staffSortOrder === 'name') {
+        return (a.fullName || '').localeCompare(b.fullName || '');
+      }
+      return a.id - b.id;
+    });
+  }, [teachersData, staffStatusFilter, selectedCategory, filterType, searchStaff, staffSortOrder]);
 
   // Grand Totals of selected staff
   const grandTotals = useMemo(() => {
@@ -665,10 +779,26 @@ export default function PayrollPage() {
       .map((id) => {
         const row = bulkRows[id];
         if (!row) return null;
+        const teacherObj = teachersData?.find((t: any) => t.id === id) || row;
         const calc = calculateRow(row);
-        return { ...row, calc };
+        return { ...row, teacherObj, calc };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a: any, b: any) => {
+        if (staffSortOrder === 'hierarchy') {
+          const rankA = getStaffRank(a.teacherObj || a);
+          const rankB = getStaffRank(b.teacherObj || b);
+          if (rankA !== rankB) return rankA - rankB;
+          return (a.teacherId || a.id) - (b.teacherId || b.id);
+        }
+        if (staffSortOrder === 'id') {
+          return (a.teacherId || a.id) - (b.teacherId || b.id);
+        }
+        if (staffSortOrder === 'name') {
+          return (a.fullName || '').localeCompare(b.fullName || '');
+        }
+        return (a.teacherId || a.id) - (b.teacherId || b.id);
+      });
 
     printWin.document.write(`
       <!DOCTYPE html>
@@ -1181,6 +1311,20 @@ export default function PayrollPage() {
                   onChange={(e) => setSearchStaff(e.target.value)}
                   className="w-full rounded-xl border border-gray-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs focus:bg-white focus:outline-hidden"
                 />
+              </div>
+              {/* Order / Ranking Selector */}
+              <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-gray-200 rounded-xl px-2.5 py-1.5">
+                <span className="text-[11px] font-bold text-gray-500">क्रम:</span>
+                <select
+                  value={staffSortOrder}
+                  onChange={(e: any) => setStaffSortOrder(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-[#1e3a5f] focus:outline-hidden cursor-pointer"
+                  title="शिक्षक तथा कर्मचारीहरूको क्रम छनोट गर्नुहोस्"
+                >
+                  <option value="hierarchy">👑 पद/तहगत मर्यादाक्रम (Official Hierarchy)</option>
+                  <option value="id">🔢 दर्ता क्र.सं. (Staff ID Order)</option>
+                  <option value="name">🔤 नाम वर्णानुक्रम (A-Z)</option>
+                </select>
               </div>
 
               <div className="flex items-center gap-1.5 font-bold text-xs text-gray-700 shrink-0">

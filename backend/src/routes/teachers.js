@@ -60,7 +60,7 @@ router.get('/', authenticate, async (req, res) => {
           orderBy: { createdAt: 'desc' },
         },
       },
-      orderBy: { fullName: 'asc' },
+      orderBy: req.query.sortBy === 'name' ? { fullName: 'asc' } : { id: 'asc' },
     });
     return res.json({ success: true, data: teachers });
   } catch (err) {
